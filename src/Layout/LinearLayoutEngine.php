@@ -9,8 +9,11 @@ use LibreSign\XObjectTemplate\Html\Node;
 
 final readonly class LinearLayoutEngine
 {
-    public function __construct(private InlineStyleParser $styleParser = new InlineStyleParser())
+    private InlineStyleParser $styleParser;
+
+    public function __construct(?InlineStyleParser $styleParser = null)
     {
+        $this->styleParser = $styleParser ?? new InlineStyleParser();
     }
 
     /**

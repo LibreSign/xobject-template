@@ -14,12 +14,21 @@ use LibreSign\XObjectTemplate\Pdf\PdfEscaper;
 
 final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
 {
+    private SubsetHtmlParser $htmlParser;
+    private LinearLayoutEngine $layoutEngine;
+    private PdfEscaper $pdfEscaper;
+    private ColorParser $colorParser;
+
     public function __construct(
-        private SubsetHtmlParser $htmlParser = new SubsetHtmlParser(),
-        private LinearLayoutEngine $layoutEngine = new LinearLayoutEngine(),
-        private PdfEscaper $pdfEscaper = new PdfEscaper(),
-        private ColorParser $colorParser = new ColorParser(),
+        ?SubsetHtmlParser $htmlParser = null,
+        ?LinearLayoutEngine $layoutEngine = null,
+        ?PdfEscaper $pdfEscaper = null,
+        ?ColorParser $colorParser = null,
     ) {
+        $this->htmlParser = $htmlParser ?? new SubsetHtmlParser();
+        $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine();
+        $this->pdfEscaper = $pdfEscaper ?? new PdfEscaper();
+        $this->colorParser = $colorParser ?? new ColorParser();
     }
 
     public function compile(CompileRequest $request): CompileResult
