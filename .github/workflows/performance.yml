@@ -11,7 +11,7 @@ jobs:
       BENCH_MAX_AVG_MS: 4.0
       BENCH_MAX_MEM_KB: 2048
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
