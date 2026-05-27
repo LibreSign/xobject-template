@@ -36,8 +36,23 @@ final class ColorParserTest extends TestCase
             'expected' => '0.6667 0.7333 0.8 rg',
         ];
 
+        yield 'trim and uppercase are supported' => [
+            'input' => '  #AaBbCc  ',
+            'expected' => '0.6667 0.7333 0.8 rg',
+        ];
+
         yield 'invalid color falls back to black' => [
             'input' => 'not-a-color',
+            'expected' => '0 0 0 rg',
+        ];
+
+        yield 'rejects extra trailing digits' => [
+            'input' => '#1234567',
+            'expected' => '0 0 0 rg',
+        ];
+
+        yield 'rejects prefixed six-digit tail' => [
+            'input' => 'x123456',
             'expected' => '0 0 0 rg',
         ];
     }

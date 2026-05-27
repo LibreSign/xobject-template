@@ -37,4 +37,35 @@ final class SubsetHtmlParserAdvancedTest extends TestCase
         self::assertSame('World', $nodes[0]->children[2]->text);
         self::assertSame('font-size:10; margin:2', $nodes[0]->children[2]->attributes['style']);
     }
+
+    public function testParseNormalizesTagAndAttributeNamesAndKeepsAllAttributes(): void
+    {
+        $parser = new SubsetHtmlParser();
+
+        $nodes = $parser->parse('<DIV STYLE="font-size:10" DATA-ID="42">Hi</DIV>');
+
+        self::assertCount(1, $nodes);
+        self::assertSame('div', $nodes[0]->tag);
+        self::assertArrayHasKey('style', $nodes[0]->attributes);
+        self::assertArrayHasKey('data-id', $nodes[0]->attributes);
+        self::assertSame('font-size:10', $nodes[0]->attributes['style']);
+        self::assertSame('42', $nodes[0]->attributes['data-id']);
+    }
+
+    public function testParseTrimsInheritedStyleAndRestoresLibxmlInternalErrorFlag(): void
+    {
+        $parser = new SubsetHtmlParser();
+        $previous = libxml_use_internal_errors(false);
+
+        try {
+            $nodes = $parser->parse('<div style=" font-size:10 "><span>Hi</span></div>');
+        } finally {
+            $current = libxml_use_internal_errors(false);
+            libxml_use_internal_errors($previous);
+        }
+
+        self::assertFalse($current);
+        self::assertSame('font-size:10', $nodes[0]->attributes['style']);
+        self::assertSame('font-size:10', $nodes[0]->children[0]->children[0]->attributes['style']);
+    }
 }

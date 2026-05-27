@@ -25,6 +25,7 @@ final class SignatureAppearanceXObjectAdapterTest extends TestCase
         $payload = $adapter->toPdfSignerPayload($result);
 
         self::assertSame('BT\n(Foo) Tj\nET', $payload['stream']);
+        self::assertSame(['Font' => ['F1' => ['BaseFont' => '/Helvetica']]], $payload['resources']);
         self::assertSame([0.0, 0.0, 240.0, 84.0], $payload['bbox']);
     }
 }

@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit;
 
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
+use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -61,5 +62,22 @@ final class XObjectTemplateCompilerTest extends TestCase
             'html' => '<p style="font-size:10;margin:8;padding:4">Offset Text</p>',
             'expectedSnippet' => '20.000000 48.000000 Td',
         ];
+    }
+
+    public function testCompileUsesProvidedTemplateDocumentBuilderInstance(): void
+    {
+        $builder = (new TemplateDocumentBuilder())->withFontResources([
+            'Z1' => [
+                'Type' => '/Font',
+                'Subtype' => '/Type1',
+                'BaseFont' => '/Helvetica',
+            ],
+        ]);
+        $compiler = new XObjectTemplateCompiler(null, null, null, null, $builder);
+
+        $result = $compiler->compile(new CompileRequest(html: '<p>Hello</p>'));
+
+        self::assertArrayHasKey('Z1', $result->resources['Font']);
+        self::assertArrayNotHasKey('F1', $result->resources['Font']);
     }
 }

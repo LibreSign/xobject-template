@@ -24,13 +24,13 @@ final class TemplateDocumentBuilderCompatibilityTest extends TestCase
             null,
             new PdfEscaper(),
             new ColorParser(),
-            new TemplateDocumentBuilder(),
         );
 
         $result = $compiler->compile(new CompileRequest(html: '<p>Hello</p>'));
 
         self::assertStringContainsString('(Hello) Tj', $result->contentStream);
         self::assertSame([0.0, 0.0, 240.0, 84.0], $result->bbox);
+        self::assertArrayHasKey('Font', $result->resources);
     }
 
     public function testBuilderBuildsPayloadWithCustomMetadataCount(): void
@@ -45,5 +45,20 @@ final class TemplateDocumentBuilderCompatibilityTest extends TestCase
 
         self::assertSame([0.0, 0.0, 100.0, 50.0], $result->bbox);
         self::assertSame(7, $result->metadata['node_count']);
+        self::assertSame(0, $result->metadata['line_count']);
+        self::assertSame(0, $result->metadata['image_count']);
+    }
+
+    public function testBuilderBuildUsesDefaultNodeCountWhenNotProvided(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $result = $builder->build(
+            new CompileRequest(html: '<p>Hello</p>', width: 100.0, height: 50.0),
+            new LayoutResult(lines: [], images: []),
+            hrtime(true),
+        );
+
+        self::assertSame(0, $result->metadata['node_count']);
     }
 }

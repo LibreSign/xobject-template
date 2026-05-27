@@ -18,6 +18,19 @@ final class SubsetHtmlParserTest extends TestCase
         $parser = new SubsetHtmlParser();
 
         $this->expectException(UnsupportedSubsetException::class);
+        $this->expectExceptionMessage('Tag <table> is not supported.');
         $parser->parse('<table><tr><td>x</td></tr></table>');
+    }
+
+    public function testParseNormalizesAttributesAndTrimsTextNodes(): void
+    {
+        $parser = new SubsetHtmlParser();
+
+        $nodes = $parser->parse('<span STYLE=" color:#fff ">   Hello   </span>');
+
+        self::assertCount(1, $nodes);
+        self::assertSame('span', $nodes[0]->tag);
+        self::assertSame('color:#fff', $nodes[0]->attributes['style']);
+        self::assertSame('Hello', $nodes[0]->children[0]->text);
     }
 }
