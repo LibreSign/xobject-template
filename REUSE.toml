@@ -10,7 +10,7 @@ SPDX-FileCopyrightText = "2026 LibreSign"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
 [[annotations]]
-path = ["src/**", "tests/**", "benchmarks/**", "scripts/**", ".github/**", "*.php", "*.xml", "*.json", "*.json5", "*.cjs", "docker-compose.yml", ".env.example"]
+path = ["src/**", "tests/**", "benchmarks/**", "scripts/**", ".github/**", "*.php", "*.xml", "*.json", "*.json5", "*.cjs", "docker-compose.yml"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 LibreSign"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
