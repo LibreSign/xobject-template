@@ -7,6 +7,7 @@ namespace LibreSign\XObjectTemplate\Layout;
 use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Html\Node;
 
+/** @noRector */
 final readonly class LinearLayoutEngine
 {
     private InlineStyleParser $styleParser;

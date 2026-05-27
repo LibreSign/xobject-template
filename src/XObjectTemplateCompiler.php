@@ -12,6 +12,7 @@ use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use LibreSign\XObjectTemplate\Pdf\ColorParser;
 use LibreSign\XObjectTemplate\Pdf\PdfEscaper;
 
+/** @noRector */
 final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
 {
     private SubsetHtmlParser $htmlParser;
