@@ -9,4 +9,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial bootstrap for MVP HTML+CSS subset to Form XObject compilation.
+- Initial bootstrap for HTML+CSS subset to Form XObject compilation.

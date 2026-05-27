@@ -26,7 +26,13 @@ final class SubsetHtmlParser
     public function parse(string $html): array
     {
         $dom = new DOMDocument('1.0', 'UTF-8');
-        @$dom->loadHTML('<?xml encoding="utf-8" ?><body>' . $html . '</body>', LIBXML_NOERROR | LIBXML_NOWARNING);
+        $previousUseInternalErrors = libxml_use_internal_errors(true);
+        $dom->loadHTML(
+            '<?xml encoding="utf-8" ?><body>' . $html . '</body>',
+            LIBXML_NOERROR | LIBXML_NOWARNING,
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors($previousUseInternalErrors);
 
         $body = $dom->getElementsByTagName('body')->item(0);
         if (!$body instanceof DOMElement) {
@@ -49,12 +55,14 @@ final class SubsetHtmlParser
         if ($node instanceof DOMElement) {
             $tag = strtolower($node->tagName);
             if (!isset($this->allowedTags[$tag])) {
-                throw new UnsupportedSubsetException(sprintf('Tag <%s> is not supported in MVP subset.', $tag));
+                throw new UnsupportedSubsetException(sprintf('Tag <%s> is not supported.', $tag));
             }
 
             $attributes = [];
-            foreach ($node->attributes as $attribute) {
-                $attributes[strtolower($attribute->name)] = $attribute->value;
+            if ($node->attributes !== null) {
+                foreach ($node->attributes as $attribute) {
+                    $attributes[strtolower($attribute->name)] = $attribute->value;
+                }
             }
 
             $ownStyle = $attributes['style'] ?? '';
@@ -79,7 +87,7 @@ final class SubsetHtmlParser
             );
         }
 
-        $text = trim($node->textContent ?? '');
+        $text = trim($node->textContent);
         if ($text === '') {
             return null;
         }
