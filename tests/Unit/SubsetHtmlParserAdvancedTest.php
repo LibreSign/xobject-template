@@ -29,7 +29,10 @@ final class SubsetHtmlParserAdvancedTest extends TestCase
         self::assertCount(3, $nodes[0]->children);
         self::assertSame('span', $nodes[0]->children[0]->tag);
         self::assertSame('Hello', $nodes[0]->children[0]->children[0]->text);
-        self::assertSame('font-size:10; margin:2;font-weight:bold', $nodes[0]->children[0]->children[0]->attributes['style']);
+        self::assertSame(
+            'font-size:10; margin:2;font-weight:bold',
+            $nodes[0]->children[0]->children[0]->attributes['style'],
+        );
         self::assertSame('br', $nodes[0]->children[1]->tag);
         self::assertSame('World', $nodes[0]->children[2]->text);
         self::assertSame('font-size:10; margin:2', $nodes[0]->children[2]->attributes['style']);
