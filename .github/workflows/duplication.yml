@@ -11,9 +11,15 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - name: Detect minimum PHP from composer.json
+        id: php_min
+        run: |
+          php_version=$(grep -Po '"php"\s*:\s*"\K[^"]+' composer.json | grep -Eo '[0-9]+\.[0-9]+' | head -n1)
+          [[ -n "$php_version" ]] || { echo "Could not determine minimum PHP version"; exit 1; }
+          echo "version=$php_version" >> "$GITHUB_OUTPUT"
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: ${{ steps.php_min.outputs.version }}
       - run: composer install --no-interaction --prefer-dist
       - run: composer bin phpcpd install --no-interaction --prefer-dist
       - run: composer run duplication:check
