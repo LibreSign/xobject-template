@@ -38,5 +38,10 @@ final class VisibleSignatureBusinessRuleTest extends TestCase
             'html' => '<img src="/fixture/sign.png" style="width:20px;height:20px" /><span style="font-size:9">ID 42</span>',
             'maxStreamLength' => 1400,
         ];
+
+        yield 'styled signer with alignment and spacing' => [
+            'html' => '<div style="font-family:Times New Roman;font-weight:700;text-align:right;margin:6;padding:2;width:220">Signed by Styled User</div>',
+            'maxStreamLength' => 1800,
+        ];
     }
 }

@@ -43,5 +43,20 @@ final class XObjectTemplateCompilerTest extends TestCase
             'html' => '<img src="/tmp/signature.png" style="width:24px;height:24px" />',
             'expectedSnippet' => '/Im0 Do',
         ];
+
+        yield 'bold font weight mapping' => [
+            'html' => '<p style="font-size:10;font-weight:bold">Bold Name</p>',
+            'expectedSnippet' => '/F2 10.000000 Tf',
+        ];
+
+        yield 'font family mapping times' => [
+            'html' => '<p style="font-size:10;font-family:Times New Roman">Times Text</p>',
+            'expectedSnippet' => '/F3 10.000000 Tf',
+        ];
+
+        yield 'margin and padding affect position' => [
+            'html' => '<p style="font-size:10;margin:8;padding:4">Offset Text</p>',
+            'expectedSnippet' => '20.000000 48.000000 Td',
+        ];
     }
 }

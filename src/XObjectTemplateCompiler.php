@@ -62,6 +62,31 @@ final class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
                     'Subtype' => '/Type1',
                     'BaseFont' => '/Helvetica',
                 ],
+                'F2' => [
+                    'Type' => '/Font',
+                    'Subtype' => '/Type1',
+                    'BaseFont' => '/Helvetica-Bold',
+                ],
+                'F3' => [
+                    'Type' => '/Font',
+                    'Subtype' => '/Type1',
+                    'BaseFont' => '/Times-Roman',
+                ],
+                'F4' => [
+                    'Type' => '/Font',
+                    'Subtype' => '/Type1',
+                    'BaseFont' => '/Times-Bold',
+                ],
+                'F5' => [
+                    'Type' => '/Font',
+                    'Subtype' => '/Type1',
+                    'BaseFont' => '/Courier',
+                ],
+                'F6' => [
+                    'Type' => '/Font',
+                    'Subtype' => '/Type1',
+                    'BaseFont' => '/Courier-Bold',
+                ],
             ],
             'XObject' => [],
         ];

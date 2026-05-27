@@ -35,7 +35,7 @@ final class SubsetHtmlParser
 
         $nodes = [];
         foreach ($body->childNodes as $child) {
-            $parsed = $this->parseDomNode($child);
+            $parsed = $this->parseDomNode($child, '');
             if ($parsed !== null) {
                 $nodes[] = $parsed;
             }
@@ -44,7 +44,7 @@ final class SubsetHtmlParser
         return $nodes;
     }
 
-    private function parseDomNode(DOMNode $node): ?Node
+    private function parseDomNode(DOMNode $node, string $inheritedStyle): ?Node
     {
         if ($node instanceof DOMElement) {
             $tag = strtolower($node->tagName);
@@ -57,9 +57,15 @@ final class SubsetHtmlParser
                 $attributes[strtolower($attribute->name)] = $attribute->value;
             }
 
+            $ownStyle = $attributes['style'] ?? '';
+            $effectiveStyle = $this->mergeStyle($inheritedStyle, $ownStyle);
+            if ($effectiveStyle !== '') {
+                $attributes['style'] = $effectiveStyle;
+            }
+
             $children = [];
             foreach ($node->childNodes as $childNode) {
-                $child = $this->parseDomNode($childNode);
+                $child = $this->parseDomNode($childNode, $effectiveStyle);
                 if ($child !== null) {
                     $children[] = $child;
                 }
@@ -67,7 +73,7 @@ final class SubsetHtmlParser
 
             return new Node(
                 tag: $tag,
-                text: trim($node->textContent ?? ''),
+                text: '',
                 attributes: $attributes,
                 children: $children,
             );
@@ -78,6 +84,27 @@ final class SubsetHtmlParser
             return null;
         }
 
-        return new Node(tag: 'span', text: $text);
+        $attributes = [];
+        if ($inheritedStyle !== '') {
+            $attributes['style'] = $inheritedStyle;
+        }
+
+        return new Node(tag: 'span', text: $text, attributes: $attributes);
+    }
+
+    private function mergeStyle(string $inheritedStyle, string $ownStyle): string
+    {
+        $inheritedStyle = trim($inheritedStyle);
+        $ownStyle = trim($ownStyle);
+
+        if ($inheritedStyle === '') {
+            return $ownStyle;
+        }
+
+        if ($ownStyle === '') {
+            return $inheritedStyle;
+        }
+
+        return $inheritedStyle . ';' . $ownStyle;
     }
 }

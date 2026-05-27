@@ -30,22 +30,42 @@ final class LinearLayoutEngine
 
         foreach ($this->walk($nodes) as $node) {
             $style = $this->styleParser->parse($node->attributes['style'] ?? '');
+            $margin = $this->parseBoxSpacing((string) $style->get('margin', '0'));
+            $padding = $this->parseBoxSpacing((string) $style->get('padding', '0'));
+
+            $cursorY -= ($margin['top'] + $padding['top']);
+
             $fontSize = $this->toPoints($style->get('font-size', '10'));
             $lineHeight = max($fontSize * 1.2, $this->toPoints($style->get('line-height', (string) ($fontSize * 1.2))));
+            $fontAlias = $this->resolveFontAlias((string) $style->get('font-family', 'helvetica'), (string) $style->get('font-weight', 'normal'));
+
+            $boxWidth = $this->toPoints((string) $style->get('width', '0'));
+            if ($boxWidth <= 0) {
+                $boxWidth = max($width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'], 0);
+            }
+            $leftBase = $margin['left'] + $padding['left'];
+            $rightBase = $leftBase + $boxWidth;
 
             if ($node->tag === 'img') {
-                $imgWidth = $this->toPoints($style->get('width', '32'));
-                $imgHeight = $this->toPoints($style->get('height', '32'));
+                $imgWidth = $this->toPoints((string) $style->get('width', '32'));
+                $imgHeight = $this->toPoints((string) $style->get('height', '32'));
+                if ($imgWidth <= 0) {
+                    $imgWidth = 32.0;
+                }
+                if ($imgHeight <= 0) {
+                    $imgHeight = 32.0;
+                }
+
                 $images[] = new LayoutImage(
                     alias: 'Im' . $imageCount,
-                    x: 4.0,
+                    x: $leftBase,
                     y: max($cursorY - $imgHeight, 0),
                     width: min($imgWidth, $width),
                     height: min($imgHeight, $height),
                     source: $node->attributes['src'] ?? '',
                 );
                 ++$imageCount;
-                $cursorY -= ($imgHeight + 2.0);
+                $cursorY -= ($imgHeight + 2.0 + $margin['bottom'] + $padding['bottom']);
                 continue;
             }
 
@@ -61,9 +81,9 @@ final class LinearLayoutEngine
 
             $align = strtolower((string) $style->get('text-align', 'left'));
             $x = match ($align) {
-                'center' => $width / 2.0,
-                'right' => max($width - 8.0, 0),
-                default => 8.0,
+                'center' => $leftBase + ($boxWidth / 2.0),
+                'right' => max($rightBase - 8.0, 0),
+                default => $leftBase + 8.0,
             };
 
             $lines[] = new LayoutLine(
@@ -71,11 +91,11 @@ final class LinearLayoutEngine
                 x: $x,
                 y: max($cursorY, 0),
                 fontSize: $fontSize,
-                fontAlias: 'F1',
+                fontAlias: $fontAlias,
                 rgbColor: (string) $style->get('color', '#000000'),
             );
 
-            $cursorY -= $lineHeight;
+            $cursorY -= ($lineHeight + $margin['bottom'] + $padding['bottom']);
         }
 
         return new LayoutResult(lines: $lines, images: $images);
@@ -111,5 +131,65 @@ final class LinearLayoutEngine
         }
 
         return $number;
+    }
+
+    /**
+     * @return array{top: float, right: float, bottom: float, left: float}
+     */
+    private function parseBoxSpacing(string $value): array
+    {
+        $tokens = preg_split('/\s+/', trim($value));
+        $tokens = array_values(array_filter($tokens ?: [], static fn (string $token): bool => $token !== ''));
+
+        if ($tokens === []) {
+            return ['top' => 0.0, 'right' => 0.0, 'bottom' => 0.0, 'left' => 0.0];
+        }
+
+        $points = array_map(fn (string $token): float => $this->toPoints($token), $tokens);
+        $count = count($points);
+
+        if ($count === 1) {
+            return ['top' => $points[0], 'right' => $points[0], 'bottom' => $points[0], 'left' => $points[0]];
+        }
+
+        if ($count === 2) {
+            return ['top' => $points[0], 'right' => $points[1], 'bottom' => $points[0], 'left' => $points[1]];
+        }
+
+        if ($count === 3) {
+            return ['top' => $points[0], 'right' => $points[1], 'bottom' => $points[2], 'left' => $points[1]];
+        }
+
+        return ['top' => $points[0], 'right' => $points[1], 'bottom' => $points[2], 'left' => $points[3]];
+    }
+
+    private function resolveFontAlias(string $fontFamily, string $fontWeight): string
+    {
+        $primary = strtolower(trim(explode(',', $fontFamily)[0], " \t\n\r\0\x0B'\""));
+        $isBold = $this->isBoldWeight($fontWeight);
+
+        if (str_contains($primary, 'times')) {
+            return $isBold ? 'F4' : 'F3';
+        }
+
+        if (str_contains($primary, 'courier')) {
+            return $isBold ? 'F6' : 'F5';
+        }
+
+        return $isBold ? 'F2' : 'F1';
+    }
+
+    private function isBoldWeight(string $fontWeight): bool
+    {
+        $normalized = strtolower(trim($fontWeight));
+        if ($normalized === 'bold' || $normalized === 'bolder') {
+            return true;
+        }
+
+        if (is_numeric($normalized)) {
+            return (int) $normalized >= 600;
+        }
+
+        return false;
     }
 }
