@@ -1,0 +1,16 @@
+version = 1
+SPDX-PackageName = "xobject-template"
+SPDX-PackageSupplier = "LibreSign"
+SPDX-PackageDownloadLocation = "https://github.com/LibreSign/xobject-template"
+
+[[annotations]]
+path = ["README.md", "CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md", "CHANGELOG.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 LibreSign"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = ["src/**", "tests/**", "benchmarks/**", "scripts/**", ".github/**", "*.php", "*.xml", "*.json", "*.json5", "*.cjs", "docker-compose.yml", ".env.example"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 LibreSign"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

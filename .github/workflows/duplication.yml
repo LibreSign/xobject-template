@@ -1,0 +1,19 @@
+name: duplication
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  duplication:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer bin phpcpd install --no-interaction --prefer-dist
+      - run: composer run duplication:check

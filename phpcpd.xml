@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<phpcpd>
+  <exclude>vendor</exclude>
+  <exclude>tests/Fixtures</exclude>
+  <exclude>tests/Snapshots</exclude>
+</phpcpd>

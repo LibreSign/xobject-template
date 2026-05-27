@@ -1,0 +1,77 @@
+{
+  "name": "libresign/xobject-template",
+  "description": "Minimal HTML+CSS to PDF Form XObject compiler for visible signature appearance.",
+  "type": "library",
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "pdf",
+    "xobject",
+    "signature",
+    "html",
+    "css"
+  ],
+  "require": {
+    "php": "^8.2"
+  },
+  "require-dev": {
+    "bamarni/composer-bin-plugin": "^1.8",
+    "roave/security-advisories": "dev-latest"
+  },
+  "autoload": {
+    "psr-4": {
+      "LibreSign\\XObjectTemplate\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "LibreSign\\XObjectTemplate\\Tests\\": "tests/"
+    }
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "bamarni/composer-bin-plugin": true
+    }
+  },
+  "extra": {
+    "bamarni-bin": {
+      "bin-links": false,
+      "forward-command": false
+    }
+  },
+  "scripts": {
+    "lint": [
+      "@cs:check",
+      "@rector:check",
+      "@psalm",
+      "@duplication:check",
+      "@composer:validate"
+    ],
+    "cs:check": "vendor-bin/phpcs/vendor/squizlabs/php_codesniffer/bin/phpcs -q",
+    "cs:fix": "vendor-bin/phpcs/vendor/squizlabs/php_codesniffer/bin/phpcbf -q",
+    "rector:check": "vendor-bin/rector/vendor/rector/rector/bin/rector process --dry-run",
+    "rector:fix": "vendor-bin/rector/vendor/rector/rector/bin/rector process",
+    "psalm": "vendor-bin/psalm/vendor/vimeo/psalm/psalm --no-progress",
+    "phpmd": "vendor-bin/phpmd/vendor/phpmd/phpmd/src/bin/phpmd src,tests text phpmd.xml",
+    "psalm:update-baseline": "vendor-bin/psalm/vendor/vimeo/psalm/psalm --set-baseline=psalm-baseline.xml",
+    "duplication:check": "vendor-bin/phpcpd/vendor/sebastian/phpcpd/phpcpd --min-lines=8 --min-tokens=70 --exclude vendor --exclude tests/Fixtures --exclude tests/Snapshots src tests",
+    "composer:validate": "composer validate --strict",
+    "composer:normalize:check": "vendor-bin/qa/vendor/ergebnis/composer-normalize/bin/composer-normalize --dry-run",
+    "bc:check": "vendor-bin/qa/vendor/roave/backward-compatibility-check/bin/roave-backward-compatibility-check --from=origin/main --to=HEAD",
+    "licenses:check": "php scripts/licenses-check.php",
+    "changelog:check": "php scripts/changelog-check.php",
+    "release:draft": "php scripts/release-draft.php",
+    "deps:audit": "composer audit",
+    "docker:lint": "docker run --rm -i hadolint/hadolint < .docker/Dockerfile",
+    "sh:lint": "shfmt -d scripts",
+    "sh:security": "shellcheck scripts/*.sh",
+    "profile:xdebug": "XDEBUG_MODE=profile php benchmarks/profile.php",
+    "test:unit": "vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --testsuite unit",
+    "test:coverage": "XDEBUG_MODE=coverage vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --coverage-text --coverage-clover=build/coverage/clover.xml",
+    "mutation:test": "vendor-bin/mutation/vendor/infection/infection/bin/infection --threads=max",
+    "performance:check": "php benchmarks/compiler-benchmark.php",
+    "bin": [
+      "composer bin all list"
+    ]
+  }
+}

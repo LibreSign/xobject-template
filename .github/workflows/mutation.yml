@@ -1,0 +1,17 @@
+name: mutation
+
+on:
+  pull_request:
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer bin phpunit install --no-interaction --prefer-dist
+      - run: composer bin mutation install --no-interaction --prefer-dist
+      - run: composer run mutation:test

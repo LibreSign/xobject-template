@@ -1,0 +1,5 @@
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+This file intentionally references the standard license text published by the FSF.
+For the full legal text, see: https://www.gnu.org/licenses/agpl-3.0.txt

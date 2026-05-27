@@ -1,0 +1,14 @@
+name: docker
+
+on:
+  pull_request:
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint Dockerfile
+        run: docker run --rm -i hadolint/hadolint < .docker/Dockerfile
+      - name: Validate compose
+        run: docker compose config > /dev/null

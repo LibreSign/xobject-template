@@ -1,0 +1,26 @@
+name: compatibility-matrix
+
+on:
+  pull_request:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3']
+        deps: [lowest, highest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+      - run: |
+          if [ "${{ matrix.deps }}" = "lowest" ]; then
+            composer update --prefer-lowest --prefer-dist --no-interaction
+          else
+            composer update --prefer-stable --prefer-dist --no-interaction
+          fi
+      - run: composer bin phpunit install --no-interaction --prefer-dist
+      - run: composer run test:unit

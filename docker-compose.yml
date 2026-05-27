@@ -1,0 +1,21 @@
+name: xobject-template-${COMPOSE_PROJECT_SUFFIX:-default}
+
+services:
+  php:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /var/www/html
+    environment:
+      XDEBUG_ENABLED: ${XDEBUG_ENABLED:-0}
+      XDEBUG_MODE: ${XDEBUG_MODE:-off}
+      COMPOSER_HOME: /var/www/.composer
+    volumes:
+      - ./:/var/www/html
+      - ${COMPOSER_CACHE_DIR:-/tmp/composer-cache}:/var/www/.composer/
+      - ./.profile:/var/www/html/.profile
+    command: ["bash", "-lc", "composer --version && bash"]

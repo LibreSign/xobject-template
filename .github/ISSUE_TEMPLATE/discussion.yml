@@ -1,0 +1,16 @@
+name: Discussion
+description: Start a technical/product discussion
+labels: [discussion]
+body:
+  - type: textarea
+    id: topic
+    attributes:
+      label: Topic
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+    validations:
+      required: true

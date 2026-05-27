@@ -1,0 +1,19 @@
+name: performance
+
+on:
+  pull_request:
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    env:
+      BENCH_ITERATIONS: 250
+      BENCH_MAX_AVG_MS: 4.0
+      BENCH_MAX_MEM_KB: 2048
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - run: composer install --no-interaction --prefer-dist
+      - run: php benchmarks/compiler-benchmark.php

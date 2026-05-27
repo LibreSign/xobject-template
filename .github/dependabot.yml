@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: "/"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - security
+    groups:
+      composer-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    assignees:
+      - "libresign"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - security
+    groups:
+      actions-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    assignees:
+      - "libresign"
