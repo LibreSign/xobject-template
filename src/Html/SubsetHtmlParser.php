@@ -26,13 +26,13 @@ final class SubsetHtmlParser
     public function parse(string $html): array
     {
         $dom = new DOMDocument('1.0', 'UTF-8');
-        $previousUseInternalErrors = libxml_use_internal_errors(true);
+        $prevLibxmlErrors = libxml_use_internal_errors(true);
         $dom->loadHTML(
             '<?xml encoding="utf-8" ?><body>' . $html . '</body>',
             LIBXML_NOERROR | LIBXML_NOWARNING,
         );
         libxml_clear_errors();
-        libxml_use_internal_errors($previousUseInternalErrors);
+        libxml_use_internal_errors($prevLibxmlErrors);
 
         $body = $dom->getElementsByTagName('body')->item(0);
         if (!$body instanceof DOMElement) {
@@ -50,6 +50,9 @@ final class SubsetHtmlParser
         return $nodes;
     }
 
+    /**
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     */
     private function parseDomNode(DOMNode $node, string $inheritedStyle): ?Node
     {
         if ($node instanceof DOMElement) {

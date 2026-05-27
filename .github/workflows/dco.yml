@@ -8,6 +8,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: tim-actions/dco@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Validate DCO sign-off in commits
+        run: |
+          set -euo pipefail
+          RANGE="${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
+
+          invalid=0
+          while IFS= read -r sha; do
+            [[ -z "$sha" ]] && continue
+
+            parent_count=$(git rev-list --parents -n1 "$sha" | wc -w)
+            if [[ "$parent_count" -gt 2 ]]; then
+              continue
+            fi
+
+            if ! git log -1 --format=%B "$sha" | grep -qi '^Signed-off-by:'; then
+              echo "Missing Signed-off-by in commit $sha"
+              invalid=1
+            fi
+          done < <(git rev-list "$RANGE")
+
+          if [[ $invalid -ne 0 ]]; then
+            exit 1
+          fi
