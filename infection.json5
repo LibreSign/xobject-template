@@ -9,6 +9,9 @@
   "mutators": {
     "@default": true
   },
+  "phpUnit": {
+    "customPath": "vendor-bin/phpunit/vendor/bin/phpunit"
+  },
   "minMsi": 70,
   "minCoveredMsi": 80,
   "testFramework": "phpunit",
