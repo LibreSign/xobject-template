@@ -12,7 +12,7 @@ jobs:
           fetch-depth: 0
       - name: Check if CHANGELOG.md changed
         id: changed_files
-        uses: tj-actions/changed-files@v46
+        uses: tj-actions/changed-files@v47
         with:
           files: |
             CHANGELOG.md
