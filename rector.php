@@ -9,4 +9,8 @@ return RectorConfig::configure()
         __DIR__ . '/src',
         __DIR__ . '/tests',
     ])
+    ->withSkip([
+        __DIR__ . '/src/Layout/LinearLayoutEngine.php',
+        __DIR__ . '/src/XObjectTemplateCompiler.php',
+    ])
     ->withPhpSets();
