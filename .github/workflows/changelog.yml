@@ -8,9 +8,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-      - run: composer install --no-interaction --prefer-dist
-      - run: composer bin qa install --no-interaction --prefer-dist
-      - run: composer run changelog:check
+          fetch-depth: 0
+      - name: Check if CHANGELOG.md changed
+        id: changed_files
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+            CHANGELOG.md
+      - name: Enforce changelog update for PRs
+        if: github.actor != 'dependabot[bot]'
+        run: |
+          if [[ "${{ steps.changed_files.outputs.any_changed }}" != "true" ]]; then
+            echo "CHANGELOG.md must be updated in this PR (or use dependabot flow)."
+            exit 1
+          fi
+      - name: Validate Keep a Changelog structure
+        run: |
+          grep -q '^## \[Unreleased\]' CHANGELOG.md
