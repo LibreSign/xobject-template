@@ -10,7 +10,7 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Detect minimum PHP from composer.json
         id: php_min
         run: |

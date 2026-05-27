@@ -10,7 +10,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Lint Dockerfile
         run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < .docker/Dockerfile
       - name: Validate compose

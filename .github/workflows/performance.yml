@@ -14,7 +14,7 @@ jobs:
       BENCH_MAX_AVG_MS: 4.0
       BENCH_MAX_MEM_KB: 2048
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Detect minimum PHP from composer.json
         id: php_min
         run: |
