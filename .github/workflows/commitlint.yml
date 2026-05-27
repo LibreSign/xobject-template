@@ -18,6 +18,7 @@ jobs:
           invalid=0
           while IFS= read -r message; do
             [[ -z "$message" ]] && continue
+            [[ "$message" =~ ^Merge\  ]] && continue
 
             if [[ "$message" =~ ^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?:\ .+ ]]; then
               continue
