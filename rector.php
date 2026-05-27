@@ -10,6 +10,6 @@ return RectorConfig::configure()
         __DIR__ . '/tests',
     ])
     ->withSkip([
-        'Rector\\Php84\\Rector\\ClassMethod\\NewInInitializerRector',
+        'Rector\\Php84\\Rector\\Class_\\NewInInitializerRector',
     ])
     ->withPhpSets();
