@@ -7,13 +7,10 @@ namespace LibreSign\XObjectTemplate\Layout;
 use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Html\Node;
 
-final class LinearLayoutEngine
+final readonly class LinearLayoutEngine
 {
-    private InlineStyleParser $styleParser;
-
-    public function __construct(?InlineStyleParser $styleParser = null)
+    public function __construct(private InlineStyleParser $styleParser = new InlineStyleParser())
     {
-        $this->styleParser = $styleParser ?? new InlineStyleParser();
     }
 
     /**
@@ -35,9 +32,15 @@ final class LinearLayoutEngine
 
             $cursorY -= ($margin['top'] + $padding['top']);
 
-            $fontSize = $this->toPoints($style->get('font-size', '10'));
-            $lineHeight = max($fontSize * 1.2, $this->toPoints($style->get('line-height', (string) ($fontSize * 1.2))));
-            $fontAlias = $this->resolveFontAlias((string) $style->get('font-family', 'helvetica'), (string) $style->get('font-weight', 'normal'));
+            $fontSize = $this->toPoints((string) $style->get('font-size', '10'));
+            $lineHeight = max(
+                $fontSize * 1.2,
+                $this->toPoints((string) $style->get('line-height', (string) ($fontSize * 1.2))),
+            );
+            $fontAlias = $this->resolveFontAlias(
+                (string) $style->get('font-family', 'helvetica'),
+                (string) $style->get('font-weight', 'normal'),
+            );
 
             $boxWidth = $this->toPoints((string) $style->get('width', '0'));
             if ($boxWidth <= 0) {

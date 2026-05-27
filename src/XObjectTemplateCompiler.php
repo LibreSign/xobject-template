@@ -12,23 +12,14 @@ use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use LibreSign\XObjectTemplate\Pdf\ColorParser;
 use LibreSign\XObjectTemplate\Pdf\PdfEscaper;
 
-final class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
+final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
 {
-    private SubsetHtmlParser $htmlParser;
-    private LinearLayoutEngine $layoutEngine;
-    private PdfEscaper $pdfEscaper;
-    private ColorParser $colorParser;
-
     public function __construct(
-        ?SubsetHtmlParser $htmlParser = null,
-        ?LinearLayoutEngine $layoutEngine = null,
-        ?PdfEscaper $pdfEscaper = null,
-        ?ColorParser $colorParser = null,
+        private SubsetHtmlParser $htmlParser = new SubsetHtmlParser(),
+        private LinearLayoutEngine $layoutEngine = new LinearLayoutEngine(),
+        private PdfEscaper $pdfEscaper = new PdfEscaper(),
+        private ColorParser $colorParser = new ColorParser(),
     ) {
-        $this->htmlParser = $htmlParser ?? new SubsetHtmlParser();
-        $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine();
-        $this->pdfEscaper = $pdfEscaper ?? new PdfEscaper();
-        $this->colorParser = $colorParser ?? new ColorParser();
     }
 
     public function compile(CompileRequest $request): CompileResult
@@ -42,7 +33,14 @@ final class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
         $stream[] = 'q';
 
         foreach ($layout->images as $image) {
-            $stream[] = sprintf('q %F 0 0 %F %F %F cm /%s Do Q', $image->width, $image->height, $image->x, $image->y, $image->alias);
+            $stream[] = sprintf(
+                'q %F 0 0 %F %F %F cm /%s Do Q',
+                $image->width,
+                $image->height,
+                $image->x,
+                $image->y,
+                $image->alias,
+            );
         }
 
         $stream[] = 'BT';

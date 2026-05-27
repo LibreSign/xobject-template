@@ -14,3 +14,9 @@ path = ["src/**", "tests/**", "benchmarks/**", "scripts/**", ".github/**", "*.ph
 precedence = "override"
 SPDX-FileCopyrightText = "2026 LibreSign"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = ["phpunit.xml.dist", "vendor-bin/**/composer.json"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 LibreSign"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

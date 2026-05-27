@@ -1,5 +1,13 @@
 name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
+template: |
+  ## Changes
+
+  $CHANGES
+
+  ## Contributors
+
+  $CONTRIBUTORS
 change-template: '- $TITLE (#$NUMBER)'
 categories:
   - title: 'Features'
