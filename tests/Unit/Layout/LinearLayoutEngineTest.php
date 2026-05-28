@@ -9,6 +9,7 @@ namespace LibreSign\XObjectTemplate\Tests\Unit\Layout;
 
 use LibreSign\XObjectTemplate\Html\Node;
 use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class LinearLayoutEngineTest extends TestCase
@@ -205,5 +206,68 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertCount(1, $result->images);
         self::assertEqualsWithDelta(12.0, $result->images[0]->width, 0.0001);
         self::assertEqualsWithDelta(32.0, $result->images[0]->height, 0.0001);
+    }
+
+    #[DataProvider('nestedTraversalProvider')]
+    public function testLayoutKeepsDepthFirstTraversalOrderForNestedNodes(array $nodes, array $expectedTexts): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout($nodes, 240.0, 90.0);
+
+        self::assertSame($expectedTexts, array_map(static fn ($line): string => $line->text, $result->lines));
+    }
+
+    public function testLayoutHandlesDeeplyNestedTreeWithoutDroppingLeafText(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $depth = 120;
+        $leaf = new Node(tag: 'span', text: 'Deep leaf', attributes: ['style' => 'font-size:10']);
+        for ($i = 0; $i < $depth; ++$i) {
+            $leaf = new Node(tag: 'div', text: '', attributes: [], children: [$leaf]);
+        }
+
+        $result = $engine->layout([$leaf], 240.0, 90.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame('Deep leaf', $result->lines[0]->text);
+    }
+
+    /**
+     * @return iterable<string, array{nodes: list<Node>, expectedTexts: list<string>}>
+     */
+    public static function nestedTraversalProvider(): iterable
+    {
+        yield 'root before children and sibling after subtree' => [
+            'nodes' => [
+                new Node(
+                    tag: 'div',
+                    text: 'A',
+                    attributes: ['style' => 'font-size:10'],
+                    children: [
+                        new Node(tag: 'span', text: 'B', attributes: ['style' => 'font-size:10']),
+                        new Node(
+                            tag: 'span',
+                            text: 'C',
+                            attributes: ['style' => 'font-size:10'],
+                            children: [
+                                new Node(tag: 'span', text: 'D', attributes: ['style' => 'font-size:10']),
+                            ],
+                        ),
+                    ],
+                ),
+                new Node(tag: 'p', text: 'E', attributes: ['style' => 'font-size:10']),
+            ],
+            'expectedTexts' => ['A', 'B', 'C', 'D', 'E'],
+        ];
+
+        yield 'multiple roots preserve insertion order' => [
+            'nodes' => [
+                new Node(tag: 'span', text: 'First', attributes: ['style' => 'font-size:10']),
+                new Node(tag: 'span', text: 'Second', attributes: ['style' => 'font-size:10']),
+            ],
+            'expectedTexts' => ['First', 'Second'],
+        ];
     }
 }
