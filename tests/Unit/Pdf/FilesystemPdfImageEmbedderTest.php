@@ -11,6 +11,7 @@ use LibreSign\XObjectTemplate\Pdf\FilesystemPdfImageEmbedder;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class FilesystemPdfImageEmbedderTest extends TestCase
 {
@@ -193,6 +194,49 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         $this->expectExceptionMessage('Unsupported PNG row filter 5.');
 
         $embedder->embed($pngPath);
+    }
+
+    public function testUnfilterPngRowSupportsAverageFilterWithMultiPixelContext(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
+
+        $decodedRow = $method->invoke(
+            $embedder,
+            3,
+            "\x55\x5a\x5f\x64\x3c\x3c\x3c\x3c",
+            "\x0a\x14\x1e\x28\x32\x3c\x46\x50",
+            4,
+        );
+
+        self::assertSame("\x5a\x64\x6e\x78\x82\x8c\x96\xa0", $decodedRow);
+    }
+
+    public function testUnfilterPngRowSupportsPaethFilterWithMultiPixelContext(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
+
+        $decodedRow = $method->invoke(
+            $embedder,
+            4,
+            "\x0a\x0a\x0a\x0a\x0a\x14\x1e\x28",
+            "\x0a\x14\x1e\x28\x3c\x46\x50\x5a",
+            4,
+        );
+
+        self::assertSame("\x14\x1e\x28\x32\x46\x5a\x6e\x82", $decodedRow);
+    }
+
+    public function testPaethPredictorSelectsExpectedNeighborAcrossTieCases(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'paethPredictor');
+
+        self::assertSame(20, $method->invoke($embedder, 20, 20, 10));
+        self::assertSame(50, $method->invoke($embedder, 50, 10, 20));
+        self::assertSame(50, $method->invoke($embedder, 10, 50, 20));
+        self::assertSame(20, $method->invoke($embedder, 10, 30, 20));
     }
 
     /**

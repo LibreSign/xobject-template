@@ -15,13 +15,13 @@ final readonly class LinearLayoutEngine
 {
     private InlineStyleParser $styleParser;
     private LayoutStyleResolver $styleResolver;
-    private StructuredLayoutRenderer $structuredLayoutRenderer;
+    private StructuredLayoutRenderer $structuredRenderer;
 
     public function __construct(?InlineStyleParser $styleParser = null)
     {
         $this->styleParser = $styleParser ?? new InlineStyleParser();
         $this->styleResolver = new LayoutStyleResolver();
-        $this->structuredLayoutRenderer = new StructuredLayoutRenderer($this->styleParser, $this->styleResolver);
+        $this->structuredRenderer = new StructuredLayoutRenderer($this->styleParser, $this->styleResolver);
     }
 
     /**
@@ -30,7 +30,7 @@ final readonly class LinearLayoutEngine
     public function layout(array $nodes, float $width, float $height): LayoutResult
     {
         if ($this->requiresStructuredLayout($nodes)) {
-            return $this->structuredLayoutRenderer->layout($nodes, $width, $height);
+            return $this->structuredRenderer->layout($nodes, $width, $height);
         }
 
         return $this->layoutLinear($nodes, $width, $height);
