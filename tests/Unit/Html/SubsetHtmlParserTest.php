@@ -90,4 +90,26 @@ final class SubsetHtmlParserTest extends TestCase
         self::assertSame('font-size:10', $nodes[0]->attributes['style']);
         self::assertSame('font-size:10', $nodes[0]->children[0]->children[0]->attributes['style']);
     }
+
+    public function testParseClearsLibxmlErrorsAfterMalformedHtmlAndRestoresPreviousFlag(): void
+    {
+        $parser = new SubsetHtmlParser();
+        libxml_clear_errors();
+        $previous = libxml_use_internal_errors(true);
+
+        try {
+            $nodes = $parser->parse('<div style="font-size:10"><span>Broken');
+            $current = libxml_use_internal_errors(true);
+            $errors = libxml_get_errors();
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+
+        self::assertTrue($current);
+        self::assertSame([], $errors);
+        self::assertCount(1, $nodes);
+        self::assertSame('div', $nodes[0]->tag);
+        self::assertSame('Broken', $nodes[0]->children[0]->children[0]->text);
+    }
 }
