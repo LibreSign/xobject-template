@@ -13,15 +13,37 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Detect backward-compatibility baseline
+        id: bc_base
+        run: |
+          tag=$(git tag --list 'v*' --sort=-version:refname | head -n1)
+
+          if [[ -z "$tag" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No release tag found yet; skipping backward-compatibility check until the first tagged release."
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "ref=$tag" >> "$GITHUB_OUTPUT"
+          echo "Using backward-compatibility baseline: $tag"
       - name: Detect minimum PHP from composer.json
+        if: steps.bc_base.outputs.skip != 'true'
         id: php_min
         run: |
           php_version=$(grep -Po '"php"\s*:\s*"\K[^"]+' composer.json | grep -Eo '[0-9]+\.[0-9]+' | head -n1)
           [[ -n "$php_version" ]] || { echo "Could not determine minimum PHP version"; exit 1; }
           echo "version=$php_version" >> "$GITHUB_OUTPUT"
       - uses: shivammathur/setup-php@v2
+        if: steps.bc_base.outputs.skip != 'true'
         with:
           php-version: ${{ steps.php_min.outputs.version }}
-      - run: composer install --no-interaction --prefer-dist
-      - run: composer bin qa install --no-interaction --prefer-dist
-      - run: composer run bc:check
+      - name: Skip BC check before first release
+        if: steps.bc_base.outputs.skip == 'true'
+        run: echo "Skipping backward-compatibility check because the package has no tagged release yet."
+      - if: steps.bc_base.outputs.skip != 'true'
+        run: composer install --no-interaction --prefer-dist
+      - if: steps.bc_base.outputs.skip != 'true'
+        run: composer bin qa install --no-interaction --prefer-dist
+      - if: steps.bc_base.outputs.skip != 'true'
+        run: vendor-bin/qa/vendor/roave/backward-compatibility-check/bin/roave-backward-compatibility-check --from="${{ steps.bc_base.outputs.ref }}" --to=HEAD
