@@ -15,9 +15,6 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionProperty;
 
-/**
- * @SuppressWarnings(PHPMD.TooManyPublicMethods)
- */
 final class LinearLayoutEngineTest extends TestCase
 {
     public function testLayoutSupportsNestedNodesImagesAndStyles(): void
