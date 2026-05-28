@@ -10,6 +10,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Initial bootstrap for HTML+CSS subset to Form XObject compilation.
+_No unreleased entries yet._
