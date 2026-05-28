@@ -20,6 +20,7 @@ Use the compiler to generate a reusable XObject result. Consumers that prefer ar
 ```php
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Integration\XObjectPayloadAdapter;
+use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 
 $compiler = new XObjectTemplateCompiler();
@@ -32,7 +33,18 @@ $result = $compiler->compile(new CompileRequest(
 ));
 
 $payload = (new XObjectPayloadAdapter())->toXObjectPayload($result);
+$pdf = (new SinglePagePdfExporter())->export($result);
+
+file_put_contents(__DIR__ . '/build/preview.pdf', $pdf);
 ```
+
+### Standalone PDF export
+
+`SinglePagePdfExporter` wraps a compiled XObject result into a one-page PDF whose `MediaBox` matches the compiled `bbox` size exactly.
+
+- The page size is derived from `$result->bbox`
+- Non-zero bounding boxes are translated back to the page origin automatically
+- Local PNG and JPEG image sources are embedded into the standalone PDF during export
 
 ### Output contract
 
@@ -41,6 +53,7 @@ $payload = (new XObjectPayloadAdapter())->toXObjectPayload($result);
 - `$result->bbox`: bounding box as `[x1, y1, x2, y2]`
 - `$result->metadata`: render diagnostics such as `line_count`, `image_count`, `node_count`, and `render_ms`
 - `$payload`: transport-agnostic array with `stream`, `resources`, and `bbox`
+- `$pdf`: standalone PDF bytes ready to save, stream, or attach to preview workflows
 
 ## Supported HTML/CSS subset
 
