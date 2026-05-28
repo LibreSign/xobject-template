@@ -27,7 +27,7 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         array $expectedTexts,
     ): void {
         $previewRoot = dirname(__DIR__, 2) . '/build/visible-stamp-previews';
-        $assetRoot = dirname(__DIR__) . '/Fixtures/visible-stamp-assets';
+        $assetRoot = $previewRoot . '/assets';
         $this->ensureDirectoryExists($previewRoot);
         $this->ensureDirectoryExists($assetRoot);
 
