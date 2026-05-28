@@ -12,6 +12,7 @@ use LibreSign\XObjectTemplate\Layout\LayoutImage;
 use LibreSign\XObjectTemplate\Layout\LayoutLine;
 use LibreSign\XObjectTemplate\Layout\LayoutResult;
 use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class TemplateDocumentBuilderTest extends TestCase
@@ -66,17 +67,15 @@ final class TemplateDocumentBuilderTest extends TestCase
 
     public function testBuildMetadataDefaultsNodeCountAndUsesRoundedMilliseconds(): void
     {
-        $builder = new TemplateDocumentBuilder();
+        $builder = new TemplateDocumentBuilder(clock: static fn (): int => 2_000_000);
         $layout = new LayoutResult(lines: [], images: []);
-        $startedAtNs = hrtime(true) - 2_000_000;
 
-        $metadata = $builder->buildMetadata($layout, $startedAtNs);
+        $metadata = $builder->buildMetadata($layout, 0);
 
         self::assertSame(0, $metadata['line_count']);
         self::assertSame(0, $metadata['image_count']);
         self::assertSame(0, $metadata['node_count']);
-        self::assertGreaterThan(0.5, $metadata['render_ms']);
-        self::assertLessThan(1000.0, $metadata['render_ms']);
+        self::assertSame(2.0, $metadata['render_ms']);
     }
 
     public function testBuilderBuildsPayloadWithCustomMetadataCount(): void
@@ -106,5 +105,91 @@ final class TemplateDocumentBuilderTest extends TestCase
         );
 
         self::assertSame(0, $result->metadata['node_count']);
+    }
+
+    public function testBuildContentStreamIsDirectlyUsableForImagesAndEscapedText(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [
+                new LayoutLine(
+                    text: 'Signer (QA)',
+                    x: 12.0,
+                    y: 22.0,
+                    fontSize: 9.0,
+                    fontAlias: 'F2',
+                    rgbColor: '#abcdef',
+                ),
+            ],
+            images: [
+                new LayoutImage(alias: 'Im7', x: 1.0, y: 2.0, width: 3.0, height: 4.0, source: '/img.png'),
+            ],
+        ));
+
+        self::assertStringContainsString('q 3.000000 0 0 4.000000 1.000000 2.000000 cm /Im7 Do Q', $stream);
+        self::assertStringContainsString('/F2 9.000000 Tf', $stream);
+        self::assertStringContainsString('0.6706 0.8039 0.9373 rg', $stream);
+        self::assertStringContainsString('(Signer \\(QA\\)) Tj', $stream);
+    }
+
+    public function testBuildResourcesExposesImageDictionaryAndCustomFontsFromDerivedBuilder(): void
+    {
+        $builder = (new TemplateDocumentBuilder())->withFontResources([
+            'Z9' => [
+                'Type' => '/Font',
+                'Subtype' => '/Type1',
+                'BaseFont' => '/Courier',
+            ],
+        ]);
+
+        $resources = $builder->buildResources(new LayoutResult(
+            lines: [],
+            images: [
+                new LayoutImage(alias: 'Im9', x: 0.0, y: 0.0, width: 10.0, height: 11.0, source: '/proof.png'),
+            ],
+        ));
+
+        self::assertArrayHasKey('Z9', $resources['Font']);
+        self::assertArrayNotHasKey('F1', $resources['Font']);
+        self::assertSame('/proof.png', $resources['XObject']['Im9']['Source']);
+        self::assertSame(10.0, $resources['XObject']['Im9']['Width']);
+        self::assertSame(11.0, $resources['XObject']['Im9']['Height']);
+    }
+
+    #[DataProvider('metadataRoundingProvider')]
+    public function testBuildMetadataUsesDeterministicClockRounding(
+        int $finishedAtNs,
+        int $startedAtNs,
+        float $expectedRenderMs,
+    ): void {
+        $builder = new TemplateDocumentBuilder(clock: static fn (): int => $finishedAtNs);
+
+        $metadata = $builder->buildMetadata(new LayoutResult(lines: [], images: []), $startedAtNs);
+
+        self::assertSame($expectedRenderMs, $metadata['render_ms']);
+    }
+
+    /**
+     * @return iterable<string, array{finishedAtNs: int, startedAtNs: int, expectedRenderMs: float}>
+     */
+    public static function metadataRoundingProvider(): iterable
+    {
+        yield 'three-decimal rounding stays exact' => [
+            'finishedAtNs' => 123_456_789,
+            'startedAtNs' => 0,
+            'expectedRenderMs' => 123.457,
+        ];
+
+        yield 'denominator stays at one million nanoseconds' => [
+            'finishedAtNs' => 500_499_001,
+            'startedAtNs' => 0,
+            'expectedRenderMs' => 500.499,
+        ];
+
+        yield 'elapsed time subtracts start and keeps third-decimal rounding' => [
+            'finishedAtNs' => 510_499_500,
+            'startedAtNs' => 10_000_000,
+            'expectedRenderMs' => 500.5,
+        ];
     }
 }
