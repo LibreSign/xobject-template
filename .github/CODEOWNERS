@@ -1,9 +1,1 @@
-* @LibreSign/maintainers
-
-/src/ @LibreSign/maintainers
-/.github/workflows/ @LibreSign/maintainers
-/composer.json @LibreSign/maintainers
-/REUSE.toml @LibreSign/maintainers
-/phpunit.xml.dist @LibreSign/maintainers
-/psalm.xml @LibreSign/maintainers
-/rector.php @LibreSign/maintainers
+* @vitormattos
