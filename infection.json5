@@ -12,8 +12,8 @@
   "phpUnit": {
     "customPath": "vendor-bin/phpunit/vendor/bin/phpunit"
   },
-  "minMsi": 70,
-  "minCoveredMsi": 80,
+  "minMsi": 75,
+  "minCoveredMsi": 85,
   "testFramework": "phpunit",
   "timeout": 10
 }
