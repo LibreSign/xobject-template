@@ -55,6 +55,41 @@ file_put_contents(__DIR__ . '/build/preview.pdf', $pdf);
 - `$payload`: transport-agnostic array with `stream`, `resources`, and `bbox`
 - `$pdf`: standalone PDF bytes ready to save, stream, or attach to preview workflows
 
+### Scaling a compiled XObject
+
+`CompileRequest::width` and `CompileRequest::height` define the base design size of the template.
+If a downstream consumer needs to place the compiled stamp at a different size while preserving the
+original aspect ratio, it should keep the compiled XObject unchanged and apply a uniform scale during
+PDF placement instead of recompiling the HTML with new dimensions.
+
+- Read the base size from `$result->bbox`
+- Compute a single scale factor from the target width or target height
+- Apply the same scale to both axes in the placement matrix
+
+```php
+[$minX, $minY, $maxX, $maxY] = $result->bbox;
+
+$baseWidth = $maxX - $minX;
+$baseHeight = $maxY - $minY;
+
+$targetWidth = 175.0;
+$scale = $targetWidth / $baseWidth;
+$targetHeight = $baseHeight * $scale;
+
+// Consumer-side PDF placement concept:
+$placement = sprintf(
+	'q %F 0 0 %F %F %F cm /Fm0 Do Q',
+	$scale,
+	$scale,
+	$x,
+	$y,
+);
+```
+
+Using a uniform placement scale keeps text, images, spacing, and line breaks visually aligned.
+Recompiling only to emulate a proportional resize is usually the wrong integration point for this
+package.
+
 ## Supported HTML/CSS subset
 
 ### HTML
