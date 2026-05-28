@@ -8,12 +8,15 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit;
 
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
+use LibreSign\XObjectTemplate\Html\SubsetHtmlParser;
+use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use LibreSign\XObjectTemplate\Pdf\ColorParser;
 use LibreSign\XObjectTemplate\Pdf\PdfEscaper;
 use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 
 final class XObjectTemplateCompilerTest extends TestCase
 {
@@ -85,17 +88,45 @@ final class XObjectTemplateCompilerTest extends TestCase
 
     public function testCompilerConstructorStillAcceptsLegacyPdfDependencies(): void
     {
+        $pdfEscaper = new PdfEscaper();
+        $colorParser = new ColorParser();
         $compiler = new XObjectTemplateCompiler(
             null,
             null,
-            new PdfEscaper(),
-            new ColorParser(),
+            $pdfEscaper,
+            $colorParser,
         );
 
         $result = $compiler->compile(new CompileRequest(html: '<p>Hello</p>'));
 
+        $builderProp = new ReflectionProperty($compiler, 'documentBuilder');
+        $builder = $builderProp->getValue($compiler);
+        $escProp = new ReflectionProperty($builder, 'pdfEscaper');
+        $colProp = new ReflectionProperty($builder, 'colorParser');
+
         self::assertStringContainsString('(Hello) Tj', $result->contentStream);
         self::assertSame([0.0, 0.0, 240.0, 84.0], $result->bbox);
         self::assertArrayHasKey('Font', $result->resources);
+        self::assertSame($pdfEscaper, $escProp->getValue($builder));
+        self::assertSame($colorParser, $colProp->getValue($builder));
+    }
+
+    private function getBuilderProperty(object $obj, string $name): object
+    {
+        $prop = new ReflectionProperty($obj, $name);
+        return $prop->getValue($obj);
+    }
+
+    public function testCompilerConstructorKeepsProvidedParserAndLayoutInstances(): void
+    {
+        $htmlParser = new SubsetHtmlParser();
+        $layoutEngine = new LinearLayoutEngine();
+        $compiler = new XObjectTemplateCompiler($htmlParser, $layoutEngine);
+
+        $htmlParserProperty = new ReflectionProperty($compiler, 'htmlParser');
+        $layoutEngineProperty = new ReflectionProperty($compiler, 'layoutEngine');
+
+        self::assertSame($htmlParser, $htmlParserProperty->getValue($compiler));
+        self::assertSame($layoutEngine, $layoutEngineProperty->getValue($compiler));
     }
 }

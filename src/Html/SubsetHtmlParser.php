@@ -14,6 +14,9 @@ use LibreSign\XObjectTemplate\Exception\UnsupportedSubsetException;
 
 final class SubsetHtmlParser
 {
+    private const HTML_WRAPPER = '<?xml encoding="utf-8" ?><body>%s</body>';
+    private const LIBXML_HTML_PARSE_FLAGS = 96; // LIBXML_NOERROR | LIBXML_NOWARNING
+
     /** @var array<string, true> */
     private array $allowedTags = [
         'div' => true,
@@ -31,14 +34,14 @@ final class SubsetHtmlParser
         $dom = new DOMDocument('1.0', 'UTF-8');
         $prevLibxmlErrors = libxml_use_internal_errors(true);
         $dom->loadHTML(
-            '<?xml encoding="utf-8" ?><body>' . $html . '</body>',
-            LIBXML_NOERROR | LIBXML_NOWARNING,
+            sprintf(self::HTML_WRAPPER, $html),
+            self::LIBXML_HTML_PARSE_FLAGS,
         );
         libxml_clear_errors();
         libxml_use_internal_errors($prevLibxmlErrors);
 
         $body = $dom->getElementsByTagName('body')->item(0);
-        if (!$body instanceof DOMElement) {
+        if ($body === null) {
             return [];
         }
 
@@ -64,13 +67,14 @@ final class SubsetHtmlParser
 
     private function parseElementNode(DOMElement $node, string $inheritedStyle): Node
     {
-        $tag = strtolower($node->tagName);
+        $tag = $node->tagName;
         if (!isset($this->allowedTags[$tag])) {
             throw new UnsupportedSubsetException(sprintf('Tag <%s> is not supported.', $tag));
         }
 
         $attributes = $this->collectAttributes($node);
         $effectiveStyle = $this->mergeStyle($inheritedStyle, $attributes['style'] ?? '');
+        unset($attributes['style']);
         if ($effectiveStyle !== '') {
             $attributes['style'] = $effectiveStyle;
         }
@@ -112,12 +116,11 @@ final class SubsetHtmlParser
     private function collectAttributes(DOMElement $node): array
     {
         $attributes = [];
-        if ($node->attributes === null) {
-            return $attributes;
-        }
-
-        foreach ($node->attributes as $attribute) {
-            $attributes[strtolower($attribute->name)] = $attribute->value;
+        $nodeAttrs = $node->attributes;
+        if ($nodeAttrs !== null) {
+            foreach ($nodeAttrs as $attribute) {
+                $attributes[$attribute->name] = trim($attribute->value);
+            }
         }
 
         return $attributes;
@@ -125,9 +128,6 @@ final class SubsetHtmlParser
 
     private function mergeStyle(string $inheritedStyle, string $ownStyle): string
     {
-        $inheritedStyle = trim($inheritedStyle);
-        $ownStyle = trim($ownStyle);
-
         if ($inheritedStyle === '') {
             return $ownStyle;
         }

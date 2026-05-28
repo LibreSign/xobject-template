@@ -7,9 +7,13 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Unit\Layout;
 
+use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Html\Node;
 use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use ReflectionProperty;
 
 final class LinearLayoutEngineTest extends TestCase
 {
@@ -205,5 +209,248 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertCount(1, $result->images);
         self::assertEqualsWithDelta(12.0, $result->images[0]->width, 0.0001);
         self::assertEqualsWithDelta(32.0, $result->images[0]->height, 0.0001);
+    }
+
+    public function testConstructorKeepsProvidedInlineStyleParserInstance(): void
+    {
+        $styleParser = new InlineStyleParser();
+        $engine = new LinearLayoutEngine($styleParser);
+
+        $property = new ReflectionProperty($engine, 'styleParser');
+
+        self::assertSame($styleParser, $property->getValue($engine));
+    }
+
+    public function testLayoutNormalizesTrimmedSpacingFontAndAlignmentValues(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'p',
+                text: 'Trimmed',
+                attributes: [
+                    'style' => 'margin:  4px  8px ; padding: 2px  6px 4px 8px ; '
+                        . 'font-size: 10PX; text-align: RIGHT ; color:#123456',
+                ],
+            ),
+        ], 100.0, 90.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame('Trimmed', $result->lines[0]->text);
+        self::assertEqualsWithDelta(81.5, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(73.5, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(7.5, $result->lines[0]->fontSize, 0.0001);
+        self::assertSame('#123456', $result->lines[0]->rgbColor);
+    }
+
+    public function testLayoutTrimsTextUsesDefaultLineHeightMultiplierAndAdvancesBreaks(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(tag: 'span', text: '  Trim me  ', attributes: ['style' => 'font-size:10']),
+            new Node(tag: 'br', text: '', attributes: []),
+            new Node(tag: 'span', text: 'Next', attributes: ['style' => 'font-size:10']),
+        ], 120.0, 90.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertSame('Trim me', $result->lines[0]->text);
+        self::assertSame('Next', $result->lines[1]->text);
+        self::assertEqualsWithDelta(78.0, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(54.0, $result->lines[1]->y, 0.0001);
+    }
+
+    public function testLayoutClampsRightAlignmentAndLineYToZeroOnTinyCanvas(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Tiny',
+                attributes: ['style' => 'text-align:right;width:0;margin:0;padding:0;font-size:10'],
+            ),
+        ], 4.0, 6.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->y, 0.0001);
+    }
+
+    public function testLayoutPrefersExplicitLineHeightWhenItExceedsFontDefault(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(tag: 'span', text: 'First', attributes: ['style' => 'font-size:10;line-height:30']),
+            new Node(tag: 'br', text: '', attributes: []),
+            new Node(tag: 'span', text: 'Second', attributes: ['style' => 'font-size:10']),
+        ], 120.0, 120.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertEqualsWithDelta(108.0, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(66.0, $result->lines[1]->y, 0.0001);
+    }
+
+    public function testLayoutKeepsZeroFallbackWidthForCenteredTinyCanvas(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Center',
+                attributes: ['style' => 'text-align:center;width:0;font-size:10'],
+            ),
+        ], 0.0, 20.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->x, 0.0001);
+    }
+
+    public function testLayoutClampsNegativeAvailableWidthToZero(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Negative width',
+                attributes: ['style' => 'text-align:center;width:0;font-size:10'],
+            ),
+        ], -1.0, 20.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->x, 0.0001);
+    }
+
+    public function testLayoutSubtractsBottomSpacingFromFollowingLinePosition(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(tag: 'span', text: 'First', attributes: ['style' => 'font-size:10;margin:0 0 5;padding:0 0 7']),
+            new Node(tag: 'span', text: 'Second', attributes: ['style' => 'font-size:10']),
+        ], 100.0, 100.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertEqualsWithDelta(88.0, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(64.0, $result->lines[1]->y, 0.0001);
+    }
+
+    public function testLayoutUsesThreeValueSpacingRightSlotForHorizontalPositioning(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Three values',
+                attributes: ['style' => 'font-size:10;text-align:right;margin:1 20 3;width:0'],
+            ),
+        ], 100.0, 100.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(72.0, $result->lines[0]->x, 0.0001);
+    }
+
+    public function testLayoutRecognizesTrimmedUppercaseBoldTokens(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Bold text',
+                attributes: ['style' => 'font-size:10;font-family:Courier;font-weight: BOLD '],
+            ),
+            new Node(
+                tag: 'span',
+                text: 'Numeric bold',
+                attributes: ['style' => 'font-size:10;font-family:Helvetica;font-weight: 600 '],
+            ),
+        ], 120.0, 100.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertSame('F6', $result->lines[0]->fontAlias);
+        self::assertSame('F2', $result->lines[1]->fontAlias);
+    }
+
+    #[DataProvider('nestedTraversalProvider')]
+    public function testLayoutKeepsDepthFirstTraversalOrderForNestedNodes(array $nodes, array $expectedTexts): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout($nodes, 240.0, 90.0);
+
+        self::assertSame($expectedTexts, array_map(static fn ($line): string => $line->text, $result->lines));
+    }
+
+    public function testLayoutHandlesDeeplyNestedTreeWithoutDroppingLeafText(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $depth = 120;
+        $leaf = new Node(tag: 'span', text: 'Deep leaf', attributes: ['style' => 'font-size:10']);
+        for ($i = 0; $i < $depth; ++$i) {
+            $leaf = new Node(tag: 'div', text: '', attributes: [], children: [$leaf]);
+        }
+
+        $result = $engine->layout([$leaf], 240.0, 90.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame('Deep leaf', $result->lines[0]->text);
+    }
+
+    public function testParseBoxSpacingReturnsZeroSlotsForWhitespaceOnlyInput(): void
+    {
+        $engine = new LinearLayoutEngine();
+        $method = new ReflectionMethod($engine, 'parseBoxSpacing');
+
+        /** @var array{top: float, right: float, bottom: float, left: float} $spacing */
+        $spacing = $method->invoke($engine, '   ');
+
+        self::assertSame(
+            ['top' => 0.0, 'right' => 0.0, 'bottom' => 0.0, 'left' => 0.0],
+            $spacing,
+        );
+    }
+
+    /**
+     * @return iterable<string, array{nodes: list<Node>, expectedTexts: list<string>}>
+     */
+    public static function nestedTraversalProvider(): iterable
+    {
+        yield 'root before children and sibling after subtree' => [
+            'nodes' => [
+                new Node(
+                    tag: 'div',
+                    text: 'A',
+                    attributes: ['style' => 'font-size:10'],
+                    children: [
+                        new Node(tag: 'span', text: 'B', attributes: ['style' => 'font-size:10']),
+                        new Node(
+                            tag: 'span',
+                            text: 'C',
+                            attributes: ['style' => 'font-size:10'],
+                            children: [
+                                new Node(tag: 'span', text: 'D', attributes: ['style' => 'font-size:10']),
+                            ],
+                        ),
+                    ],
+                ),
+                new Node(tag: 'p', text: 'E', attributes: ['style' => 'font-size:10']),
+            ],
+            'expectedTexts' => ['A', 'B', 'C', 'D', 'E'],
+        ];
+
+        yield 'multiple roots preserve insertion order' => [
+            'nodes' => [
+                new Node(tag: 'span', text: 'First', attributes: ['style' => 'font-size:10']),
+                new Node(tag: 'span', text: 'Second', attributes: ['style' => 'font-size:10']),
+            ],
+            'expectedTexts' => ['First', 'Second'],
+        ];
     }
 }
