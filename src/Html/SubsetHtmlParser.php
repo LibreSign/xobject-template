@@ -38,7 +38,7 @@ final class SubsetHtmlParser
         libxml_use_internal_errors($prevLibxmlErrors);
 
         $body = $dom->getElementsByTagName('body')->item(0);
-        if (!$body instanceof DOMElement) {
+        if ($body === null) {
             return [];
         }
 
@@ -64,13 +64,14 @@ final class SubsetHtmlParser
 
     private function parseElementNode(DOMElement $node, string $inheritedStyle): Node
     {
-        $tag = strtolower($node->tagName);
+        $tag = $node->tagName;
         if (!isset($this->allowedTags[$tag])) {
             throw new UnsupportedSubsetException(sprintf('Tag <%s> is not supported.', $tag));
         }
 
         $attributes = $this->collectAttributes($node);
         $effectiveStyle = $this->mergeStyle($inheritedStyle, $attributes['style'] ?? '');
+        unset($attributes['style']);
         if ($effectiveStyle !== '') {
             $attributes['style'] = $effectiveStyle;
         }
@@ -117,7 +118,7 @@ final class SubsetHtmlParser
         }
 
         foreach ($node->attributes as $attribute) {
-            $attributes[strtolower($attribute->name)] = $attribute->value;
+            $attributes[$attribute->name] = trim($attribute->value);
         }
 
         return $attributes;
@@ -125,7 +126,6 @@ final class SubsetHtmlParser
 
     private function mergeStyle(string $inheritedStyle, string $ownStyle): string
     {
-        $inheritedStyle = trim($inheritedStyle);
         $ownStyle = trim($ownStyle);
 
         if ($inheritedStyle === '') {
