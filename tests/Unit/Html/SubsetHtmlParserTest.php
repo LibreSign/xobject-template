@@ -52,13 +52,41 @@ final class SubsetHtmlParserTest extends TestCase
         self::assertCount(3, $nodes[0]->children);
         self::assertSame('span', $nodes[0]->children[0]->tag);
         self::assertSame('Hello', $nodes[0]->children[0]->children[0]->text);
+        self::assertSame('font-size:10;font-weight:bold', $nodes[0]->children[0]->attributes['style']);
         self::assertSame(
-            'font-size:10; margin:2;font-weight:bold',
+            'font-size:10;font-weight:bold',
             $nodes[0]->children[0]->children[0]->attributes['style'],
         );
         self::assertSame('br', $nodes[0]->children[1]->tag);
         self::assertSame('World', $nodes[0]->children[2]->text);
         self::assertSame('font-size:10; margin:2', $nodes[0]->children[2]->attributes['style']);
+    }
+
+    public function testParseOnlyInheritsTextualStylesToDescendants(): void
+    {
+        $parser = new SubsetHtmlParser();
+
+        $nodes = $parser->parse(
+            '<div style="width:58%;height:100%;padding:18 24;font-size:20;color:#123456">'
+            . '<div style="font-weight:700">Title</div>'
+            . '</div>',
+        );
+
+        self::assertSame(
+            'width:58%;height:100%;padding:18 24;font-size:20;color:#123456',
+            $nodes[0]->attributes['style'],
+        );
+        self::assertSame(
+            'font-size:20;color:#123456;font-weight:700',
+            $nodes[0]->children[0]->attributes['style'],
+        );
+        self::assertSame(
+            'font-size:20;color:#123456;font-weight:700',
+            $nodes[0]->children[0]->children[0]->attributes['style'],
+        );
+        self::assertStringNotContainsString('width:58%', $nodes[0]->children[0]->attributes['style']);
+        self::assertStringNotContainsString('height:100%', $nodes[0]->children[0]->attributes['style']);
+        self::assertStringNotContainsString('padding:18 24', $nodes[0]->children[0]->attributes['style']);
     }
 
     public function testParseNormalizesTagAndAttributeNamesAndKeepsAllAttributes(): void

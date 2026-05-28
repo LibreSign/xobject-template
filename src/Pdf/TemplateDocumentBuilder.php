@@ -88,7 +88,7 @@ final readonly class TemplateDocumentBuilder
         foreach ($layout->lines as $line) {
             $stream[] = sprintf('/%s %F Tf', $line->fontAlias, $line->fontSize);
             $stream[] = $this->colorParser->toPdfRgb($line->rgbColor);
-            $stream[] = sprintf('%F %F Td', $line->x, $line->y);
+            $stream[] = sprintf('1 0 0 1 %F %F Tm', $line->x, $line->y);
             $stream[] = sprintf('(%s) Tj', $this->pdfEscaper->escapeLiteralString($line->text));
         }
         $stream[] = 'ET';

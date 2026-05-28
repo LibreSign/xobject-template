@@ -16,6 +16,14 @@ final class SubsetHtmlParser
 {
     private const HTML_WRAPPER = '<?xml encoding="utf-8" ?><body>%s</body>';
     private const LIBXML_HTML_PARSE_FLAGS = 96; // LIBXML_NOERROR | LIBXML_NOWARNING
+    private const INHERITABLE_STYLE_PROPERTIES = [
+        'color' => true,
+        'font-family' => true,
+        'font-size' => true,
+        'font-weight' => true,
+        'line-height' => true,
+        'text-align' => true,
+    ];
 
     /** @var array<string, true> */
     private array $allowedTags = [
@@ -130,6 +138,8 @@ final class SubsetHtmlParser
 
     private function mergeStyle(string $inheritedStyle, string $ownStyle): string
     {
+        $inheritedStyle = $this->filterInheritableStyle($inheritedStyle);
+
         if ($inheritedStyle === '') {
             return $ownStyle;
         }
@@ -139,5 +149,36 @@ final class SubsetHtmlParser
         }
 
         return $inheritedStyle . ';' . $ownStyle;
+    }
+
+    private function filterInheritableStyle(string $style): string
+    {
+        if ($style === '') {
+            return '';
+        }
+
+        $resolvedDeclarations = [];
+
+        foreach (explode(';', $style) as $declaration) {
+            $trimmedDeclaration = trim($declaration);
+            if ($trimmedDeclaration === '') {
+                continue;
+            }
+
+            $segments = explode(':', $trimmedDeclaration, 2);
+            if (count($segments) !== 2) {
+                continue;
+            }
+
+            $property = strtolower(trim($segments[0]));
+            $value = trim($segments[1]);
+            if ($value === '' || !isset(self::INHERITABLE_STYLE_PROPERTIES[$property])) {
+                continue;
+            }
+
+            $resolvedDeclarations[$property] = $property . ':' . $value;
+        }
+
+        return implode(';', array_values($resolvedDeclarations));
     }
 }

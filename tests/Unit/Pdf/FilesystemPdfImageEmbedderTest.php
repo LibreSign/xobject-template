@@ -8,8 +8,10 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
 
 use LibreSign\XObjectTemplate\Pdf\FilesystemPdfImageEmbedder;
+use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class FilesystemPdfImageEmbedderTest extends TestCase
 {
@@ -28,7 +30,7 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     public function testEmbedReturnsPredictorBackedImageForOpaqueRgbPng(): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
-        $pngPath = $this->createTemporaryFile('png', $this->createPng(
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
             width: 1,
             height: 1,
             colorType: 2,
@@ -57,7 +59,7 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     public function testEmbedCreatesSoftMaskForRgbaPng(): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
-        $pngPath = $this->createTemporaryFile('png', $this->createPng(
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
             width: 1,
             height: 1,
             colorType: 6,
@@ -80,7 +82,7 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     public function testEmbedSupportsAllRgbaPredictorFilters(int $filterType): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
-        $pngPath = $this->createTemporaryFile('png', $this->createPng(
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
             width: 1,
             height: 1,
             colorType: 6,
@@ -98,7 +100,7 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     public function testEmbedRejectsUnsupportedPngHeaders(int $bitDepth, int $interlace, string $expectedMessage): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
-        $pngPath = $this->createTemporaryFile('png', $this->createPng(
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
             width: 1,
             height: 1,
             colorType: 2,
@@ -181,7 +183,7 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     public function testEmbedRejectsUnsupportedRowFilters(): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
-        $pngPath = $this->createTemporaryFile('png', $this->createPng(
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
             width: 1,
             height: 1,
             colorType: 6,
@@ -192,6 +194,49 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         $this->expectExceptionMessage('Unsupported PNG row filter 5.');
 
         $embedder->embed($pngPath);
+    }
+
+    public function testUnfilterPngRowSupportsAverageFilterWithMultiPixelContext(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
+
+        $decodedRow = $method->invoke(
+            $embedder,
+            3,
+            "\x55\x5a\x5f\x64\x3c\x3c\x3c\x3c",
+            "\x0a\x14\x1e\x28\x32\x3c\x46\x50",
+            4,
+        );
+
+        self::assertSame("\x5a\x64\x6e\x78\x82\x8c\x96\xa0", $decodedRow);
+    }
+
+    public function testUnfilterPngRowSupportsPaethFilterWithMultiPixelContext(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
+
+        $decodedRow = $method->invoke(
+            $embedder,
+            4,
+            "\x0a\x0a\x0a\x0a\x0a\x14\x1e\x28",
+            "\x0a\x14\x1e\x28\x3c\x46\x50\x5a",
+            4,
+        );
+
+        self::assertSame("\x14\x1e\x28\x32\x46\x5a\x6e\x82", $decodedRow);
+    }
+
+    public function testPaethPredictorSelectsExpectedNeighborAcrossTieCases(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'paethPredictor');
+
+        self::assertSame(20, $method->invoke($embedder, 20, 20, 10));
+        self::assertSame(50, $method->invoke($embedder, 50, 10, 20));
+        self::assertSame(50, $method->invoke($embedder, 10, 50, 20));
+        self::assertSame(20, $method->invoke($embedder, 10, 30, 20));
     }
 
     /**
@@ -236,35 +281,5 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         $this->temporaryFiles[] = $pathWithExtension;
 
         return $pathWithExtension;
-    }
-
-    private function createPng(
-        int $width,
-        int $height,
-        int $colorType,
-        string $scanlines,
-        int $bitDepth = 8,
-        int $interlace = 0,
-    ): string {
-        $ihdr = pack('NNCCCCC', $width, $height, $bitDepth, $colorType, 0, 0, $interlace);
-        $idat = gzcompress($scanlines);
-
-        return "\x89PNG\r\n\x1a\n"
-            . $this->createChunk('IHDR', $ihdr)
-            . $this->createChunk('IDAT', $idat)
-            . $this->createChunk('IEND', '');
-    }
-
-    private function createChunk(string $type, string $data): string
-    {
-        $crc = crc32($type . $data);
-        if ($crc < 0) {
-            $crc += 4_294_967_296;
-        }
-
-        return pack('N', strlen($data))
-            . $type
-            . $data
-            . pack('N', $crc);
     }
 }

@@ -211,6 +211,106 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertEqualsWithDelta(32.0, $result->images[0]->height, 0.0001);
     }
 
+    public function testLayoutSupportsAbsolutelyPositionedImagesWithoutAdvancingFlow(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'width:200;height:100'],
+                children: [
+                    new Node(
+                        tag: 'img',
+                        text: '',
+                        attributes: [
+                            'src' => '/fixture/background.png',
+                            'style' => 'position:absolute;left:0;top:0;width:100%;height:100%',
+                        ],
+                    ),
+                    new Node(tag: 'span', text: 'Foreground text', attributes: ['style' => 'font-size:10']),
+                ],
+            ),
+        ], 200.0, 100.0);
+
+        self::assertCount(1, $result->images);
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(0.0, $result->images[0]->x, 0.0001);
+        self::assertEqualsWithDelta(0.0, $result->images[0]->y, 0.0001);
+        self::assertEqualsWithDelta(200.0, $result->images[0]->width, 0.0001);
+        self::assertEqualsWithDelta(100.0, $result->images[0]->height, 0.0001);
+        self::assertSame('Foreground text', $result->lines[0]->text);
+        self::assertEqualsWithDelta(88.0, $result->lines[0]->y, 0.0001);
+    }
+
+    public function testLayoutSupportsFlexRowsWithPercentageColumns(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display:flex;flex-direction:row;width:200;height:100'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: ['style' => 'width:50%;height:100%'],
+                        children: [
+                            new Node(tag: 'span', text: 'Left column', attributes: ['style' => 'font-size:10']),
+                        ],
+                    ),
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: ['style' => 'width:50%;height:100%'],
+                        children: [
+                            new Node(tag: 'span', text: 'Right column', attributes: ['style' => 'font-size:10']),
+                        ],
+                    ),
+                ],
+            ),
+        ], 200.0, 100.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertSame('Left column', $result->lines[0]->text);
+        self::assertSame('Right column', $result->lines[1]->text);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(100.0, $result->lines[1]->x, 0.0001);
+        self::assertEqualsWithDelta(88.0, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(88.0, $result->lines[1]->y, 0.0001);
+    }
+
+    public function testLayoutSupportsFlexCenteringForImages(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: [
+                    'style' => 'display:flex;justify-content:center;align-items:center;width:200;height:100',
+                ],
+                children: [
+                    new Node(
+                        tag: 'img',
+                        text: '',
+                        attributes: ['src' => '/fixture/center.png', 'style' => 'width:80;height:40'],
+                    ),
+                ],
+            ),
+        ], 200.0, 100.0);
+
+        self::assertCount(1, $result->images);
+        self::assertEqualsWithDelta(60.0, $result->images[0]->x, 0.0001);
+        self::assertEqualsWithDelta(30.0, $result->images[0]->y, 0.0001);
+        self::assertEqualsWithDelta(80.0, $result->images[0]->width, 0.0001);
+        self::assertEqualsWithDelta(40.0, $result->images[0]->height, 0.0001);
+    }
+
     public function testConstructorKeepsProvidedInlineStyleParserInstance(): void
     {
         $styleParser = new InlineStyleParser();

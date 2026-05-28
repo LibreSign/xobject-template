@@ -55,6 +55,41 @@ file_put_contents(__DIR__ . '/build/preview.pdf', $pdf);
 - `$payload`: transport-agnostic array with `stream`, `resources`, and `bbox`
 - `$pdf`: standalone PDF bytes ready to save, stream, or attach to preview workflows
 
+### Scaling a compiled XObject
+
+`CompileRequest::width` and `CompileRequest::height` define the base design size of the template.
+If a downstream consumer needs to place the compiled stamp at a different size while preserving the
+original aspect ratio, it should keep the compiled XObject unchanged and apply a uniform scale during
+PDF placement instead of recompiling the HTML with new dimensions.
+
+- Read the base size from `$result->bbox`
+- Compute a single scale factor from the target width or target height
+- Apply the same scale to both axes in the placement matrix
+
+```php
+[$minX, $minY, $maxX, $maxY] = $result->bbox;
+
+$baseWidth = $maxX - $minX;
+$baseHeight = $maxY - $minY;
+
+$targetWidth = 175.0;
+$scale = $targetWidth / $baseWidth;
+$targetHeight = $baseHeight * $scale;
+
+// Consumer-side PDF placement concept:
+$placement = sprintf(
+	'q %F 0 0 %F %F %F cm /Fm0 Do Q',
+	$scale,
+	$scale,
+	$x,
+	$y,
+);
+```
+
+Using a uniform placement scale keeps text, images, spacing, and line breaks visually aligned.
+Recompiling only to emulate a proportional resize is usually the wrong integration point for this
+package.
+
 ## Supported HTML/CSS subset
 
 ### HTML
@@ -68,13 +103,17 @@ file_put_contents(__DIR__ . '/build/preview.pdf', $pdf);
 
 - Typography: `font-size`, `font-family`, `font-weight`, `line-height`, `color`
 - Layout: `margin`, `padding`, `text-align`, `width`, `height`
-- Numeric values can be provided as unitless numbers or `px`
+- Structured layout: `display:flex`, `flex-direction`, `justify-content`, `align-items`, `gap`
+- Absolute placement: `position:absolute`, `top`, `right`, `bottom`, `left`
+- Numeric values can be provided as unitless numbers or `px`; `width`, `height`, and positional offsets also accept `%`
 - `px` values are converted to PDF points using the package conversion rules
 - Unknown or incomplete CSS declarations are ignored instead of aborting the render
 
 ### Rendering notes
 
 - Font family mapping currently targets the built-in Helvetica, Times, and Courier aliases used by the generated PDF resources
+- Percentage-based sizing and offsets resolve relative to the current layout container
+- Flex layouts are intentionally small-scope and predictable: the engine supports deterministic row/column compositions for stamps, labels, and approval blocks rather than full browser-grade CSS
 - `img` width/height fall back to `32x32` when omitted or invalid
 - Image and text placement are clamped to the requested output box
 - The compiler output is not tied to any single downstream package; any consumer that understands Form XObject stream/resources/bbox data can use it

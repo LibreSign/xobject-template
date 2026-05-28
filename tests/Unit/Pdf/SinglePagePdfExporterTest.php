@@ -170,6 +170,144 @@ final class SinglePagePdfExporterTest extends TestCase
         self::assertStringContainsString('/Interpolate true', $pdf);
     }
 
+    public function testExportPreservesAllFontAndImageReferencesInPageTreeAndTrailer(): void
+    {
+        $embedder = new class () implements PdfImageEmbedderInterface
+        {
+            /** @var list<string> */
+            public array $sources = [];
+
+            public function embed(string $source): EmbeddedPdfImage
+            {
+                $this->sources[] = $source;
+
+                return new EmbeddedPdfImage(
+                    dictionary: [
+                        'Type' => '/XObject',
+                        'Subtype' => '/Image',
+                        'Width' => 1,
+                        'Height' => 1,
+                        'ColorSpace' => '/DeviceRGB',
+                        'BitsPerComponent' => 8,
+                        'Filter' => '/FlateDecode',
+                    ],
+                    stream: 'RGB',
+                );
+            }
+        };
+
+        $exporter = new SinglePagePdfExporter($embedder);
+
+        $pdf = $exporter->export(new CompileResult(
+            contentStream: 'BT ET',
+            resources: [
+                'Font' => [
+                    'F1' => [
+                        'Type' => '/Font',
+                        'Subtype' => '/Type1',
+                        'BaseFont' => '/Helvetica',
+                    ],
+                    'F2' => [
+                        'Type' => '/Font',
+                        'Subtype' => '/Type1',
+                        'BaseFont' => '/Times-Roman',
+                    ],
+                ],
+                'XObject' => [
+                    'Im0' => [
+                        'Type' => '/XObject',
+                        'Subtype' => '/Image',
+                        'Source' => '/tmp/left.png',
+                        'Width' => 10.0,
+                        'Height' => 10.0,
+                    ],
+                    'Im1' => [
+                        'Type' => '/XObject',
+                        'Subtype' => '/Image',
+                        'Source' => '/tmp/right.png',
+                        'Width' => 10.0,
+                        'Height' => 10.0,
+                    ],
+                ],
+            ],
+            bbox: [0.0, 0.0, 40.0, 20.0],
+        ));
+
+        $expectedCatalogObject = implode("\n", [
+            '1 0 obj',
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            'endobj',
+        ]);
+        $expectedPagesObject = implode("\n", [
+            '2 0 obj',
+            '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+            'endobj',
+        ]);
+        $expectedPageObject = implode("\n", [
+            '3 0 obj',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 40 20] '
+                . '/Resources << /XObject << /Fm0 5 0 R >> >> /Contents 4 0 R >>',
+            'endobj',
+        ]);
+        $expectedFormResources = '/Resources << /Font << /F1 6 0 R /F2 7 0 R >> '
+            . '/XObject << /Im0 8 0 R /Im1 9 0 R >> >>';
+
+        self::assertSame(['/tmp/left.png', '/tmp/right.png'], $embedder->sources);
+        self::assertStringContainsString($expectedCatalogObject, $pdf);
+        self::assertStringContainsString($expectedPagesObject, $pdf);
+        self::assertStringContainsString($expectedPageObject, $pdf);
+        self::assertStringContainsString('/Type /XObject /Subtype /Form /FormType 1', $pdf);
+        self::assertStringContainsString($expectedFormResources, $pdf);
+        self::assertStringContainsString("xref\n0 10\n", $pdf);
+        self::assertStringContainsString("trailer\n<< /Size 10 /Root 1 0 R >>", $pdf);
+    }
+
+    public function testExportWrapsPageAndFormStreamsInExpectedOrder(): void
+    {
+        $exporter = new SinglePagePdfExporter(new class () implements PdfImageEmbedderInterface
+        {
+            public function embed(string $source): EmbeddedPdfImage
+            {
+                throw new \LogicException(sprintf('Image embedding should not be called for %s.', $source));
+            }
+        });
+
+        $contentStream = "BT\n/F1 10 Tf\n0 0 0 rg\n8 12 Td\n(Hello) Tj\nET";
+        $pageStream = 'q 1 0 0 1 0 0 cm /Fm0 Do Q';
+
+        $pdf = $exporter->export(new CompileResult(
+            contentStream: $contentStream,
+            resources: [
+                'Font' => [
+                    'F1' => [
+                        'Type' => '/Font',
+                        'Subtype' => '/Type1',
+                        'BaseFont' => '/Helvetica',
+                    ],
+                ],
+            ],
+            bbox: [0.0, 0.0, 40.0, 20.0],
+        ));
+
+        $expectedPageContentObject = implode("\n", [
+            '4 0 obj',
+            sprintf('<< /Length %d >>', strlen($pageStream)),
+            'stream',
+            $pageStream,
+            'endstream',
+            'endobj',
+        ]);
+        $expectedFormStreamFragment = implode("\n", [
+            sprintf('/Length %d >>', strlen($contentStream)),
+            'stream',
+            $contentStream,
+            'endstream',
+        ]);
+
+        self::assertStringContainsString($expectedPageContentObject, $pdf);
+        self::assertStringContainsString($expectedFormStreamFragment, $pdf);
+    }
+
     #[DataProvider('invalidCompileResultProvider')]
     public function testExportRejectsInvalidCompileResults(CompileResult $result, string $expectedMessage): void
     {
@@ -208,6 +346,15 @@ final class SinglePagePdfExporterTest extends TestCase
                 contentStream: 'BT ET',
                 resources: ['Font' => []],
                 bbox: [0.0, 0.0, 0.0, 40.0],
+            ),
+            'expectedMessage' => 'CompileResult bbox must describe a positive area.',
+        ];
+
+        yield 'bbox without positive height' => [
+            'result' => new CompileResult(
+                contentStream: 'BT ET',
+                resources: ['Font' => []],
+                bbox: [0.0, 0.0, 40.0, 0.0],
             ),
             'expectedMessage' => 'CompileResult bbox must describe a positive area.',
         ];

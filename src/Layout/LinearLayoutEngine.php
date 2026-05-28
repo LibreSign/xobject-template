@@ -8,21 +8,38 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Layout;
 
 use LibreSign\XObjectTemplate\Css\InlineStyleParser;
+use LibreSign\XObjectTemplate\Css\StyleMap;
 use LibreSign\XObjectTemplate\Html\Node;
 
 final readonly class LinearLayoutEngine
 {
     private InlineStyleParser $styleParser;
+    private LayoutStyleResolver $styleResolver;
+    private StructuredLayoutRenderer $structuredRenderer;
 
     public function __construct(?InlineStyleParser $styleParser = null)
     {
         $this->styleParser = $styleParser ?? new InlineStyleParser();
+        $this->styleResolver = new LayoutStyleResolver();
+        $this->structuredRenderer = new StructuredLayoutRenderer($this->styleParser, $this->styleResolver);
     }
 
     /**
      * @param list<Node> $nodes
      */
     public function layout(array $nodes, float $width, float $height): LayoutResult
+    {
+        if ($this->requiresStructuredLayout($nodes)) {
+            return $this->structuredRenderer->layout($nodes, $width, $height);
+        }
+
+        return $this->layoutLinear($nodes, $width, $height);
+    }
+
+    /**
+     * @param list<Node> $nodes
+     */
+    private function layoutLinear(array $nodes, float $width, float $height): LayoutResult
     {
         $lines = [];
         $images = [];
@@ -107,12 +124,50 @@ final readonly class LinearLayoutEngine
         return new LayoutResult(lines: $lines, images: $images);
     }
 
-    private function styleValue(
-        \LibreSign\XObjectTemplate\Css\StyleMap $style,
-        string $property,
-        string $default,
-    ): string {
-        return $style->get($property, $default) ?? $default;
+    /**
+     * @param list<Node> $nodes
+     */
+    private function requiresStructuredLayout(array $nodes): bool
+    {
+        foreach ($this->walk($nodes) as $node) {
+            $style = $this->styleParser->parse($node->attributes['style'] ?? '');
+            if ($this->containsStructuredLayoutRules($style)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function containsStructuredLayoutRules(StyleMap $style): bool
+    {
+        if (strtolower(trim($this->styleValue($style, 'display', ''))) === 'flex') {
+            return true;
+        }
+
+        if ($this->styleResolver->isAbsolutelyPositioned($style)) {
+            return true;
+        }
+
+        foreach (['width', 'height', 'left', 'top', 'right', 'bottom', 'gap'] as $property) {
+            if (str_contains($this->styleValue($style, $property, ''), '%')) {
+                return true;
+            }
+        }
+
+        $justifyContent = strtolower(trim($this->styleValue($style, 'justify-content', '')));
+        if (in_array($justifyContent, ['center', 'flex-end', 'space-between'], true)) {
+            return true;
+        }
+
+        $alignItems = strtolower(trim($this->styleValue($style, 'align-items', '')));
+
+        return in_array($alignItems, ['center', 'flex-end'], true);
+    }
+
+    private function styleValue(StyleMap $style, string $property, string $default): string
+    {
+        return $this->styleResolver->styleValue($style, $property, $default);
     }
 
     /**
@@ -142,27 +197,12 @@ final readonly class LinearLayoutEngine
 
     private function toPoints(string $value): float
     {
-        $normalized = strtolower($value);
-        $number = (float) preg_replace('/[^0-9.\-]/', '', $normalized);
-        if (str_ends_with($normalized, 'px')) {
-            return $number * 0.75;
-        }
-
-        return $number;
+        return $this->styleResolver->toPoints($value);
     }
 
-    private function resolveLineHeight(
-        \LibreSign\XObjectTemplate\Css\StyleMap $style,
-        float $fontSize,
-    ): float {
-        $defaultLineHeight = $fontSize * 1.2;
-        $configuredLineHeight = $this->styleValue($style, 'line-height', '');
-
-        if ($configuredLineHeight === '') {
-            return $defaultLineHeight;
-        }
-
-        return max($defaultLineHeight, $this->toPoints($configuredLineHeight));
+    private function resolveLineHeight(StyleMap $style, float $fontSize): float
+    {
+        return $this->styleResolver->resolveLineHeight($style, $fontSize);
     }
 
     /**
@@ -170,58 +210,11 @@ final readonly class LinearLayoutEngine
      */
     private function parseBoxSpacing(string $value): array
     {
-        preg_match_all('/\S+/', $value, $matches);
-        $tokens = $matches[0];
-
-        if ($tokens === []) {
-            return ['top' => 0.0, 'right' => 0.0, 'bottom' => 0.0, 'left' => 0.0];
-        }
-
-        $points = array_map(fn (string $token): float => $this->toPoints($token), $tokens);
-        $count = count($points);
-
-        if ($count === 1) {
-            return ['top' => $points[0], 'right' => $points[0], 'bottom' => $points[0], 'left' => $points[0]];
-        }
-
-        if ($count === 2) {
-            return ['top' => $points[0], 'right' => $points[1], 'bottom' => $points[0], 'left' => $points[1]];
-        }
-
-        if ($count === 3) {
-            return ['top' => $points[0], 'right' => $points[1], 'bottom' => $points[2], 'left' => $points[1]];
-        }
-
-        return ['top' => $points[0], 'right' => $points[1], 'bottom' => $points[2], 'left' => $points[3]];
+        return $this->styleResolver->parseBoxSpacing($value);
     }
 
     private function resolveFontAlias(string $fontFamily, string $fontWeight): string
     {
-        $primary = strtolower(explode(',', $fontFamily)[0]);
-        $isBold = $this->isBoldWeight($fontWeight);
-
-        if (str_contains($primary, 'times')) {
-            return $isBold ? 'F4' : 'F3';
-        }
-
-        if (str_contains($primary, 'courier')) {
-            return $isBold ? 'F6' : 'F5';
-        }
-
-        return $isBold ? 'F2' : 'F1';
-    }
-
-    private function isBoldWeight(string $fontWeight): bool
-    {
-        $normalized = strtolower($fontWeight);
-        if ($normalized === 'bold' || $normalized === 'bolder') {
-            return true;
-        }
-
-        if (is_numeric($normalized)) {
-            return $normalized >= 600;
-        }
-
-        return false;
+        return $this->styleResolver->resolveFontAlias($fontFamily, $fontWeight);
     }
 }
