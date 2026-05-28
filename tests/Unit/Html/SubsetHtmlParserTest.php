@@ -72,9 +72,18 @@ final class SubsetHtmlParserTest extends TestCase
             . '</div>',
         );
 
-        self::assertSame('width:58%;height:100%;padding:18 24;font-size:20;color:#123456', $nodes[0]->attributes['style']);
-        self::assertSame('font-size:20;color:#123456;font-weight:700', $nodes[0]->children[0]->attributes['style']);
-        self::assertSame('font-size:20;color:#123456;font-weight:700', $nodes[0]->children[0]->children[0]->attributes['style']);
+        self::assertSame(
+            'width:58%;height:100%;padding:18 24;font-size:20;color:#123456',
+            $nodes[0]->attributes['style'],
+        );
+        self::assertSame(
+            'font-size:20;color:#123456;font-weight:700',
+            $nodes[0]->children[0]->attributes['style'],
+        );
+        self::assertSame(
+            'font-size:20;color:#123456;font-weight:700',
+            $nodes[0]->children[0]->children[0]->attributes['style'],
+        );
         self::assertStringNotContainsString('width:58%', $nodes[0]->children[0]->attributes['style']);
         self::assertStringNotContainsString('height:100%', $nodes[0]->children[0]->attributes['style']);
         self::assertStringNotContainsString('padding:18 24', $nodes[0]->children[0]->attributes['style']);
