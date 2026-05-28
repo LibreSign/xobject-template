@@ -116,10 +116,6 @@ final class SubsetHtmlParser
     private function collectAttributes(DOMElement $node): array
     {
         $attributes = [];
-        if ($node->attributes === null) {
-            return $attributes;
-        }
-
         foreach ($node->attributes as $attribute) {
             $attributes[$attribute->name] = trim($attribute->value);
         }
