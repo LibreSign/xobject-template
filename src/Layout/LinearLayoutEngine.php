@@ -33,22 +33,19 @@ final readonly class LinearLayoutEngine
 
         foreach ($this->walk($nodes) as $node) {
             $style = $this->styleParser->parse($node->attributes['style'] ?? '');
-            $margin = $this->parseBoxSpacing((string) $style->get('margin', '0'));
-            $padding = $this->parseBoxSpacing((string) $style->get('padding', '0'));
+            $margin = $this->parseBoxSpacing($this->styleValue($style, 'margin', '0'));
+            $padding = $this->parseBoxSpacing($this->styleValue($style, 'padding', '0'));
 
             $cursorY -= ($margin['top'] + $padding['top']);
 
-            $fontSize = $this->toPoints((string) $style->get('font-size', '10'));
-            $lineHeight = max(
-                $fontSize * 1.2,
-                $this->toPoints((string) $style->get('line-height', (string) ($fontSize * 1.2))),
-            );
+            $fontSize = $this->toPoints($this->styleValue($style, 'font-size', '10'));
+            $lineHeight = $this->resolveLineHeight($style, $fontSize);
             $fontAlias = $this->resolveFontAlias(
-                (string) $style->get('font-family', 'helvetica'),
-                (string) $style->get('font-weight', 'normal'),
+                $this->styleValue($style, 'font-family', 'helvetica'),
+                $this->styleValue($style, 'font-weight', 'normal'),
             );
 
-            $boxWidth = $this->toPoints((string) $style->get('width', '0'));
+            $boxWidth = $this->toPoints($this->styleValue($style, 'width', '0'));
             if ($boxWidth <= 0) {
                 $boxWidth = max($width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'], 0);
             }
@@ -56,8 +53,8 @@ final readonly class LinearLayoutEngine
             $rightBase = $leftBase + $boxWidth;
 
             if ($node->tag === 'img') {
-                $imgWidth = $this->toPoints((string) $style->get('width', '32'));
-                $imgHeight = $this->toPoints((string) $style->get('height', '32'));
+                $imgWidth = $this->toPoints($this->styleValue($style, 'width', '32'));
+                $imgHeight = $this->toPoints($this->styleValue($style, 'height', '32'));
                 if ($imgWidth <= 0) {
                     $imgWidth = 32.0;
                 }
@@ -88,7 +85,7 @@ final readonly class LinearLayoutEngine
                 continue;
             }
 
-            $align = strtolower((string) $style->get('text-align', 'left'));
+            $align = strtolower($this->styleValue($style, 'text-align', 'left'));
             $x = match ($align) {
                 'center' => $leftBase + ($boxWidth / 2.0),
                 'right' => max($rightBase - 8.0, 0),
@@ -101,13 +98,21 @@ final readonly class LinearLayoutEngine
                 y: max($cursorY, 0),
                 fontSize: $fontSize,
                 fontAlias: $fontAlias,
-                rgbColor: (string) $style->get('color', '#000000'),
+                rgbColor: $this->styleValue($style, 'color', '#000000'),
             );
 
             $cursorY -= ($lineHeight + $margin['bottom'] + $padding['bottom']);
         }
 
         return new LayoutResult(lines: $lines, images: $images);
+    }
+
+    private function styleValue(
+        \LibreSign\XObjectTemplate\Css\StyleMap $style,
+        string $property,
+        string $default,
+    ): string {
+        return $style->get($property, $default) ?? $default;
     }
 
     /**
@@ -125,10 +130,6 @@ final readonly class LinearLayoutEngine
 
         while ($stack !== []) {
             $node = array_pop($stack);
-            if (!$node instanceof Node) {
-                continue;
-            }
-
             $result[] = $node;
 
             if ($node->children === []) {
@@ -145,7 +146,7 @@ final readonly class LinearLayoutEngine
 
     private function toPoints(string $value): float
     {
-        $normalized = trim(strtolower($value));
+        $normalized = strtolower($value);
         if ($normalized === '') {
             return 0.0;
         }
@@ -158,13 +159,27 @@ final readonly class LinearLayoutEngine
         return $number;
     }
 
+    private function resolveLineHeight(
+        \LibreSign\XObjectTemplate\Css\StyleMap $style,
+        float $fontSize,
+    ): float {
+        $defaultLineHeight = $fontSize * 1.2;
+        $configuredLineHeight = $this->styleValue($style, 'line-height', '');
+
+        if ($configuredLineHeight === '') {
+            return $defaultLineHeight;
+        }
+
+        return max($defaultLineHeight, $this->toPoints($configuredLineHeight));
+    }
+
     /**
      * @return array{top: float, right: float, bottom: float, left: float}
      */
     private function parseBoxSpacing(string $value): array
     {
-        $tokens = preg_split('/\s+/', trim($value));
-        $tokens = array_values(array_filter($tokens ?: [], static fn (string $token): bool => $token !== ''));
+        preg_match_all('/\S+/', $value, $matches);
+        $tokens = $matches[0];
 
         if ($tokens === []) {
             return ['top' => 0.0, 'right' => 0.0, 'bottom' => 0.0, 'left' => 0.0];
@@ -190,7 +205,7 @@ final readonly class LinearLayoutEngine
 
     private function resolveFontAlias(string $fontFamily, string $fontWeight): string
     {
-        $primary = strtolower(trim(explode(',', $fontFamily)[0], " \t\n\r\0\x0B'\""));
+        $primary = strtolower(explode(',', $fontFamily)[0]);
         $isBold = $this->isBoldWeight($fontWeight);
 
         if (str_contains($primary, 'times')) {
@@ -206,13 +221,13 @@ final readonly class LinearLayoutEngine
 
     private function isBoldWeight(string $fontWeight): bool
     {
-        $normalized = strtolower(trim($fontWeight));
+        $normalized = strtolower($fontWeight);
         if ($normalized === 'bold' || $normalized === 'bolder') {
             return true;
         }
 
         if (is_numeric($normalized)) {
-            return (int) $normalized >= 600;
+            return $normalized >= 600;
         }
 
         return false;
