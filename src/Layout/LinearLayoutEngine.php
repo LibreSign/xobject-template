@@ -117,10 +117,26 @@ final readonly class LinearLayoutEngine
     private function walk(array $nodes): array
     {
         $result = [];
-        foreach ($nodes as $node) {
+        $stack = [];
+
+        for ($index = count($nodes) - 1; $index >= 0; --$index) {
+            $stack[] = $nodes[$index];
+        }
+
+        while ($stack !== []) {
+            $node = array_pop($stack);
+            if (!$node instanceof Node) {
+                continue;
+            }
+
             $result[] = $node;
-            if ($node->children !== []) {
-                $result = [...$result, ...$this->walk($node->children)];
+
+            if ($node->children === []) {
+                continue;
+            }
+
+            for ($index = count($node->children) - 1; $index >= 0; --$index) {
+                $stack[] = $node->children[$index];
             }
         }
 
