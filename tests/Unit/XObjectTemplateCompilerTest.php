@@ -99,16 +99,22 @@ final class XObjectTemplateCompilerTest extends TestCase
 
         $result = $compiler->compile(new CompileRequest(html: '<p>Hello</p>'));
 
-        $documentBuilderProperty = new ReflectionProperty($compiler, 'documentBuilder');
-        $documentBuilder = $documentBuilderProperty->getValue($compiler);
-        $pdfEscaperProperty = new ReflectionProperty($documentBuilder, 'pdfEscaper');
-        $colorParserProperty = new ReflectionProperty($documentBuilder, 'colorParser');
+        $builderProp = new ReflectionProperty($compiler, 'documentBuilder');
+        $builder = $builderProp->getValue($compiler);
+        $escProp = new ReflectionProperty($builder, 'pdfEscaper');
+        $colProp = new ReflectionProperty($builder, 'colorParser');
 
         self::assertStringContainsString('(Hello) Tj', $result->contentStream);
         self::assertSame([0.0, 0.0, 240.0, 84.0], $result->bbox);
         self::assertArrayHasKey('Font', $result->resources);
-        self::assertSame($pdfEscaper, $pdfEscaperProperty->getValue($documentBuilder));
-        self::assertSame($colorParser, $colorParserProperty->getValue($documentBuilder));
+        self::assertSame($pdfEscaper, $escProp->getValue($builder));
+        self::assertSame($colorParser, $colProp->getValue($builder));
+    }
+
+    private function getBuilderProperty(object $obj, string $name): object
+    {
+        $prop = new ReflectionProperty($obj, $name);
+        return $prop->getValue($obj);
     }
 
     public function testCompilerConstructorKeepsProvidedParserAndLayoutInstances(): void

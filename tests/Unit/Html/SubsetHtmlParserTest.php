@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Unit\Html;
 
+use DOMDocument;
 use LibreSign\XObjectTemplate\Exception\UnsupportedSubsetException;
 use LibreSign\XObjectTemplate\Html\SubsetHtmlParser;
 use PHPUnit\Framework\TestCase;
@@ -145,7 +146,7 @@ final class SubsetHtmlParserTest extends TestCase
         $previous = libxml_use_internal_errors(true);
 
         try {
-            $probe = new \DOMDocument('1.0', 'UTF-8');
+            $probe = new DOMDocument('1.0', 'UTF-8');
             $probe->loadXML('<root><broken></root>');
             $errorsBefore = libxml_get_errors();
 
