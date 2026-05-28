@@ -26,8 +26,8 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         int $expectedImageCount,
         array $expectedTexts,
     ): void {
-        $previewRoot = dirname(__DIR__, 2) . '/build/phase1-visible-stamp-layouts';
-        $assetRoot = $previewRoot . '/assets';
+        $previewRoot = dirname(__DIR__, 2) . '/build/visible-stamp-previews';
+        $assetRoot = dirname(__DIR__) . '/Fixtures/visible-stamp-assets';
         $this->ensureDirectoryExists($previewRoot);
         $this->ensureDirectoryExists($assetRoot);
 

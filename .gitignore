@@ -6,6 +6,7 @@
 /vendor-bin/**/composer.lock
 /composer.lock
 /build/
+/tests/Fixtures/visible-stamp-assets/
 /.phpunit.result.cache
 /.infection.cache
 /.idea/
