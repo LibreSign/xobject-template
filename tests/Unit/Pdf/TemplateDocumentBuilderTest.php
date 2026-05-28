@@ -129,7 +129,39 @@ final class TemplateDocumentBuilderTest extends TestCase
         self::assertStringContainsString('q 3.000000 0 0 4.000000 1.000000 2.000000 cm /Im7 Do Q', $stream);
         self::assertStringContainsString('/F2 9.000000 Tf', $stream);
         self::assertStringContainsString('0.6706 0.8039 0.9373 rg', $stream);
+        self::assertStringContainsString('1 0 0 1 12.000000 22.000000 Tm', $stream);
         self::assertStringContainsString('(Marker \\(QA\\)) Tj', $stream);
+    }
+
+    public function testBuildContentStreamUsesAbsoluteTextMatrixForMultipleLines(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [
+                new LayoutLine(
+                    text: 'First line',
+                    x: 18.0,
+                    y: 72.0,
+                    fontSize: 10.0,
+                    fontAlias: 'F1',
+                    rgbColor: '#000000',
+                ),
+                new LayoutLine(
+                    text: 'Second line',
+                    x: 120.0,
+                    y: 40.0,
+                    fontSize: 10.0,
+                    fontAlias: 'F1',
+                    rgbColor: '#000000',
+                ),
+            ],
+            images: [],
+        ));
+
+        self::assertStringContainsString('1 0 0 1 18.000000 72.000000 Tm', $stream);
+        self::assertStringContainsString('1 0 0 1 120.000000 40.000000 Tm', $stream);
+        self::assertStringNotContainsString(' Td', $stream);
     }
 
     public function testBuildResourcesExposesImageDictionaryAndCustomFontsFromDerivedBuilder(): void
