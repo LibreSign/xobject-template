@@ -229,7 +229,8 @@ final class LinearLayoutEngineTest extends TestCase
                 tag: 'p',
                 text: 'Trimmed',
                 attributes: [
-                    'style' => 'margin:  4px  8px ; padding: 2px  6px 4px 8px ; font-size: 10PX; text-align: RIGHT ; color:#123456',
+                    'style' => 'margin:  4px  8px ; padding: 2px  6px 4px 8px ; '
+                        . 'font-size: 10PX; text-align: RIGHT ; color:#123456',
                 ],
             ),
         ], 100.0, 90.0);
@@ -240,6 +241,139 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertEqualsWithDelta(73.5, $result->lines[0]->y, 0.0001);
         self::assertEqualsWithDelta(7.5, $result->lines[0]->fontSize, 0.0001);
         self::assertSame('#123456', $result->lines[0]->rgbColor);
+    }
+
+    public function testLayoutTrimsTextUsesDefaultLineHeightMultiplierAndAdvancesBreaks(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(tag: 'span', text: '  Trim me  ', attributes: ['style' => 'font-size:10']),
+            new Node(tag: 'br', text: '', attributes: []),
+            new Node(tag: 'span', text: 'Next', attributes: ['style' => 'font-size:10']),
+        ], 120.0, 90.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertSame('Trim me', $result->lines[0]->text);
+        self::assertSame('Next', $result->lines[1]->text);
+        self::assertEqualsWithDelta(78.0, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(54.0, $result->lines[1]->y, 0.0001);
+    }
+
+    public function testLayoutClampsRightAlignmentAndLineYToZeroOnTinyCanvas(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Tiny',
+                attributes: ['style' => 'text-align:right;width:0;margin:0;padding:0;font-size:10'],
+            ),
+        ], 4.0, 6.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->y, 0.0001);
+    }
+
+    public function testLayoutPrefersExplicitLineHeightWhenItExceedsFontDefault(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(tag: 'span', text: 'First', attributes: ['style' => 'font-size:10;line-height:30']),
+            new Node(tag: 'br', text: '', attributes: []),
+            new Node(tag: 'span', text: 'Second', attributes: ['style' => 'font-size:10']),
+        ], 120.0, 120.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertEqualsWithDelta(108.0, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(66.0, $result->lines[1]->y, 0.0001);
+    }
+
+    public function testLayoutKeepsZeroFallbackWidthForCenteredTinyCanvas(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Center',
+                attributes: ['style' => 'text-align:center;width:0;font-size:10'],
+            ),
+        ], 0.0, 20.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->x, 0.0001);
+    }
+
+    public function testLayoutClampsNegativeAvailableWidthToZero(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Negative width',
+                attributes: ['style' => 'text-align:center;width:0;font-size:10'],
+            ),
+        ], -1.0, 20.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(0.0, $result->lines[0]->x, 0.0001);
+    }
+
+    public function testLayoutSubtractsBottomSpacingFromFollowingLinePosition(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(tag: 'span', text: 'First', attributes: ['style' => 'font-size:10;margin:0 0 5;padding:0 0 7']),
+            new Node(tag: 'span', text: 'Second', attributes: ['style' => 'font-size:10']),
+        ], 100.0, 100.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertEqualsWithDelta(88.0, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(64.0, $result->lines[1]->y, 0.0001);
+    }
+
+    public function testLayoutUsesThreeValueSpacingRightSlotForHorizontalPositioning(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Three values',
+                attributes: ['style' => 'font-size:10;text-align:right;margin:1 20 3;width:0'],
+            ),
+        ], 100.0, 100.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(72.0, $result->lines[0]->x, 0.0001);
+    }
+
+    public function testLayoutRecognizesTrimmedUppercaseBoldTokens(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'Bold text',
+                attributes: ['style' => 'font-size:10;font-family:Courier;font-weight: BOLD '],
+            ),
+            new Node(
+                tag: 'span',
+                text: 'Numeric bold',
+                attributes: ['style' => 'font-size:10;font-family:Helvetica;font-weight: 600 '],
+            ),
+        ], 120.0, 100.0);
+
+        self::assertCount(2, $result->lines);
+        self::assertSame('F6', $result->lines[0]->fontAlias);
+        self::assertSame('F2', $result->lines[1]->fontAlias);
     }
 
     #[DataProvider('nestedTraversalProvider')]
