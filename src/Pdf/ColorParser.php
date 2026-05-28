@@ -20,9 +20,10 @@ final class ColorParser
             return '0 0 0 rg';
         }
 
-        $r = round(hexdec(substr($hex, 0, 2)) / 255, 4);
-        $g = round(hexdec(substr($hex, 2, 2)) / 255, 4);
-        $b = round(hexdec(substr($hex, 4, 2)) / 255, 4);
+        $channels = str_split($hex, 2);
+        $r = round(hexdec($channels[0]) / 255, 4);
+        $g = round(hexdec($channels[1]) / 255, 4);
+        $b = round(hexdec($channels[2]) / 255, 4);
 
         return sprintf('%s %s %s rg', $r, $g, $b);
     }
