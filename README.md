@@ -17,14 +17,6 @@
 
 Use the compiler to generate `content stream`, `resources`, and `bbox`, then map the output to your signature appearance DTO adapter.
 
-## Container environment overrides
-
-When using `docker-compose.yml`, these optional environment variables are supported:
-
-- `UID` and `GID` for container user/group mapping (default: `1000`).
-- `XDEBUG_ENABLED` and `XDEBUG_MODE` for Xdebug toggling (defaults: `0` and `off`).
-- `COMPOSER_CACHE_DIR` to override the Composer cache mount path (default: `/tmp/composer-cache`).
-
 ## License
 
 AGPL-3.0-or-later.
