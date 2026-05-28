@@ -64,7 +64,7 @@ final class SubsetHtmlParserTest extends TestCase
     {
         $parser = new SubsetHtmlParser();
 
-        $nodes = $parser->parse('<DIV STYLE="font-size:10" DATA-ID="42">Hi</DIV>');
+        $nodes = $parser->parse('<DIV STYLE="font-size:10" DATA-ID=" 42 ">Hi</DIV>');
 
         self::assertCount(1, $nodes);
         self::assertSame('div', $nodes[0]->tag);
@@ -74,13 +74,25 @@ final class SubsetHtmlParserTest extends TestCase
         self::assertSame('42', $nodes[0]->attributes['data-id']);
     }
 
+    public function testParseDoesNotKeepEmptyStyleAttributeWhenNoStyleIsResolved(): void
+    {
+        $parser = new SubsetHtmlParser();
+
+        $nodes = $parser->parse('<div><span style="   ">Hello</span></div>');
+
+        self::assertCount(1, $nodes);
+        self::assertArrayNotHasKey('style', $nodes[0]->attributes);
+        self::assertArrayNotHasKey('style', $nodes[0]->children[0]->attributes);
+        self::assertArrayNotHasKey('style', $nodes[0]->children[0]->children[0]->attributes);
+    }
+
     public function testParseTrimsInheritedStyleAndRestoresLibxmlInternalErrorFlag(): void
     {
         $parser = new SubsetHtmlParser();
         $previous = libxml_use_internal_errors(false);
 
         try {
-            $nodes = $parser->parse('<div style=" font-size:10 "><span>Hi</span></div>');
+            $nodes = $parser->parse('<div style=" font-size:10 "><span style=" font-weight:bold ">Hi</span></div>');
         } finally {
             $current = libxml_use_internal_errors(false);
             libxml_use_internal_errors($previous);
@@ -88,7 +100,10 @@ final class SubsetHtmlParserTest extends TestCase
 
         self::assertFalse($current);
         self::assertSame('font-size:10', $nodes[0]->attributes['style']);
-        self::assertSame('font-size:10', $nodes[0]->children[0]->children[0]->attributes['style']);
+        self::assertSame(
+            'font-size:10;font-weight:bold',
+            $nodes[0]->children[0]->children[0]->attributes['style'],
+        );
     }
 
     public function testParseClearsLibxmlErrorsAfterMalformedHtmlAndRestoresPreviousFlag(): void
