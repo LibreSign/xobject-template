@@ -47,8 +47,11 @@ final class InlineStyleParserTest extends TestCase
     }
 
     #[DataProvider('invalidChunkProvider')]
-    public function testParseSkipsEachInvalidChunkVariantAndContinuesParsing(string $style, array $expectedPresent, array $expectedAbsent): void
-    {
+    public function testParseSkipsEachInvalidChunkVariantAndContinuesParsing(
+        string $style,
+        array $expectedPresent,
+        array $expectedAbsent,
+    ): void {
         $parser = new InlineStyleParser();
 
         $map = $parser->parse($style);
@@ -63,7 +66,11 @@ final class InlineStyleParserTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{style: string, expectedPresent: array<string, string>, expectedAbsent: list<string>}>
+     * @return iterable<string, array{
+     *     style: string,
+     *     expectedPresent: array<string, string>,
+     *     expectedAbsent: list<string>
+     * }>
      */
     public static function invalidChunkProvider(): iterable
     {
