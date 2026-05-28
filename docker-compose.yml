@@ -21,7 +21,7 @@ services:
       COMPOSER_HOME: /var/www/.composer
     volumes:
       - ./:/var/www/html
-      # Optional override (default shown): COMPOSER_CACHE_DIR=/tmp/composer-cache
-      - ${COMPOSER_CACHE_DIR:-/tmp/composer-cache}:/var/www/.composer/
+      # Optional override (default shown): COMPOSER_CACHE_DIR=${HOME}/.composer
+      - ${COMPOSER_CACHE_DIR:-${HOME}/.composer}:/var/www/.composer/
       - ./.profile:/var/www/html/.profile
     command: ["bash", "-lc", "composer --version && bash"]
