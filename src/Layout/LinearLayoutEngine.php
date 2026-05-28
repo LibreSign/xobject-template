@@ -122,11 +122,7 @@ final readonly class LinearLayoutEngine
     private function walk(array $nodes): array
     {
         $result = [];
-        $stack = [];
-
-        for ($index = count($nodes) - 1; $index >= 0; --$index) {
-            $stack[] = $nodes[$index];
-        }
+        $stack = array_reverse($nodes);
 
         while ($stack !== []) {
             $node = array_pop($stack);
@@ -136,8 +132,8 @@ final readonly class LinearLayoutEngine
                 continue;
             }
 
-            for ($index = count($node->children) - 1; $index >= 0; --$index) {
-                $stack[] = $node->children[$index];
+            foreach (array_reverse($node->children) as $child) {
+                $stack[] = $child;
             }
         }
 
@@ -147,10 +143,6 @@ final readonly class LinearLayoutEngine
     private function toPoints(string $value): float
     {
         $normalized = strtolower($value);
-        if ($normalized === '') {
-            return 0.0;
-        }
-
         $number = (float) preg_replace('/[^0-9.\-]/', '', $normalized);
         if (str_ends_with($normalized, 'px')) {
             return $number * 0.75;
