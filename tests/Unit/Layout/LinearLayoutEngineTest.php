@@ -7,10 +7,12 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Unit\Layout;
 
+use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Html\Node;
 use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 
 final class LinearLayoutEngineTest extends TestCase
 {
@@ -206,6 +208,38 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertCount(1, $result->images);
         self::assertEqualsWithDelta(12.0, $result->images[0]->width, 0.0001);
         self::assertEqualsWithDelta(32.0, $result->images[0]->height, 0.0001);
+    }
+
+    public function testConstructorKeepsProvidedInlineStyleParserInstance(): void
+    {
+        $styleParser = new InlineStyleParser();
+        $engine = new LinearLayoutEngine($styleParser);
+
+        $property = new ReflectionProperty($engine, 'styleParser');
+
+        self::assertSame($styleParser, $property->getValue($engine));
+    }
+
+    public function testLayoutNormalizesTrimmedSpacingFontAndAlignmentValues(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'p',
+                text: 'Trimmed',
+                attributes: [
+                    'style' => 'margin:  4px  8px ; padding: 2px  6px 4px 8px ; font-size: 10PX; text-align: RIGHT ; color:#123456',
+                ],
+            ),
+        ], 100.0, 90.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame('Trimmed', $result->lines[0]->text);
+        self::assertEqualsWithDelta(81.5, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(73.5, $result->lines[0]->y, 0.0001);
+        self::assertEqualsWithDelta(7.5, $result->lines[0]->fontSize, 0.0001);
+        self::assertSame('#123456', $result->lines[0]->rgbColor);
     }
 
     #[DataProvider('nestedTraversalProvider')]
