@@ -28,6 +28,8 @@ final class SubsetHtmlParser
 
     /**
      * @return list<Node>
+     *
+     * @throws UnsupportedSubsetException If the HTML fragment contains an element outside the supported subset.
      */
     public function parse(string $html): array
     {

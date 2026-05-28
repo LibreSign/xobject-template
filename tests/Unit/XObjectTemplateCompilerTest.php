@@ -39,8 +39,8 @@ final class XObjectTemplateCompilerTest extends TestCase
     public static function htmlProvider(): iterable
     {
         yield 'paragraph text' => [
-            'html' => '<p style="font-size:10;color:#000">Signed by Alice</p>',
-            'expectedSnippet' => '(Signed by Alice) Tj',
+            'html' => '<p style="font-size:10;color:#000">Rendered for Alice</p>',
+            'expectedSnippet' => '(Rendered for Alice) Tj',
         ];
 
         yield 'line break text' => [
@@ -49,7 +49,7 @@ final class XObjectTemplateCompilerTest extends TestCase
         ];
 
         yield 'image command' => [
-            'html' => '<img src="/tmp/signature.png" style="width:24px;height:24px" />',
+            'html' => '<img src="/tmp/example-image.png" style="width:24px;height:24px" />',
             'expectedSnippet' => '/Im0 Do',
         ];
 
@@ -86,7 +86,7 @@ final class XObjectTemplateCompilerTest extends TestCase
         self::assertArrayNotHasKey('F1', $result->resources['Font']);
     }
 
-    public function testCompilerConstructorStillAcceptsLegacyPdfDependencies(): void
+    public function testCompilerConstructorAcceptsExplicitPdfDependencies(): void
     {
         $pdfEscaper = new PdfEscaper();
         $colorParser = new ColorParser();

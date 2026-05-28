@@ -109,14 +109,14 @@ final class LinearLayoutEngineTest extends TestCase
                 tag: 'img',
                 text: '',
                 attributes: [
-                    'src' => '/fixture/signature.png',
+                    'src' => '/fixture/example-image.png',
                     'style' => 'width:0;height:-10',
                 ],
             ),
         ], 20.0, 15.0);
 
         self::assertCount(1, $result->images);
-        self::assertSame('/fixture/signature.png', $result->images[0]->source);
+        self::assertSame('/fixture/example-image.png', $result->images[0]->source);
         self::assertSame('Im0', $result->images[0]->alias);
         self::assertEqualsWithDelta(20.0, $result->images[0]->width, 0.0001);
         self::assertEqualsWithDelta(15.0, $result->images[0]->height, 0.0001);

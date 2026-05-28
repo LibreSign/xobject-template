@@ -9,10 +9,10 @@ namespace LibreSign\XObjectTemplate\Integration;
 
 use LibreSign\XObjectTemplate\Dto\CompileResult;
 
-final class SignatureAppearanceXObjectAdapter
+final class XObjectPayloadAdapter
 {
     /**
-     * Output compatible with consumers expecting stream/resources pair.
+     * Output compatible with consumers expecting a generic Form XObject payload.
      *
      * @return array{
      *     stream: string,
@@ -20,7 +20,7 @@ final class SignatureAppearanceXObjectAdapter
      *     bbox: array{0: float, 1: float, 2: float, 3: float}
      * }
      */
-    public function toPdfSignerPayload(CompileResult $result): array
+    public function toXObjectPayload(CompileResult $result): array
     {
         return [
             'stream' => $result->contentStream,

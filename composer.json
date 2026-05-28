@@ -1,12 +1,14 @@
 {
   "name": "libresign/xobject-template",
-  "description": "Minimal HTML+CSS to PDF Form XObject compiler for visible signature appearance.",
+  "description": "Minimal HTML+CSS to reusable PDF Form XObject compiler.",
   "type": "library",
   "license": "AGPL-3.0-or-later",
   "keywords": [
     "pdf",
     "xobject",
-    "signature",
+    "template",
+    "rendering",
+    "layout",
     "html",
     "css"
   ],
@@ -59,7 +61,6 @@
     "composer:validate": "composer validate --strict",
     "composer:normalize:check": "vendor-bin/qa/vendor/ergebnis/composer-normalize/bin/composer-normalize --dry-run",
     "bc:check": "vendor-bin/qa/vendor/roave/backward-compatibility-check/bin/roave-backward-compatibility-check --from=origin/main --to=HEAD",
-    "licenses:check": "php scripts/licenses-check.php",
     "changelog:check": "echo 'Handled by GitHub Action: .github/workflows/changelog.yml'",
     "release:draft": "echo 'Handled by GitHub Action: .github/workflows/release-draft.yml'",
     "deps:audit": "composer audit",

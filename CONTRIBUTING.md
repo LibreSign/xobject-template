@@ -22,3 +22,9 @@ Run key checks before opening/updating PR:
 - `composer run test:unit`
 - `composer run test:coverage`
 - `composer run deps:audit`
+
+## Coverage policy
+
+- CI generates Clover XML and HTML reports under `build/coverage/`
+- Pull requests must keep **minimum line coverage at 95%**
+- Coverage reports are stored temporarily in GitHub Actions ephemeral storage for post-PR analysis

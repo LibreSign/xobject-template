@@ -23,7 +23,7 @@ final class TemplateDocumentBuilderTest extends TestCase
         $layout = new LayoutResult(
             lines: [
                 new LayoutLine(
-                    text: 'Signed by Alice',
+                    text: 'Rendered for Alice',
                     x: 12.0,
                     y: 48.0,
                     fontSize: 10.0,
@@ -38,7 +38,7 @@ final class TemplateDocumentBuilderTest extends TestCase
                     y: 4.0,
                     width: 24.0,
                     height: 24.0,
-                    source: '/tmp/signature.png',
+                    source: '/tmp/example-image.png',
                 ),
             ],
         );
@@ -50,7 +50,7 @@ final class TemplateDocumentBuilderTest extends TestCase
         self::assertStringContainsString('/Im0 Do', $result->contentStream);
         self::assertStringContainsString("\nET\nQ", $result->contentStream);
         self::assertSame([0.0, 0.0, 240.0, 84.0], $result->bbox);
-        self::assertSame('Signed by Alice', $layout->lines[0]->text);
+        self::assertSame('Rendered for Alice', $layout->lines[0]->text);
         self::assertArrayHasKey('Font', $result->resources);
         self::assertArrayHasKey('XObject', $result->resources);
         self::assertSame('/Helvetica', $result->resources['Font']['F1']['BaseFont']);
@@ -58,7 +58,7 @@ final class TemplateDocumentBuilderTest extends TestCase
         self::assertSame('/Image', $result->resources['XObject']['Im0']['Subtype']);
         self::assertSame(24.0, $result->resources['XObject']['Im0']['Width']);
         self::assertSame(24.0, $result->resources['XObject']['Im0']['Height']);
-        self::assertSame('/tmp/signature.png', $result->resources['XObject']['Im0']['Source']);
+        self::assertSame('/tmp/example-image.png', $result->resources['XObject']['Im0']['Source']);
         self::assertSame(1, $result->metadata['line_count']);
         self::assertSame(1, $result->metadata['image_count']);
         self::assertSame(2, $result->metadata['node_count']);
@@ -113,7 +113,7 @@ final class TemplateDocumentBuilderTest extends TestCase
         $stream = $builder->buildContentStream(new LayoutResult(
             lines: [
                 new LayoutLine(
-                    text: 'Signer (QA)',
+                    text: 'Marker (QA)',
                     x: 12.0,
                     y: 22.0,
                     fontSize: 9.0,
@@ -129,7 +129,7 @@ final class TemplateDocumentBuilderTest extends TestCase
         self::assertStringContainsString('q 3.000000 0 0 4.000000 1.000000 2.000000 cm /Im7 Do Q', $stream);
         self::assertStringContainsString('/F2 9.000000 Tf', $stream);
         self::assertStringContainsString('0.6706 0.8039 0.9373 rg', $stream);
-        self::assertStringContainsString('(Signer \\(QA\\)) Tj', $stream);
+        self::assertStringContainsString('(Marker \\(QA\\)) Tj', $stream);
     }
 
     public function testBuildResourcesExposesImageDictionaryAndCustomFontsFromDerivedBuilder(): void
