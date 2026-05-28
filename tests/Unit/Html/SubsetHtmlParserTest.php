@@ -127,4 +127,37 @@ final class SubsetHtmlParserTest extends TestCase
         self::assertSame('div', $nodes[0]->tag);
         self::assertSame('Broken', $nodes[0]->children[0]->children[0]->text);
     }
+
+    public function testParsePreservesUtf8CharactersFromHtmlFragment(): void
+    {
+        $parser = new SubsetHtmlParser();
+
+        $nodes = $parser->parse('<span>ação € 😀</span>');
+
+        self::assertCount(1, $nodes);
+        self::assertSame('ação € 😀', $nodes[0]->children[0]->text);
+    }
+
+    public function testParseClearsPreExistingLibxmlErrorBuffer(): void
+    {
+        $parser = new SubsetHtmlParser();
+        libxml_clear_errors();
+        $previous = libxml_use_internal_errors(true);
+
+        try {
+            $probe = new \DOMDocument('1.0', 'UTF-8');
+            $probe->loadXML('<root><broken></root>');
+            $errorsBefore = libxml_get_errors();
+
+            $parser->parse('<div>ok</div>');
+
+            $errorsAfter = libxml_get_errors();
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+
+        self::assertNotSame([], $errorsBefore);
+        self::assertSame([], $errorsAfter);
+    }
 }
