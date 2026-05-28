@@ -1,9 +1,1 @@
 * @vitormattos
-
-/src/ @vitormattos
-/.github/workflows/ @vitormattos
-/composer.json @vitormattos
-/REUSE.toml @vitormattos
-/phpunit.xml.dist @vitormattos
-/psalm.xml @vitormattos
-/rector.php @vitormattos
