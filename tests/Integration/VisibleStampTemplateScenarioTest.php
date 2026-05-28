@@ -128,6 +128,17 @@ final class VisibleStampTemplateScenarioTest extends TestCase
                 'Date: 2026-05-28T16:40:21+00:00',
             ],
         ];
+
+        yield 'two columns with centered cells' => [
+            'slug' => 'two-columns-centered-cells',
+            'layout' => 'two_columns_centered_cells',
+            'expectedImageCount' => 2,
+            'expectedTexts' => [
+                'Signed with LibreSign',
+                'Preview Issuer',
+                'Date: 2026-05-28T16:40:21+00:00',
+            ],
+        ];
     }
 
     private function buildLayoutHtml(string $layout, string $backgroundPath, ?string $signaturePath): string
@@ -183,6 +194,22 @@ final class VisibleStampTemplateScenarioTest extends TestCase
                 . '</div>'
                 . '</div>',
                 $background,
+            ),
+            'two_columns_centered_cells' => sprintf(
+                '<div style="display:flex;flex-direction:row;width:100%%;height:100%%;padding:14 18">%s'
+                . '<div style="display:flex;justify-content:center;align-items:center;width:44%%;height:100%%">'
+                . '<img src="%s" style="width:320px;height:100px" />'
+                . '</div>'
+                . '<div style="display:flex;justify-content:center;align-items:center;width:56%%;height:100%%">'
+                . '<div style="width:300px;height:120px">'
+                . '<div style="font-size:20;font-weight:700">Signed with LibreSign</div>'
+                . '<div style="font-size:18;margin:8 0 0 0">Preview Issuer</div>'
+                . '<div style="font-size:16;margin:10 0 0 0">Date: 2026-05-28T16:40:21+00:00</div>'
+                . '</div>'
+                . '</div>'
+                . '</div>',
+                $background,
+                $this->requireSignaturePath($signaturePath),
             ),
             default => throw new \InvalidArgumentException(sprintf('Unknown visible stamp layout "%s".', $layout)),
         };
@@ -282,7 +309,11 @@ final class VisibleStampTemplateScenarioTest extends TestCase
 
     private function layoutUsesSignatureImage(string $layout): bool
     {
-        return in_array($layout, ['signature_and_metadata_right', 'signature_centered'], true);
+        return in_array(
+            $layout,
+            ['signature_and_metadata_right', 'signature_centered', 'two_columns_centered_cells'],
+            true,
+        );
     }
 
     private function escapeAttribute(string $value): string
