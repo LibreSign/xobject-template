@@ -11,6 +11,7 @@ use LibreSign\XObjectTemplate\Contract\XObjectTemplateCompilerInterface;
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Dto\CompileResult;
 use LibreSign\XObjectTemplate\Exception\UnsupportedSubsetException;
+use LibreSign\XObjectTemplate\Html\HtmlContextInterpolator;
 use LibreSign\XObjectTemplate\Html\SubsetHtmlParser;
 use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use LibreSign\XObjectTemplate\Pdf\ColorParser;
@@ -20,6 +21,7 @@ use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
 final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
 {
     private SubsetHtmlParser $htmlParser;
+    private HtmlContextInterpolator $contextInterpolator;
     private LinearLayoutEngine $layoutEngine;
     private TemplateDocumentBuilder $documentBuilder;
 
@@ -29,8 +31,10 @@ final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerI
         ?PdfEscaper $pdfEscaper = null,
         ?ColorParser $colorParser = null,
         ?TemplateDocumentBuilder $documentBuilder = null,
+        ?HtmlContextInterpolator $contextInterpolator = null,
     ) {
         $this->htmlParser = $htmlParser ?? new SubsetHtmlParser();
+        $this->contextInterpolator = $contextInterpolator ?? new HtmlContextInterpolator();
         $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine();
         $this->documentBuilder = $documentBuilder ?? new TemplateDocumentBuilder(
             $pdfEscaper ?? new PdfEscaper(),
@@ -47,7 +51,9 @@ final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerI
     {
         $start = hrtime(true);
 
-        $nodes = $this->htmlParser->parse($request->html);
+        $nodes = $this->htmlParser->parse(
+            $this->contextInterpolator->interpolate($request->html, $request->context),
+        );
         $layout = $this->layoutEngine->layout($nodes, $request->width, $request->height);
 
         return $this->documentBuilder->build($request, $layout, $start, count($nodes));

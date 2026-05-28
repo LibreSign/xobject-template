@@ -11,13 +11,23 @@ final class ColorParser
 {
     public function toPdfRgb(string $hexColor): string
     {
+        return $this->toPdfColor($hexColor, 'rg');
+    }
+
+    public function toPdfStrokeRgb(string $hexColor): string
+    {
+        return $this->toPdfColor($hexColor, 'RG');
+    }
+
+    private function toPdfColor(string $hexColor, string $operator): string
+    {
         $hex = ltrim(trim($hexColor), '#');
         if (strlen($hex) === 3) {
             $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
         }
 
         if (!preg_match('/^[0-9a-f]{6}$/i', $hex)) {
-            return '0 0 0 rg';
+            return sprintf('0 0 0 %s', $operator);
         }
 
         $channels = str_split($hex, 2);
@@ -25,6 +35,6 @@ final class ColorParser
         $greenChannel = round(hexdec($channels[1]) / 255, 4);
         $blueChannel = round(hexdec($channels[2]) / 255, 4);
 
-        return sprintf('%s %s %s rg', $redChannel, $greenChannel, $blueChannel);
+        return sprintf('%s %s %s %s', $redChannel, $greenChannel, $blueChannel, $operator);
     }
 }

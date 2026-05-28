@@ -21,8 +21,10 @@ final class SubsetHtmlParser
         'font-family' => true,
         'font-size' => true,
         'font-weight' => true,
+        'hyphens' => true,
         'line-height' => true,
         'text-align' => true,
+        'white-space' => true,
     ];
 
     /** @var array<string, true> */

@@ -64,8 +64,8 @@ final class XObjectTemplateCompilerTest extends TestCase
         ];
 
         yield 'margin and padding affect position' => [
-            'html' => '<p style="font-size:10;margin:8;padding:4">Offset Text</p>',
-            'expectedSnippet' => '1 0 0 1 20.000000 48.000000 Tm',
+              'html' => '<p style="font-size:10;margin:4 6;padding:8">Offset Text</p>',
+              'expectedSnippet' => '1 0 0 1 14.000000 48.000000 Tm',
         ];
     }
 

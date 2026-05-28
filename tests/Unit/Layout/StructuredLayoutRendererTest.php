@@ -9,6 +9,7 @@ namespace LibreSign\XObjectTemplate\Tests\Unit\Layout;
 
 use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Html\Node;
+use LibreSign\XObjectTemplate\Layout\LayoutDecoration;
 use LibreSign\XObjectTemplate\Layout\LayoutStyleResolver;
 use LibreSign\XObjectTemplate\Layout\StructuredLayoutRenderer;
 use PHPUnit\Framework\TestCase;
@@ -112,6 +113,51 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(76.0, $result->lines[1]->y);
         self::assertSame('After', $result->lines[2]->text);
         self::assertSame(64.0, $result->lines[2]->y);
+    }
+
+    public function testLayoutCreatesVectorDecorationsForBackgroundAndBorders(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: 'Decorated',
+                attributes: [
+                    'style' => 'width:100;height:40;padding:4;background-color:#abcdef;'
+                        . 'border-color:#123456;border-width:2;border-radius:6;font-size:10',
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertInstanceOf(LayoutDecoration::class, $result->decorations[0]);
+        self::assertSame('#abcdef', $result->decorations[0]->fillColor);
+        self::assertSame('#123456', $result->decorations[0]->strokeColor);
+        self::assertSame(2.0, $result->decorations[0]->strokeWidth);
+        self::assertSame(6.0, $result->decorations[0]->borderRadius);
+        self::assertSame(100.0, $result->decorations[0]->width);
+        self::assertSame(40.0, $result->decorations[0]->height);
+        self::assertSame(40.0, $result->decorations[0]->y);
+    }
+
+    public function testLayoutAppliesClipBoxesWhenOverflowIsHidden(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: 'Wrap this text nicely',
+                attributes: [
+                    'style' => 'width:50;height:12;overflow:hidden;text-overflow:ellipsis;font-size:10',
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertStringEndsWith('...', $result->lines[0]->text);
+        self::assertSame(['x' => 0.0, 'y' => 68.0, 'width' => 50.0, 'height' => 12.0], $result->lines[0]->clipBox);
     }
 
     private function createRenderer(): StructuredLayoutRenderer

@@ -9,13 +9,14 @@ namespace LibreSign\XObjectTemplate\Layout;
 
 use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Css\StyleMap;
-use LibreSign\XObjectTemplate\Html\Node;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 /** @internal */
 final readonly class StructuredLayoutRenderer
 {
     private StructuredBoxResolver $boxResolver;
     private StructuredFlexLayoutPlanner $flexPlanner;
+    private TextBoxLayouter $textLayouter;
 
     public function __construct(
         private InlineStyleParser $styleParser,
@@ -23,15 +24,17 @@ final readonly class StructuredLayoutRenderer
     ) {
         $this->boxResolver = new StructuredBoxResolver($styleResolver);
         $this->flexPlanner = new StructuredFlexLayoutPlanner($styleResolver);
+        $this->textLayouter = new TextBoxLayouter($styleResolver, new StandardFontMetrics());
     }
 
     /**
-     * @param list<Node> $nodes
+     * @param list<\LibreSign\XObjectTemplate\Html\Node> $nodes
      */
     public function layout(array $nodes, float $width, float $height): LayoutResult
     {
         $lines = [];
         $images = [];
+        $decorations = [];
         $imageCount = 0;
 
         $this->layoutNodes(
@@ -45,17 +48,21 @@ final readonly class StructuredLayoutRenderer
             canvasHeight: max($height, 0.0),
             lines: $lines,
             images: $images,
+            decorations: $decorations,
             imageCount: $imageCount,
+            activeClipBox: null,
         );
 
-        return new LayoutResult(lines: $lines, images: $images);
+        return new LayoutResult(lines: $lines, images: $images, decorations: $decorations);
     }
 
     /**
-     * @param list<Node> $nodes
+     * @param list<\LibreSign\XObjectTemplate\Html\Node> $nodes
      * @param array{x: float, y: float, width: float, height: float} $container
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function layoutNodes(
         array $nodes,
@@ -63,7 +70,9 @@ final readonly class StructuredLayoutRenderer
         float $canvasHeight,
         array &$lines,
         array &$images,
+        array &$decorations,
         int &$imageCount,
+        ?array $activeClipBox,
     ): float {
         $consumedHeight = 0.0;
 
@@ -71,7 +80,17 @@ final readonly class StructuredLayoutRenderer
             $style = $this->styleParser->parse($node->attributes['style'] ?? '');
 
             if ($this->styleResolver->isAbsolutelyPositioned($style)) {
-                $this->layoutAbsoluteNode($node, $style, $container, $canvasHeight, $lines, $images, $imageCount);
+                $this->layoutAbsoluteNode(
+                    $node,
+                    $style,
+                    $container,
+                    $canvasHeight,
+                    $lines,
+                    $images,
+                    $decorations,
+                    $imageCount,
+                    $activeClipBox,
+                );
                 continue;
             }
 
@@ -89,7 +108,9 @@ final readonly class StructuredLayoutRenderer
                 $canvasHeight,
                 $lines,
                 $images,
+                $decorations,
                 $imageCount,
+                $activeClipBox,
             );
         }
 
@@ -100,15 +121,19 @@ final readonly class StructuredLayoutRenderer
      * @param array{x: float, y: float, width: float, height: float} $availableBox
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function layoutFlowNode(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         StyleMap $style,
         array $availableBox,
         float $canvasHeight,
         array &$lines,
         array &$images,
+        array &$decorations,
         int &$imageCount,
+        ?array $activeClipBox,
     ): float {
         ['margin' => $margin, 'box' => $box] = $this->boxResolver->resolveFlowPlacement($node, $style, $availableBox);
 
@@ -119,7 +144,9 @@ final readonly class StructuredLayoutRenderer
             $canvasHeight,
             $lines,
             $images,
+            $decorations,
             $imageCount,
+            $activeClipBox,
         );
 
         return $margin['top'] + $renderedHeight + $margin['bottom'];
@@ -129,15 +156,19 @@ final readonly class StructuredLayoutRenderer
      * @param array{x: float, y: float, width: float, height: float} $container
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function layoutAbsoluteNode(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         StyleMap $style,
         array $container,
         float $canvasHeight,
         array &$lines,
         array &$images,
+        array &$decorations,
         int &$imageCount,
+        ?array $activeClipBox,
     ): void {
         $this->renderResolvedNode(
             $node,
@@ -146,7 +177,9 @@ final readonly class StructuredLayoutRenderer
             $canvasHeight,
             $lines,
             $images,
+            $decorations,
             $imageCount,
+            $activeClipBox,
         );
     }
 
@@ -154,54 +187,79 @@ final readonly class StructuredLayoutRenderer
      * @param array{x: float, y: float, width: float, height: float} $box
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function renderResolvedNode(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         StyleMap $style,
         array $box,
         float $canvasHeight,
         array &$lines,
         array &$images,
+        array &$decorations,
         int &$imageCount,
+        ?array $activeClipBox,
     ): float {
         if ($node->tag === 'br') {
             return 12.0;
         }
 
         if ($node->tag === 'img') {
-            return $this->renderImage($node, $box, $canvasHeight, $images, $imageCount);
-        }
-
-        if (trim($node->text) !== '' && $node->children === []) {
-            return $this->renderBlockContainer($node, $style, $box, $canvasHeight, $lines, $images, $imageCount);
+            return $this->renderImage($node, $box, $canvasHeight, $images, $imageCount, $activeClipBox);
         }
 
         if (strtolower(trim($this->styleResolver->styleValue($style, 'display', ''))) === 'flex') {
-            return $this->renderFlexContainer($node, $style, $box, $canvasHeight, $lines, $images, $imageCount);
+            return $this->renderFlexContainer(
+                $node,
+                $style,
+                $box,
+                $canvasHeight,
+                $lines,
+                $images,
+                $decorations,
+                $imageCount,
+                $activeClipBox,
+            );
         }
 
-        return $this->renderBlockContainer($node, $style, $box, $canvasHeight, $lines, $images, $imageCount);
+        return $this->renderBlockContainer(
+            $node,
+            $style,
+            $box,
+            $canvasHeight,
+            $lines,
+            $images,
+            $decorations,
+            $imageCount,
+            $activeClipBox,
+        );
     }
 
     /**
      * @param array{x: float, y: float, width: float, height: float} $box
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function renderBlockContainer(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         StyleMap $style,
         array $box,
         float $canvasHeight,
         array &$lines,
         array &$images,
+        array &$decorations,
         int &$imageCount,
+        ?array $activeClipBox,
     ): float {
         ['padding' => $padding, 'contentBox' => $contentBox] = $this->boxResolver->resolveContentBox($style, $box);
+        $localClipBox = $this->resolveClipBox($style, $box, $activeClipBox);
 
         $contentHeight = 0.0;
         if (trim($node->text) !== '') {
-            $contentHeight += $this->renderTextLine($node, $style, $contentBox, $canvasHeight, $lines);
+            $contentHeight += $this->renderTextLine($node, $style, $contentBox, $canvasHeight, $lines, $localClipBox);
         }
 
         if ($node->children !== []) {
@@ -211,28 +269,41 @@ final readonly class StructuredLayoutRenderer
                 $canvasHeight,
                 $lines,
                 $images,
+                $decorations,
                 $imageCount,
+                $localClipBox,
             );
         }
 
-        return $this->boxResolver->resolveAutoContainerHeight($box['height'], $padding, $contentHeight);
+        $renderedHeight = $localClipBox === null
+            ? $this->boxResolver->resolveAutoContainerHeight($box['height'], $padding, $contentHeight)
+            : $this->boxResolver->resolveFixedContainerHeight($box['height'], $padding, $contentHeight);
+
+        $this->appendDecoration($style, $box, $renderedHeight, $canvasHeight, $decorations);
+
+        return $renderedHeight;
     }
 
     /**
      * @param array{x: float, y: float, width: float, height: float} $box
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function renderFlexContainer(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         StyleMap $style,
         array $box,
         float $canvasHeight,
         array &$lines,
         array &$images,
+        array &$decorations,
         int &$imageCount,
+        ?array $activeClipBox,
     ): float {
         ['padding' => $padding, 'contentBox' => $contentBox] = $this->boxResolver->resolveContentBox($style, $box);
+        $localClipBox = $this->resolveClipBox($style, $box, $activeClipBox);
 
         $direction = $this->flexPlanner->normalizeDirection(
             $this->styleResolver->styleValue($style, 'flex-direction', 'row'),
@@ -248,11 +319,18 @@ final readonly class StructuredLayoutRenderer
             $canvasHeight,
             $lines,
             $images,
+            $decorations,
             $imageCount,
+            $localClipBox,
         );
 
         if ($items === []) {
-            return $box['height'] > 0.0 ? $box['height'] : ($padding['top'] + $padding['bottom']);
+            $renderedHeight = $localClipBox === null
+                ? $this->boxResolver->resolveAutoContainerHeight($box['height'], $padding, 0.0)
+                : $this->boxResolver->resolveFixedContainerHeight($box['height'], $padding, 0.0);
+            $this->appendDecoration($style, $box, $renderedHeight, $canvasHeight, $decorations);
+
+            return $renderedHeight;
         }
 
         $metrics = $this->flexPlanner->calculateMetrics($items, $direction, $justifyContent, $gap, $contentBox);
@@ -273,71 +351,56 @@ final readonly class StructuredLayoutRenderer
                 $canvasHeight,
                 $lines,
                 $images,
+                $decorations,
                 $imageCount,
+                $localClipBox,
             );
 
             $cursor += $this->flexPlanner->advanceCursor($item, $direction, $metrics['gap']);
         }
 
-        $autoHeight = $direction === 'row'
-            ? $padding['top'] + $metrics['crossAxisSize'] + $padding['bottom']
-            : $padding['top'] + $metrics['totalMainAxisSize'] + $padding['bottom'];
+        $contentHeight = $direction === 'row' ? $metrics['crossAxisSize'] : $metrics['totalMainAxisSize'];
+        $renderedHeight = $localClipBox === null
+            ? $this->boxResolver->resolveAutoContainerHeight($box['height'], $padding, $contentHeight)
+            : $this->boxResolver->resolveFixedContainerHeight($box['height'], $padding, $contentHeight);
+        $this->appendDecoration($style, $box, $renderedHeight, $canvasHeight, $decorations);
 
-        return $box['height'] > 0.0 ? max($box['height'], $autoHeight) : $autoHeight;
+        return $renderedHeight;
     }
 
     /**
      * @param array{x: float, y: float, width: float, height: float} $box
      * @param list<LayoutLine> $lines
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function renderTextLine(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         StyleMap $style,
         array $box,
         float $canvasHeight,
         array &$lines,
+        ?array $activeClipBox,
     ): float {
-        $text = trim($node->text);
-        if ($text === '') {
-            return 0.0;
+        $result = $this->textLayouter->layout($node->text, $style, $box, $canvasHeight, $activeClipBox);
+        foreach ($result['lines'] as $line) {
+            $lines[] = $line;
         }
 
-        $fontSize = $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'font-size', '10'));
-        $lineHeight = $this->styleResolver->resolveLineHeight($style, $fontSize);
-        $fontAlias = $this->styleResolver->resolveFontAlias(
-            $this->styleResolver->styleValue($style, 'font-family', 'helvetica'),
-            $this->styleResolver->styleValue($style, 'font-weight', 'normal'),
-        );
-
-        $align = strtolower($this->styleResolver->styleValue($style, 'text-align', 'left'));
-        $lineX = match ($align) {
-            'center' => $box['x'] + ($box['width'] / 2.0),
-            'right' => max($box['x'] + $box['width'], 0.0),
-            default => $box['x'],
-        };
-
-        $lines[] = new LayoutLine(
-            text: $text,
-            x: $lineX,
-            y: max($canvasHeight - ($box['y'] + $lineHeight), 0.0),
-            fontSize: $fontSize,
-            fontAlias: $fontAlias,
-            rgbColor: $this->styleResolver->styleValue($style, 'color', '#000000'),
-        );
-
-        return $lineHeight;
+        return $result['consumedHeight'];
     }
 
     /**
      * @param array{x: float, y: float, width: float, height: float} $box
      * @param list<LayoutImage> $images
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
      */
     private function renderImage(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         array $box,
         float $canvasHeight,
         array &$images,
         int &$imageCount,
+        ?array $activeClipBox,
     ): float {
         $width = $box['width'] > 0.0 ? $box['width'] : 32.0;
         $height = $box['height'] > 0.0 ? $box['height'] : 32.0;
@@ -349,6 +412,7 @@ final readonly class StructuredLayoutRenderer
             width: $width,
             height: $height,
             source: $node->attributes['src'] ?? '',
+            clipBox: $this->toPdfClipBox($activeClipBox, $canvasHeight),
         );
         ++$imageCount;
 
@@ -360,23 +424,41 @@ final readonly class StructuredLayoutRenderer
      * @param array{x: float, y: float, width: float, height: float} $contentBox
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
-     * @return list<array{node: Node, style: StyleMap, size: array{width: float, height: float}}>
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
+    * @return list<array{
+    *     node: \LibreSign\XObjectTemplate\Html\Node,
+    *     style: StyleMap,
+    *     size: array{width: float, height: float}
+    * }>
      */
     private function collectFlexItems(
-        Node $node,
+        \LibreSign\XObjectTemplate\Html\Node $node,
         array $box,
         array $contentBox,
         float $canvasHeight,
         array &$lines,
         array &$images,
+        array &$decorations,
         int &$imageCount,
+        ?array $activeClipBox,
     ): array {
         $items = [];
 
         foreach ($node->children as $child) {
             $childStyle = $this->styleParser->parse($child->attributes['style'] ?? '');
             if ($this->styleResolver->isAbsolutelyPositioned($childStyle)) {
-                $this->layoutAbsoluteNode($child, $childStyle, $box, $canvasHeight, $lines, $images, $imageCount);
+                $this->layoutAbsoluteNode(
+                    $child,
+                    $childStyle,
+                    $box,
+                    $canvasHeight,
+                    $lines,
+                    $images,
+                    $decorations,
+                    $imageCount,
+                    $activeClipBox,
+                );
                 continue;
             }
 
@@ -388,5 +470,101 @@ final readonly class StructuredLayoutRenderer
         }
 
         return $items;
+    }
+
+    /**
+     * @param array{x: float, y: float, width: float, height: float} $box
+     * @param list<LayoutDecoration> $decorations
+     */
+    private function appendDecoration(
+        StyleMap $style,
+        array $box,
+        float $renderedHeight,
+        float $canvasHeight,
+        array &$decorations,
+    ): void {
+        $fillColor = trim($this->styleResolver->styleValue($style, 'background-color', ''));
+        $strokeColor = trim($this->styleResolver->styleValue($style, 'border-color', ''));
+        $strokeWidth = $this->styleResolver->toPoints(
+            $this->styleResolver->styleValue($style, 'border-width', '0'),
+        );
+        $borderRadius = $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'border-radius', '0'));
+
+        if ($fillColor === '' && ($strokeColor === '' || $strokeWidth <= 0.0)) {
+            return;
+        }
+
+        $height = $renderedHeight > 0.0 ? $renderedHeight : $box['height'];
+        if ($box['width'] <= 0.0 || $height <= 0.0) {
+            return;
+        }
+
+        $decorations[] = new LayoutDecoration(
+            x: $box['x'],
+            y: max($canvasHeight - ($box['y'] + $height), 0.0),
+            width: $box['width'],
+            height: $height,
+            fillColor: $fillColor !== '' ? $fillColor : null,
+            strokeColor: $strokeColor !== '' ? $strokeColor : null,
+            strokeWidth: $strokeWidth,
+            borderRadius: $borderRadius,
+        );
+    }
+
+    /**
+     * @param array{x: float, y: float, width: float, height: float} $box
+     * @param array{x: float, y: float, width: float, height: float}|null $activeClipBox
+     * @return array{x: float, y: float, width: float, height: float}|null
+     */
+    private function resolveClipBox(StyleMap $style, array $box, ?array $activeClipBox): ?array
+    {
+        $currentClipBox = $activeClipBox;
+        if (
+            strtolower(trim($this->styleResolver->styleValue($style, 'overflow', 'visible'))) === 'hidden'
+            && $box['width'] > 0.0
+            && $box['height'] > 0.0
+        ) {
+            $currentClipBox = $activeClipBox === null ? $box : $this->intersectBoxes($activeClipBox, $box);
+        }
+
+        return $currentClipBox;
+    }
+
+    /**
+     * @param array{x: float, y: float, width: float, height: float} $first
+     * @param array{x: float, y: float, width: float, height: float} $second
+     * @return array{x: float, y: float, width: float, height: float}
+     */
+    private function intersectBoxes(array $first, array $second): array
+    {
+        $x = max($first['x'], $second['x']);
+        $y = max($first['y'], $second['y']);
+        $right = min($first['x'] + $first['width'], $second['x'] + $second['width']);
+        $bottom = min($first['y'] + $first['height'], $second['y'] + $second['height']);
+
+        return [
+            'x' => $x,
+            'y' => $y,
+            'width' => max($right - $x, 0.0),
+            'height' => max($bottom - $y, 0.0),
+        ];
+    }
+
+    /**
+     * @param array{x: float, y: float, width: float, height: float}|null $clipBox
+     * @return array{x: float, y: float, width: float, height: float}|null
+     */
+    private function toPdfClipBox(?array $clipBox, float $canvasHeight): ?array
+    {
+        if ($clipBox === null) {
+            return null;
+        }
+
+        return [
+            'x' => $clipBox['x'],
+            'y' => max($canvasHeight - ($clipBox['y'] + $clipBox['height']), 0.0),
+            'width' => $clipBox['width'],
+            'height' => $clipBox['height'],
+        ];
     }
 }

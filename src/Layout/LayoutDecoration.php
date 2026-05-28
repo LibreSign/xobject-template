@@ -7,19 +7,17 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Layout;
 
-final readonly class LayoutImage
+final readonly class LayoutDecoration
 {
-    /**
-     * @param array{x: float, y: float, width: float, height: float}|null $clipBox
-     */
     public function __construct(
-        public string $alias,
         public float $x,
         public float $y,
         public float $width,
         public float $height,
-        public string $source,
-        public ?array $clipBox = null,
+        public ?string $fillColor = null,
+        public ?string $strokeColor = null,
+        public float $strokeWidth = 0.0,
+        public float $borderRadius = 0.0,
     ) {
     }
 }

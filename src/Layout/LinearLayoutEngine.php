@@ -10,17 +10,20 @@ namespace LibreSign\XObjectTemplate\Layout;
 use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Css\StyleMap;
 use LibreSign\XObjectTemplate\Html\Node;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 final readonly class LinearLayoutEngine
 {
     private InlineStyleParser $styleParser;
     private LayoutStyleResolver $styleResolver;
     private StructuredLayoutRenderer $structuredRenderer;
+    private StandardFontMetrics $fontMetrics;
 
     public function __construct(?InlineStyleParser $styleParser = null)
     {
         $this->styleParser = $styleParser ?? new InlineStyleParser();
         $this->styleResolver = new LayoutStyleResolver();
+        $this->fontMetrics = new StandardFontMetrics();
         $this->structuredRenderer = new StructuredLayoutRenderer($this->styleParser, $this->styleResolver);
     }
 
@@ -103,10 +106,11 @@ final readonly class LinearLayoutEngine
             }
 
             $align = strtolower($this->styleValue($style, 'text-align', 'left'));
+            $textWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, $text);
             $lineX = match ($align) {
-                'center' => $leftBase + ($boxWidth / 2.0),
-                'right' => max($rightBase - 8.0, 0),
-                default => $leftBase + 8.0,
+                'center' => $leftBase + max(($boxWidth - $textWidth) / 2.0, 0.0),
+                'right', 'justify' => $leftBase + max($boxWidth - $textWidth, 0.0),
+                default => $leftBase,
             };
 
             $lines[] = new LayoutLine(
@@ -149,10 +153,35 @@ final readonly class LinearLayoutEngine
             return true;
         }
 
-        foreach (['width', 'height', 'left', 'top', 'right', 'bottom', 'gap'] as $property) {
+        foreach (
+            [
+                'background-color',
+                'border-color',
+                'border-width',
+                'border-radius',
+                'overflow',
+                'text-overflow',
+                'hyphens',
+                'white-space',
+            ] as $property
+        ) {
+            if ($this->styleValue($style, $property, '') !== '') {
+                return true;
+            }
+        }
+
+        foreach (
+            ['width', 'height', 'left', 'top', 'right', 'bottom', 'gap'] as $property
+        ) {
             if (str_contains($this->styleValue($style, $property, ''), '%')) {
                 return true;
             }
+        }
+
+        if (
+            strtolower(trim($this->styleValue($style, 'text-align', ''))) === 'justify'
+        ) {
+            return true;
         }
 
         $justifyContent = strtolower(trim($this->styleValue($style, 'justify-content', '')));

@@ -111,11 +111,33 @@ final readonly class StructuredBoxResolver
     /**
      * @param array{top: float, right: float, bottom: float, left: float} $padding
      */
-    public function resolveAutoContainerHeight(float $resolvedHeight, array $padding, float $contentHeight): float
-    {
+    public function resolveAutoContainerHeight(
+        float $resolvedHeight,
+        array $padding,
+        float $contentHeight,
+    ): float {
         $autoHeight = $padding['top'] + $contentHeight + $padding['bottom'];
 
-        return $resolvedHeight > 0.0 ? max($resolvedHeight, $autoHeight) : $autoHeight;
+        if ($resolvedHeight > 0.0) {
+            return max($resolvedHeight, $autoHeight);
+        }
+
+        return $autoHeight;
+    }
+
+    /**
+     * @param array{top: float, right: float, bottom: float, left: float} $padding
+     */
+    public function resolveFixedContainerHeight(
+        float $resolvedHeight,
+        array $padding,
+        float $contentHeight,
+    ): float {
+        if ($resolvedHeight > 0.0) {
+            return $resolvedHeight;
+        }
+
+        return $padding['top'] + $contentHeight + $padding['bottom'];
     }
 
     /**

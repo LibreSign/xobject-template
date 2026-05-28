@@ -90,6 +90,28 @@ Using a uniform placement scale keeps text, images, spacing, and line breaks vis
 Recompiling only to emulate a proportional resize is usually the wrong integration point for this
 package.
 
+For consumers that want a small helper instead of recalculating the matrix manually, the package also
+ships `LibreSign\XObjectTemplate\Integration\XObjectPlacementCalculator` and
+`LibreSign\XObjectTemplate\Integration\XObjectPlacement`.
+
+```php
+use LibreSign\XObjectTemplate\Integration\XObjectPlacementCalculator;
+
+$placement = (new XObjectPlacementCalculator())->fromWidth($result, 175.0, 36.0, 72.0);
+
+$pdfCommand = $placement->toPdfCommand('Fm0');
+// q 0.729167 0 0 0.729167 36.000000 72.000000 cm /Fm0 Do Q
+```
+
+### Optional context interpolation
+
+If the caller passes `CompileRequest::context`, the compiler can interpolate simple `{{ key }}`
+placeholders before parsing the HTML subset.
+
+- Values are HTML-escaped before insertion
+- Unknown placeholders are left untouched
+- Twig users can keep rendering HTML upstream and skip this feature entirely
+
 ## Supported HTML/CSS subset
 
 ### HTML
@@ -101,8 +123,9 @@ package.
 
 ### CSS used by the renderer
 
-- Typography: `font-size`, `font-family`, `font-weight`, `line-height`, `color`
-- Layout: `margin`, `padding`, `text-align`, `width`, `height`
+- Typography: `font-size`, `font-family`, `font-weight`, `line-height`, `color`, `text-align`, `hyphens`, `white-space`
+- Layout: `margin`, `padding`, `width`, `height`, `overflow`, `text-overflow`
+- Vector box styling: `background-color`, `border-color`, `border-width`, `border-radius`
 - Structured layout: `display:flex`, `flex-direction`, `justify-content`, `align-items`, `gap`
 - Absolute placement: `position:absolute`, `top`, `right`, `bottom`, `left`
 - Numeric values can be provided as unitless numbers or `px`; `width`, `height`, and positional offsets also accept `%`
@@ -112,6 +135,10 @@ package.
 ### Rendering notes
 
 - Font family mapping currently targets the built-in Helvetica, Times, and Courier aliases used by the generated PDF resources
+- Text alignment uses measured widths for left, center, right, and basic justified output (`Tw` word spacing)
+- Hyphenation supports a small deterministic subset: `hyphens:auto`, `hyphens:manual` with soft hyphens, and `hyphens:none`
+- Overflow clipping uses PDF clipping paths; `text-overflow:ellipsis` applies when hidden overflow truncates visible text
+- Backgrounds and borders are emitted as vector rectangles, including rounded corners
 - Percentage-based sizing and offsets resolve relative to the current layout container
 - Flex layouts are intentionally small-scope and predictable: the engine supports deterministic row/column compositions for stamps, labels, and approval blocks rather than full browser-grade CSS
 - `img` width/height fall back to `32x32` when omitted or invalid

@@ -9,12 +9,15 @@ namespace LibreSign\XObjectTemplate\Layout;
 
 use LibreSign\XObjectTemplate\Css\StyleMap;
 use LibreSign\XObjectTemplate\Html\Node;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 /** @internal */
 final readonly class StructuredFlexLayoutPlanner
 {
-    public function __construct(private LayoutStyleResolver $styleResolver)
-    {
+    public function __construct(
+        private LayoutStyleResolver $styleResolver,
+        private StandardFontMetrics $fontMetrics = new StandardFontMetrics(),
+    ) {
     }
 
     public function normalizeDirection(string $direction): string
@@ -44,7 +47,18 @@ final readonly class StructuredFlexLayoutPlanner
             $container['width'],
         );
         if ($width <= 0.0) {
-            $width = $node->tag === 'img' ? 32.0 : 0.0;
+            $width = match (true) {
+                $node->tag === 'img' => 32.0,
+                trim($node->text) !== '' => $this->fontMetrics->measureString(
+                    $this->styleResolver->resolveFontAlias(
+                        $this->styleResolver->styleValue($style, 'font-family', 'helvetica'),
+                        $this->styleResolver->styleValue($style, 'font-weight', 'normal'),
+                    ),
+                    $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'font-size', '10')),
+                    trim($node->text),
+                ),
+                default => 0.0,
+            };
         }
 
         $height = $this->styleResolver->resolveRelativeDimension(
