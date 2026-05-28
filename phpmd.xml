@@ -12,6 +12,12 @@
   <rule ref="rulesets/codesize.xml">
     <exclude name="CyclomaticComplexity"/>
     <exclude name="NPathComplexity"/>
+    <exclude name="TooManyPublicMethods" />
+  </rule>
+  <rule ref="rulesets/codesize.xml/TooManyPublicMethods">
+    <properties>
+      <property name="excludePattern" value=".*Test\.php$" />
+    </properties>
   </rule>
   <rule ref="rulesets/design.xml"/>
   <rule ref="rulesets/naming.xml">
