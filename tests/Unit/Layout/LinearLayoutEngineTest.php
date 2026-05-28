@@ -12,6 +12,7 @@ use LibreSign\XObjectTemplate\Html\Node;
 use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use ReflectionProperty;
 
 final class LinearLayoutEngineTest extends TestCase
@@ -400,6 +401,20 @@ final class LinearLayoutEngineTest extends TestCase
 
         self::assertCount(1, $result->lines);
         self::assertSame('Deep leaf', $result->lines[0]->text);
+    }
+
+    public function testParseBoxSpacingReturnsZeroSlotsForWhitespaceOnlyInput(): void
+    {
+        $engine = new LinearLayoutEngine();
+        $method = new ReflectionMethod($engine, 'parseBoxSpacing');
+
+        /** @var array{top: float, right: float, bottom: float, left: float} $spacing */
+        $spacing = $method->invoke($engine, '   ');
+
+        self::assertSame(
+            ['top' => 0.0, 'right' => 0.0, 'bottom' => 0.0, 'left' => 0.0],
+            $spacing,
+        );
     }
 
     /**
