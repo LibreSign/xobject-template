@@ -16,7 +16,3 @@
 ## Quick integration
 
 Use the compiler to generate `content stream`, `resources`, and `bbox`, then map the output to your signature appearance DTO adapter.
-
-## License
-
-AGPL-3.0-or-later.
