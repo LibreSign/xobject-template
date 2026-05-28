@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 name: shell-security
 
 on:
@@ -7,12 +10,5 @@ jobs:
   shell-security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install shell tools
-        run: sudo apt-get update && sudo apt-get install -y shellcheck shfmt devscripts
-      - name: shellcheck
-        run: shellcheck scripts/*.sh
-      - name: shfmt check
-        run: shfmt -d scripts
-      - name: checkbashisms
-        run: checkbashisms -f scripts/*.sh
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/shell-quality

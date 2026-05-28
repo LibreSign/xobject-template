@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 name: changelog
 
 on:
@@ -7,12 +10,12 @@ jobs:
   changelog:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Check if CHANGELOG.md changed
         id: changed_files
-        uses: tj-actions/changed-files@v46
+        uses: tj-actions/changed-files@v47
         with:
           files: |
             CHANGELOG.md

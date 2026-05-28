@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 name: release-draft
 
 on:
@@ -12,8 +15,8 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: release-drafter/release-drafter@v6
+      - uses: actions/checkout@v6
+      - uses: release-drafter/release-drafter@v7
         with:
           config-name: release-drafter.yml
         env:

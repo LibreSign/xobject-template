@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 name: xobject-template-${COMPOSE_PROJECT_SUFFIX:-default}
 
 services:
@@ -6,16 +9,19 @@ services:
       context: .
       dockerfile: .docker/Dockerfile
       args:
+        # Optional overrides (defaults shown): UID=1000, GID=1000
         UID: ${UID:-1000}
         GID: ${GID:-1000}
     user: "${UID:-1000}:${GID:-1000}"
     working_dir: /var/www/html
     environment:
+      # Optional overrides (defaults shown): XDEBUG_ENABLED=0, XDEBUG_MODE=off
       XDEBUG_ENABLED: ${XDEBUG_ENABLED:-0}
       XDEBUG_MODE: ${XDEBUG_MODE:-off}
       COMPOSER_HOME: /var/www/.composer
     volumes:
       - ./:/var/www/html
-      - ${COMPOSER_CACHE_DIR:-/tmp/composer-cache}:/var/www/.composer/
+      # Optional override (default shown): COMPOSER_CACHE_DIR=${HOME}/.composer
+      - ${COMPOSER_CACHE_DIR:-${HOME}/.composer}:/var/www/.composer/
       - ./.profile:/var/www/html/.profile
     command: ["bash", "-lc", "composer --version && bash"]

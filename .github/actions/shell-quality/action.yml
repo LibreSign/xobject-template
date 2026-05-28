@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: shell-quality
+description: Install shell tooling and run shell safety checks.
+
+runs:
+  using: composite
+  steps:
+    - name: Install shell tools
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y shellcheck shfmt devscripts
+
+    - name: shellcheck
+      shell: bash
+      run: shellcheck scripts/*.sh
+
+    - name: shfmt check
+      shell: bash
+      run: shfmt -d scripts
+
+    - name: checkbashisms
+      shell: bash
+      run: checkbashisms -f scripts/*.sh

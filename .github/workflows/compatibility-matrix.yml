@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 name: compatibility-matrix
 
 on:
@@ -9,13 +12,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3']
         deps: [lowest, highest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - name: Detect minimum PHP from composer.json
+        id: php_min
+        run: |
+          php_version=$(grep -Po '"php"\s*:\s*"\K[^"]+' composer.json | grep -Eo '[0-9]+\.[0-9]+' | head -n1)
+          [[ -n "$php_version" ]] || { echo "Could not determine minimum PHP version"; exit 1; }
+          echo "version=$php_version" >> "$GITHUB_OUTPUT"
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php }}
+          php-version: ${{ steps.php_min.outputs.version }}
       - run: |
           if [ "${{ matrix.deps }}" = "lowest" ]; then
             composer update --prefer-lowest --prefer-dist --no-interaction

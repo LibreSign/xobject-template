@@ -1,7 +1,6 @@
 {
   "require": {
     "roave/backward-compatibility-check": "^8.10",
-    "ergebnis/composer-normalize": "^2.44",
-    "reuse/reuse": "^5.1"
+    "ergebnis/composer-normalize": "^2.44"
   }
 }

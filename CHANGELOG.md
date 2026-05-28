@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 LibreSign -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -9,4 +12,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial bootstrap for MVP HTML+CSS subset to Form XObject compilation.
+- Initial bootstrap for HTML+CSS subset to Form XObject compilation.

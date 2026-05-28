@@ -1,4 +1,6 @@
 <?xml version="1.0"?>
+<!-- SPDX-FileCopyrightText: 2026 LibreSign -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <ruleset name="XObjectTemplate">
   <description>Code style rules for xobject-template.</description>
   <arg value="sp"/>

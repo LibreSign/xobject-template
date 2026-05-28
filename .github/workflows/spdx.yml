@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 name: spdx
 
 on:
@@ -7,9 +10,16 @@ jobs:
   spdx:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Verify SPDX/AGPL project metadata
         run: |
           test -f REUSE.toml
           test -f LICENSES/AGPL-3.0-or-later.txt
-          php -r '$j=json_decode(file_get_contents("composer.json"), true); if (($j["license"] ?? "") !== "AGPL-3.0-or-later") {fwrite(STDERR, "Invalid license metadata\n"); exit(1);} '
+          php <<'PHP'
+          <?php
+          $j = json_decode(file_get_contents('composer.json'), true);
+          if (($j['license'] ?? '') !== 'AGPL-3.0-or-later') {
+              fwrite(STDERR, "Invalid license metadata\n");
+              exit(1);
+          }
+          PHP

@@ -1,5 +1,8 @@
 <?php
 
+// SPDX-FileCopyrightText: 2026 LibreSign
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Html;
@@ -26,7 +29,13 @@ final class SubsetHtmlParser
     public function parse(string $html): array
     {
         $dom = new DOMDocument('1.0', 'UTF-8');
-        @$dom->loadHTML('<?xml encoding="utf-8" ?><body>' . $html . '</body>', LIBXML_NOERROR | LIBXML_NOWARNING);
+        $prevLibxmlErrors = libxml_use_internal_errors(true);
+        $dom->loadHTML(
+            '<?xml encoding="utf-8" ?><body>' . $html . '</body>',
+            LIBXML_NOERROR | LIBXML_NOWARNING,
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors($prevLibxmlErrors);
 
         $body = $dom->getElementsByTagName('body')->item(0);
         if (!$body instanceof DOMElement) {
@@ -47,39 +56,44 @@ final class SubsetHtmlParser
     private function parseDomNode(DOMNode $node, string $inheritedStyle): ?Node
     {
         if ($node instanceof DOMElement) {
-            $tag = strtolower($node->tagName);
-            if (!isset($this->allowedTags[$tag])) {
-                throw new UnsupportedSubsetException(sprintf('Tag <%s> is not supported in MVP subset.', $tag));
-            }
-
-            $attributes = [];
-            foreach ($node->attributes as $attribute) {
-                $attributes[strtolower($attribute->name)] = $attribute->value;
-            }
-
-            $ownStyle = $attributes['style'] ?? '';
-            $effectiveStyle = $this->mergeStyle($inheritedStyle, $ownStyle);
-            if ($effectiveStyle !== '') {
-                $attributes['style'] = $effectiveStyle;
-            }
-
-            $children = [];
-            foreach ($node->childNodes as $childNode) {
-                $child = $this->parseDomNode($childNode, $effectiveStyle);
-                if ($child !== null) {
-                    $children[] = $child;
-                }
-            }
-
-            return new Node(
-                tag: $tag,
-                text: '',
-                attributes: $attributes,
-                children: $children,
-            );
+            return $this->parseElementNode($node, $inheritedStyle);
         }
 
-        $text = trim($node->textContent ?? '');
+        return $this->parseTextNode($node, $inheritedStyle);
+    }
+
+    private function parseElementNode(DOMElement $node, string $inheritedStyle): Node
+    {
+        $tag = strtolower($node->tagName);
+        if (!isset($this->allowedTags[$tag])) {
+            throw new UnsupportedSubsetException(sprintf('Tag <%s> is not supported.', $tag));
+        }
+
+        $attributes = $this->collectAttributes($node);
+        $effectiveStyle = $this->mergeStyle($inheritedStyle, $attributes['style'] ?? '');
+        if ($effectiveStyle !== '') {
+            $attributes['style'] = $effectiveStyle;
+        }
+
+        $children = [];
+        foreach ($node->childNodes as $childNode) {
+            $child = $this->parseDomNode($childNode, $effectiveStyle);
+            if ($child !== null) {
+                $children[] = $child;
+            }
+        }
+
+        return new Node(
+            tag: $tag,
+            text: '',
+            attributes: $attributes,
+            children: $children,
+        );
+    }
+
+    private function parseTextNode(DOMNode $node, string $inheritedStyle): ?Node
+    {
+        $text = trim($node->textContent);
         if ($text === '') {
             return null;
         }
@@ -90,6 +104,23 @@ final class SubsetHtmlParser
         }
 
         return new Node(tag: 'span', text: $text, attributes: $attributes);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function collectAttributes(DOMElement $node): array
+    {
+        $attributes = [];
+        if ($node->attributes === null) {
+            return $attributes;
+        }
+
+        foreach ($node->attributes as $attribute) {
+            $attributes[strtolower($attribute->name)] = $attribute->value;
+        }
+
+        return $attributes;
     }
 
     private function mergeStyle(string $inheritedStyle, string $ownStyle): string
