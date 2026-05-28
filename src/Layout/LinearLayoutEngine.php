@@ -86,7 +86,7 @@ final readonly class LinearLayoutEngine
             }
 
             $align = strtolower($this->styleValue($style, 'text-align', 'left'));
-            $x = match ($align) {
+            $lineX = match ($align) {
                 'center' => $leftBase + ($boxWidth / 2.0),
                 'right' => max($rightBase - 8.0, 0),
                 default => $leftBase + 8.0,
@@ -94,7 +94,7 @@ final readonly class LinearLayoutEngine
 
             $lines[] = new LayoutLine(
                 text: $text,
-                x: $x,
+                x: $lineX,
                 y: max($cursorY, 0),
                 fontSize: $fontSize,
                 fontAlias: $fontAlias,

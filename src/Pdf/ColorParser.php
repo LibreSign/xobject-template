@@ -21,10 +21,10 @@ final class ColorParser
         }
 
         $channels = str_split($hex, 2);
-        $r = round(hexdec($channels[0]) / 255, 4);
-        $g = round(hexdec($channels[1]) / 255, 4);
-        $b = round(hexdec($channels[2]) / 255, 4);
+        $redChannel = round(hexdec($channels[0]) / 255, 4);
+        $greenChannel = round(hexdec($channels[1]) / 255, 4);
+        $blueChannel = round(hexdec($channels[2]) / 255, 4);
 
-        return sprintf('%s %s %s rg', $r, $g, $b);
+        return sprintf('%s %s %s rg', $redChannel, $greenChannel, $blueChannel);
     }
 }
