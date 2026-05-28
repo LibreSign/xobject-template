@@ -6,6 +6,9 @@ name: coverage
 on:
   pull_request:
 
+env:
+  COVERAGE_THRESHOLDS: '95 95'
+
 jobs:
   coverage:
     runs-on: ubuntu-latest
@@ -23,4 +26,27 @@ jobs:
           coverage: xdebug
       - run: composer install --no-interaction --prefer-dist
       - run: composer bin phpunit install --no-interaction --prefer-dist
-      - run: composer run test:coverage
+      - name: Generate coverage reports
+        run: XDEBUG_MODE=coverage vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --coverage-text --coverage-clover=build/coverage/clover.xml --coverage-cobertura=build/coverage/cobertura.xml --coverage-html=build/coverage/html
+      - name: Store temporary coverage cache
+        uses: actions/cache/save@v4
+        with:
+          path: build/coverage
+          key: coverage-${{ github.event.pull_request.number }}-${{ github.sha }}
+      - name: Upload temporary coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ github.event.pull_request.number }}-${{ github.sha }}
+          path: build/coverage
+          retention-days: 7
+      - name: Validate minimum line coverage
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: build/coverage/cobertura.xml
+          fail_below_min: true
+          format: text
+          hide_branch_rate: false
+          hide_complexity: true
+          indicators: true
+          output: console
+          thresholds: ${{ env.COVERAGE_THRESHOLDS }}

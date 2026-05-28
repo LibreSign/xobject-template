@@ -10,6 +10,7 @@ namespace LibreSign\XObjectTemplate;
 use LibreSign\XObjectTemplate\Contract\XObjectTemplateCompilerInterface;
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Dto\CompileResult;
+use LibreSign\XObjectTemplate\Exception\UnsupportedSubsetException;
 use LibreSign\XObjectTemplate\Html\SubsetHtmlParser;
 use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use LibreSign\XObjectTemplate\Pdf\ColorParser;
@@ -37,6 +38,11 @@ final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerI
         );
     }
 
+    /**
+     * Compile the supported HTML+CSS subset into a reusable PDF Form XObject payload.
+     *
+     * @throws UnsupportedSubsetException If the HTML fragment contains an unsupported element.
+     */
     public function compile(CompileRequest $request): CompileResult
     {
         $start = hrtime(true);

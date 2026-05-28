@@ -8,21 +8,21 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit\Integration;
 
 use LibreSign\XObjectTemplate\Dto\CompileResult;
-use LibreSign\XObjectTemplate\Integration\SignatureAppearanceXObjectAdapter;
+use LibreSign\XObjectTemplate\Integration\XObjectPayloadAdapter;
 use PHPUnit\Framework\TestCase;
 
-final class SignatureAppearanceXObjectAdapterTest extends TestCase
+final class XObjectPayloadAdapterTest extends TestCase
 {
     public function testAdapterMapsToExpectedPayload(): void
     {
-        $adapter = new SignatureAppearanceXObjectAdapter();
+        $adapter = new XObjectPayloadAdapter();
         $result = new CompileResult(
             contentStream: 'BT\n(Foo) Tj\nET',
             resources: ['Font' => ['F1' => ['BaseFont' => '/Helvetica']]],
             bbox: [0.0, 0.0, 240.0, 84.0],
         );
 
-        $payload = $adapter->toPdfSignerPayload($result);
+        $payload = $adapter->toXObjectPayload($result);
 
         self::assertSame('BT\n(Foo) Tj\nET', $payload['stream']);
         self::assertSame(['Font' => ['F1' => ['BaseFont' => '/Helvetica']]], $payload['resources']);
