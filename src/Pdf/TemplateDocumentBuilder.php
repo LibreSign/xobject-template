@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Pdf;
 
+use Closure;
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Dto\CompileResult;
 use LibreSign\XObjectTemplate\Layout\LayoutImage;
@@ -47,6 +48,8 @@ final readonly class TemplateDocumentBuilder
         ],
     ];
 
+    private Closure $clock;
+
     /**
      * @param array<string, array<string, mixed>> $fontResources
      */
@@ -54,7 +57,9 @@ final readonly class TemplateDocumentBuilder
         private PdfEscaper $pdfEscaper = new PdfEscaper(),
         private ColorParser $colorParser = new ColorParser(),
         private array $fontResources = self::DEFAULT_FONT_RESOURCES,
+        ?Closure $clock = null,
     ) {
+        $this->clock = $clock ?? static fn (): int => hrtime(true);
     }
 
     public function build(
@@ -121,7 +126,7 @@ final readonly class TemplateDocumentBuilder
     public function buildMetadata(LayoutResult $layout, int $startedAtNs, int $nodeCount = 0): array
     {
         return [
-            'render_ms' => round((hrtime(true) - $startedAtNs) / 1_000_000, 3),
+            'render_ms' => round((($this->clock)() - $startedAtNs) / 1_000_000, 3),
             'line_count' => count($layout->lines),
             'image_count' => count($layout->images),
             'node_count' => $nodeCount,
@@ -130,7 +135,7 @@ final readonly class TemplateDocumentBuilder
 
     public function withFontResources(array $fontResources): self
     {
-        return new self($this->pdfEscaper, $this->colorParser, $fontResources);
+        return new self($this->pdfEscaper, $this->colorParser, $fontResources, $this->clock);
     }
 
     private function buildImageCommand(LayoutImage $image): string
