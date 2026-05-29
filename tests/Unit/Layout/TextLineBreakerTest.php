@@ -36,6 +36,33 @@ final class TextLineBreakerTest extends TestCase
         self::assertSame(['a b'], $breaker->wrap('a b', 20.0, 'F5', 10.0, 'none', 'normal'));
     }
 
+    public function testWrapKeepsLongWordsUnbrokenWhenHyphenationIsDisabled(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(['abcdef'], $breaker->wrap('abcdef', 5.0, 'F1', 10.0, 'none', 'normal'));
+    }
+
+    public function testBreakWordKeepsWordUnchangedWhenHyphenationIsDisabled(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(
+            ['abcdef'],
+            $this->invokeBreakerMethod($breaker, 'breakWord', 'abcdef', 5.0, 'F1', 10.0, 'none'),
+        );
+    }
+
+    public function testBreakWordKeepsWordUnchangedForUnsupportedHyphenationMode(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(
+            ['abcdef'],
+            $this->invokeBreakerMethod($breaker, 'breakWord', 'abcdef', 5.0, 'F1', 10.0, 'inherit'),
+        );
+    }
+
     public function testWrapKeepsAppendingAfterManualHyphenBreaks(): void
     {
         $metrics = new StandardFontMetrics();
@@ -160,6 +187,17 @@ final class TextLineBreakerTest extends TestCase
         $breaker = new TextLineBreaker(new StandardFontMetrics());
 
         self::assertSame([], $this->invokeBreakerMethod($breaker, 'splitCharacters', "\xc3\x28"));
+    }
+
+    public function testBreakWordAutomaticallyReturnsInvalidUtf8WordWhenCharacterSplittingFails(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+        $invalidUtf8 = "\xc3\x28";
+
+        self::assertSame(
+            [$invalidUtf8],
+            $this->invokeBreakerMethod($breaker, 'breakWordAutomatically', $invalidUtf8, 1.0, 'F1', 10.0),
+        );
     }
 
     private function invokeBreakerMethod(TextLineBreaker $breaker, string $method, mixed ...$arguments): mixed
