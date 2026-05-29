@@ -16,6 +16,20 @@ use PHPUnit\Framework\TestCase;
 
 final class StructuredLayoutRendererTest extends TestCase
 {
+    public function testLayoutUsesBreakNodesAsTwelvePointFlowSpacing(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(tag: 'br', text: '', attributes: []),
+            $this->textNode('After'),
+        ], 100.0, 100.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame('After', $result->lines[0]->text);
+        self::assertSame(76.0, $result->lines[0]->y);
+    }
+
     public function testLayoutKeepsAbsoluteNodesOutOfFlowAndAccumulatesFlowHeights(): void
     {
         $renderer = $this->createRenderer();
@@ -113,6 +127,104 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(78.0, $result->images[1]->y);
         self::assertSame('Below', $result->lines[0]->text);
         self::assertSame(63.0, $result->lines[0]->y);
+    }
+
+    public function testLayoutUsesAutoHeightForEmptyFlexContainersWithoutClipping(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display:flex;width:100;padding:2 0 3 0;background-color:#abcdef'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame(100.0, $result->decorations[0]->width);
+        self::assertSame(5.0, $result->decorations[0]->height);
+        self::assertSame(75.0, $result->decorations[0]->y);
+    }
+
+    public function testLayoutUsesFixedHeightFallbackForEmptyFlexContainersInsideClipBoxes(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'overflow:hidden;width:40;height:20'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: [
+                            'style' => 'display:flex;width:40;height:2;padding:2 0 3 0;'
+                                . 'background-color:#abcdef',
+                        ],
+                    ),
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame(40.0, $result->decorations[0]->width);
+        self::assertSame(2.0, $result->decorations[0]->height);
+        self::assertSame(78.0, $result->decorations[0]->y);
+    }
+
+    public function testLayoutUsesPaddingHeightForEmptyFlexContainersInsideClipBoxesWithoutExplicitHeight(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'overflow:hidden;width:40;height:20'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: [
+                            'style' => 'display:flex;width:40;padding:2 0 3 0;background-color:#abcdef',
+                        ],
+                    ),
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame(40.0, $result->decorations[0]->width);
+        self::assertSame(5.0, $result->decorations[0]->height);
+        self::assertSame(75.0, $result->decorations[0]->y);
+    }
+
+    public function testLayoutSupportsAbsolutelyPositionedChildrenInsideFlexContainers(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display:flex;width:40;height:20'],
+                children: [
+                    $this->imageNode('/absolute.png', 'position:absolute;left:5;top:2;width:10;height:10'),
+                    $this->imageNode('/flow.png', 'width:10;height:10'),
+                ],
+            ),
+        ], 40.0, 40.0);
+
+        self::assertCount(2, $result->images);
+        self::assertSame('/absolute.png', $result->images[0]->source);
+        self::assertSame(5.0, $result->images[0]->x);
+        self::assertSame(28.0, $result->images[0]->y);
+        self::assertSame('/flow.png', $result->images[1]->source);
+        self::assertSame(0.0, $result->images[1]->x);
+        self::assertSame(30.0, $result->images[1]->y);
     }
 
     public function testLayoutAccumulatesParentTextAndChildHeightBeforeFollowingNodes(): void
