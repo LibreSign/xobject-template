@@ -9,6 +9,9 @@ namespace LibreSign\XObjectTemplate\Pdf;
 
 use InvalidArgumentException;
 
+/**
+ * @SuppressWarnings(PHPMD.ExcessiveClassComplexity)
+ */
 final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInterface
 {
     public function embed(string $source): EmbeddedPdfImage
@@ -284,7 +287,7 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
      */
     private function unfilterPngScanlines(string $idat, int $height, int $rowLength, int $bytesPerPixel): array
     {
-        $inflated = @gzuncompress($idat);
+        $inflated = $this->runWithoutWarnings(static fn (): string|false => gzuncompress($idat));
         if (!is_string($inflated)) {
             throw new InvalidArgumentException('PNG image data could not be decompressed.');
         }
@@ -322,13 +325,13 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
     ): string {
         $row = '';
         $rowLength = strlen($filteredRow);
-        $previousRowWithPadding = str_repeat("\x00", $bytesPerPixel) . $previousRow;
+        $paddedPreviousRow = str_repeat("\x00", $bytesPerPixel) . $previousRow;
 
         for ($index = 0; $index < $rowLength; $index++) {
             $rawByte = ord($filteredRow[$index]);
             $left = $index >= $bytesPerPixel ? ord($row[$index - $bytesPerPixel]) : 0;
             $above = ord($previousRow[$index]);
-            $upperLeft = ord($previousRowWithPadding[$index]);
+            $upperLeft = ord($paddedPreviousRow[$index]);
 
             $decodedByte = match ($filterType) {
                 0 => $rawByte,
@@ -408,7 +411,7 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
 
     private function readSourceContents(string $source): string
     {
-        $contents = @file_get_contents($source);
+        $contents = $this->runWithoutWarnings(static fn (): string|false => file_get_contents($source));
         if (!is_string($contents)) {
             throw new InvalidArgumentException(sprintf('Failed to read image source "%s".', $source));
         }
@@ -459,5 +462,16 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
             4 => '/DeviceCMYK',
             default => '/DeviceRGB',
         };
+    }
+
+    private function runWithoutWarnings(callable $operation): mixed
+    {
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            return $operation();
+        } finally {
+            restore_error_handler();
+        }
     }
 }
