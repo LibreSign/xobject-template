@@ -15,6 +15,7 @@ use LibreSign\XObjectTemplate\Layout\LayoutResult;
 use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class TemplateDocumentBuilderTest extends TestCase
 {
@@ -481,6 +482,88 @@ final class TemplateDocumentBuilderTest extends TestCase
         $this->assertStringNotContainsString(' re', $emptyStream);
         $this->assertStringNotContainsString(' rg', $emptyStream);
         $this->assertStringNotContainsString(' RG', $emptyStream);
+    }
+
+    public function testBuildDecorationCommandRequiresStrokeColorAndPositiveStrokeWidth(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+        $method = new ReflectionMethod($builder, 'buildDecorationCommand');
+
+        self::assertSame(
+            'q\nQ',
+            $method->invoke(
+                $builder,
+                new LayoutDecoration(x: 1.0, y: 2.0, width: 5.0, height: 6.0, strokeWidth: 1.5),
+            ),
+        );
+        self::assertSame(
+            'q\nQ',
+            $method->invoke(
+                $builder,
+                new LayoutDecoration(x: 1.0, y: 2.0, width: 5.0, height: 6.0, strokeColor: '', strokeWidth: 1.5),
+            ),
+        );
+        self::assertSame(
+            'q\nQ',
+            $method->invoke($builder, new LayoutDecoration(
+                x: 1.0,
+                y: 2.0,
+                width: 5.0,
+                height: 6.0,
+                strokeColor: '#040506',
+                strokeWidth: 0.0,
+            )),
+        );
+    }
+
+    public function testBuildDecorationPathClampsRadiusByWidthHalfOnNarrowDecorations(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+        $method = new ReflectionMethod($builder, 'buildDecorationPath');
+
+        self::assertSame(
+            implode("\n", [
+                '4.000000 0.000000 m',
+                '4.000000 0.000000 l',
+                '6.209139 0.000000 8.000000 1.790861 8.000000 4.000000 c',
+                '8.000000 16.000000 l',
+                '8.000000 18.209139 6.209139 20.000000 4.000000 20.000000 c',
+                '4.000000 20.000000 l',
+                '1.790861 20.000000 0.000000 18.209139 0.000000 16.000000 c',
+                '0.000000 4.000000 l',
+                '0.000000 1.790861 1.790861 0.000000 4.000000 0.000000 c',
+                'h',
+            ]),
+            $method->invoke(
+                $builder,
+                new LayoutDecoration(x: 0.0, y: 0.0, width: 8.0, height: 20.0, borderRadius: 10.0),
+            ),
+        );
+    }
+
+    public function testBuildDecorationPathClampsRadiusByHeightHalfOnShortDecorations(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+        $method = new ReflectionMethod($builder, 'buildDecorationPath');
+
+        self::assertSame(
+            implode("\n", [
+                '4.000000 0.000000 m',
+                '16.000000 0.000000 l',
+                '18.209139 0.000000 20.000000 1.790861 20.000000 4.000000 c',
+                '20.000000 4.000000 l',
+                '20.000000 6.209139 18.209139 8.000000 16.000000 8.000000 c',
+                '4.000000 8.000000 l',
+                '1.790861 8.000000 0.000000 6.209139 0.000000 4.000000 c',
+                '0.000000 4.000000 l',
+                '0.000000 1.790861 1.790861 0.000000 4.000000 0.000000 c',
+                'h',
+            ]),
+            $method->invoke(
+                $builder,
+                new LayoutDecoration(x: 0.0, y: 0.0, width: 20.0, height: 8.0, borderRadius: 10.0),
+            ),
+        );
     }
 
     public function testBuildResourcesExposesImageDictionaryAndCustomFontsFromDerivedBuilder(): void
