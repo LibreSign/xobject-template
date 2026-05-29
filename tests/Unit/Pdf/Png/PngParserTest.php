@@ -5,9 +5,9 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
+namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Png;
 
-use LibreSign\XObjectTemplate\Pdf\PngParser;
+use LibreSign\XObjectTemplate\Pdf\Png\PngParser;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use PHPUnit\Framework\TestCase;
 
