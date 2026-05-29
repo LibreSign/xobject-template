@@ -22,13 +22,16 @@ final readonly class PngPdfImageFactory implements PngPdfImageFactoryInterface
 {
     private PngParserInterface $parser;
     private PngScanlineUnfiltererInterface $scanlineUnfilterer;
+    private PngScanlineCompressorInterface $scanlineCompressor;
 
     public function __construct(
         ?PngParserInterface $parser = null,
         ?PngScanlineUnfiltererInterface $scanlineUnfilterer = null,
+        ?PngScanlineCompressorInterface $scanlineCompressor = null,
     ) {
         $this->parser = $parser ?? new PngParser();
         $this->scanlineUnfilterer = $scanlineUnfilterer ?? new PngScanlineUnfilterer();
+        $this->scanlineCompressor = $scanlineCompressor ?? new PhpPngScanlineCompressor();
     }
 
     public function create(string $contents): EmbeddedPdfImage
@@ -136,7 +139,7 @@ final readonly class PngPdfImageFactory implements PngPdfImageFactoryInterface
 
     private function compressScanlines(string $scanlines): string
     {
-        $compressed = gzcompress($scanlines);
+        $compressed = $this->scanlineCompressor->compress($scanlines);
         if (!is_string($compressed)) {
             throw new InvalidArgumentException('PNG scanlines could not be compressed.');
         }
