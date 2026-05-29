@@ -160,6 +160,64 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(['x' => 0.0, 'y' => 68.0, 'width' => 50.0, 'height' => 12.0], $result->lines[0]->clipBox);
     }
 
+    public function testLayoutUsesAccumulatedConsumedHeightForLaterPercentageSizedNodes(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            $this->textNode('First'),
+            $this->textNode('Second'),
+            $this->imageNode('/remaining.png', 'width:10;height:50%'),
+        ], 100.0, 100.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(10.0, $result->images[0]->width);
+        self::assertSame(38.0, $result->images[0]->height);
+        self::assertSame(38.0, $result->images[0]->y);
+    }
+
+    public function testLayoutKeepsCollapsedRemainingHeightAtZeroForLaterPercentageImage(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            $this->textNode('Tall line'),
+            $this->imageNode('/collapsed.png', 'width:10;height:50%'),
+        ], 100.0, 10.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(10.0, $result->images[0]->width);
+        self::assertSame(32.0, $result->images[0]->height);
+        self::assertSame(0.0, $result->images[0]->y);
+    }
+
+    public function testLayoutKeepsZeroCanvasDimensionsAtZeroForAbsolutePercentageImage(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            $this->imageNode('/zero-canvas.png', 'position:absolute;left:0;top:0;width:100%;height:100%'),
+        ], 0.0, 0.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(32.0, $result->images[0]->width);
+        self::assertSame(32.0, $result->images[0]->height);
+        self::assertSame(0.0, $result->images[0]->x);
+        self::assertSame(0.0, $result->images[0]->y);
+    }
+
+    public function testLayoutKeepsZeroCanvasHeightWhenRenderingTinyText(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            $this->textNode('i', 'font-size:0.1'),
+        ], 10.0, 0.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame(0.0, $result->lines[0]->y);
+    }
+
     private function createRenderer(): StructuredLayoutRenderer
     {
         return new StructuredLayoutRenderer(new InlineStyleParser(), new LayoutStyleResolver());

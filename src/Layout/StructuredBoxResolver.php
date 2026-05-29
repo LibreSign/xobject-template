@@ -102,9 +102,7 @@ final readonly class StructuredBoxResolver
             'x' => $contentBox['x'],
             'y' => $contentBox['y'] + $consumedHeight,
             'width' => $contentBox['width'],
-            'height' => $contentBox['height'] > 0.0
-                ? max($contentBox['height'] - $consumedHeight, 0.0)
-                : 0.0,
+            'height' => max($contentBox['height'] - $consumedHeight, $this->styleResolver->toPoints('0')),
         ];
     }
 
@@ -118,11 +116,7 @@ final readonly class StructuredBoxResolver
     ): float {
         $autoHeight = $padding['top'] + $contentHeight + $padding['bottom'];
 
-        if ($resolvedHeight > 0.0) {
-            return max($resolvedHeight, $autoHeight);
-        }
-
-        return $autoHeight;
+        return max($resolvedHeight, $autoHeight);
     }
 
     /**

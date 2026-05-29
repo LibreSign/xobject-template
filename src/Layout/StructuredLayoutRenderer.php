@@ -36,16 +36,17 @@ final readonly class StructuredLayoutRenderer
         $images = [];
         $decorations = [];
         $imageCount = 0;
+        $zero = $this->styleResolver->toPoints('0');
 
         $this->layoutNodes(
             nodes: $nodes,
             container: [
                 'x' => 0.0,
                 'y' => 0.0,
-                'width' => max($width, 0.0),
-                'height' => max($height, 0.0),
+                'width' => max($width, $zero),
+                'height' => max($height, $zero),
             ],
-            canvasHeight: max($height, 0.0),
+            canvasHeight: max($height, $zero),
             lines: $lines,
             images: $images,
             decorations: $decorations,
@@ -75,6 +76,7 @@ final readonly class StructuredLayoutRenderer
         ?array $activeClipBox,
     ): float {
         $consumedHeight = 0.0;
+        $zero = $this->styleResolver->toPoints('0');
 
         foreach ($nodes as $node) {
             $style = $this->styleParser->parse($node->attributes['style'] ?? '');
@@ -98,7 +100,7 @@ final readonly class StructuredLayoutRenderer
                 'x' => $container['x'],
                 'y' => $container['y'] + $consumedHeight,
                 'width' => $container['width'],
-                'height' => max($container['height'] - $consumedHeight, 0.0),
+                'height' => max($container['height'] - $consumedHeight, $zero),
             ];
 
             $consumedHeight += $this->layoutFlowNode(

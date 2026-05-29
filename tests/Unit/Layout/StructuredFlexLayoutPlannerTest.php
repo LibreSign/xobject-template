@@ -222,6 +222,19 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
         self::assertSame(['width' => 0.0, 'height' => 0.0], $size);
     }
 
+    public function testMeasureItemUsesTrimmedTextWhenWhitespaceSurroundsVisibleCharacters(): void
+    {
+        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
+
+        $size = $planner->measureItem(
+            new Node(tag: 'span', text: '  Label  ', attributes: []),
+            (new InlineStyleParser())->parse('font-size:10'),
+            ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 0.0],
+        );
+
+        self::assertSame(['width' => 24.46, 'height' => 12.0], $size);
+    }
+
     public function testCalculateMetricsSupportsThreeItemSpaceBetweenAndEmptyCollections(): void
     {
         $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());

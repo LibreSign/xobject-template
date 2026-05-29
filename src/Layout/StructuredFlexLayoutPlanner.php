@@ -42,6 +42,7 @@ final readonly class StructuredFlexLayoutPlanner
      */
     public function measureItem(Node $node, StyleMap $style, array $container): array
     {
+        $text = trim($node->text);
         $width = $this->styleResolver->resolveRelativeDimension(
             $this->styleResolver->styleValue($style, 'width', ''),
             $container['width'],
@@ -49,13 +50,13 @@ final readonly class StructuredFlexLayoutPlanner
         if ($width <= 0.0) {
             $width = match (true) {
                 $node->tag === 'img' => 32.0,
-                trim($node->text) !== '' => $this->fontMetrics->measureString(
+                $text !== '' => $this->fontMetrics->measureString(
                     $this->styleResolver->resolveFontAlias(
                         $this->styleResolver->styleValue($style, 'font-family', 'helvetica'),
                         $this->styleResolver->styleValue($style, 'font-weight', 'normal'),
                     ),
                     $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'font-size', '10')),
-                    trim($node->text),
+                    $text,
                 ),
                 default => 0.0,
             };
@@ -68,7 +69,7 @@ final readonly class StructuredFlexLayoutPlanner
         if ($height <= 0.0) {
             $height = match (true) {
                 $node->tag === 'img' => 32.0,
-                trim($node->text) !== '' => $this->styleResolver->resolveLineHeight(
+                $text !== '' => $this->styleResolver->resolveLineHeight(
                     $style,
                     $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'font-size', '10')),
                 ),

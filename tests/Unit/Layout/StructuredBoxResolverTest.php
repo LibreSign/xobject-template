@@ -105,6 +105,18 @@ final class StructuredBoxResolverTest extends TestCase
         self::assertSame(0.0, $childContainer['height']);
     }
 
+    public function testCreateChildContainerPreservesPositiveFractionalHeightWithoutPromotingToOne(): void
+    {
+        $resolver = new StructuredBoxResolver(new LayoutStyleResolver());
+
+        $childContainer = $resolver->createChildContainer(
+            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 0.75],
+            0.0,
+        );
+
+        self::assertSame(0.75, $childContainer['height']);
+    }
+
     public function testResolveAutoContainerHeightUsesResolvedHeightWhenPresent(): void
     {
         $resolver = new StructuredBoxResolver(new LayoutStyleResolver());
@@ -116,6 +128,11 @@ final class StructuredBoxResolverTest extends TestCase
         ));
         self::assertSame(50.0, $resolver->resolveAutoContainerHeight(
             0.0,
+            ['top' => 5.0, 'right' => 0.0, 'bottom' => 5.0, 'left' => 0.0],
+            40.0,
+        ));
+        self::assertSame(50.0, $resolver->resolveAutoContainerHeight(
+            -1.0,
             ['top' => 5.0, 'right' => 0.0, 'bottom' => 5.0, 'left' => 0.0],
             40.0,
         ));
