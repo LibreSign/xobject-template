@@ -19,7 +19,7 @@ final readonly class LayoutStyleResolver
     public function toPoints(string $value): float
     {
         $normalized = strtolower($value);
-        $number = (float) preg_replace('/[^0-9.\-]/', '', $normalized);
+        $number = $this->extractNumericValue($normalized);
         if (str_ends_with($normalized, 'px')) {
             return $number * 0.75;
         }
@@ -29,13 +29,13 @@ final readonly class LayoutStyleResolver
 
     public function resolveRelativeDimension(string $value, float $reference): float
     {
-        $normalized = strtolower(trim($value));
+        $normalized = trim($value);
         if ($normalized === '') {
             return 0.0;
         }
 
         if (str_ends_with($normalized, '%')) {
-            $number = (float) preg_replace('/[^0-9.\-]/', '', $normalized);
+            $number = $this->extractNumericValue($normalized);
 
             return $reference * ($number / 100.0);
         }
@@ -118,7 +118,7 @@ final readonly class LayoutStyleResolver
 
     public function isAbsolutelyPositioned(StyleMap $style): bool
     {
-        return strtolower(trim($this->styleValue($style, 'position', ''))) === 'absolute';
+        return strtolower($this->styleValue($style, 'position', '')) === 'absolute';
     }
 
     /**
@@ -147,5 +147,10 @@ final readonly class LayoutStyleResolver
         }
 
         return false;
+    }
+
+    private function extractNumericValue(string $value): float
+    {
+        return (float) preg_replace('/[^0-9.\-]/', '', strtolower($value));
     }
 }

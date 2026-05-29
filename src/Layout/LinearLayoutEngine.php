@@ -67,10 +67,12 @@ final readonly class LinearLayoutEngine
 
             $boxWidth = $this->toPoints($this->styleValue($style, 'width', '0'));
             if ($boxWidth <= 0) {
-                $boxWidth = max($width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'], 0);
+                $boxWidth = $width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'];
+                if ($boxWidth < 0.0) {
+                    $boxWidth = 0.0;
+                }
             }
             $leftBase = $margin['left'] + $padding['left'];
-            $rightBase = $leftBase + $boxWidth;
 
             if ($node->tag === 'img') {
                 $imgWidth = $this->toPoints($this->styleValue($style, 'width', '32'));
@@ -109,7 +111,7 @@ final readonly class LinearLayoutEngine
             $textWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, $text);
             $lineX = match ($align) {
                 'center' => $leftBase + max(($boxWidth - $textWidth) / 2.0, 0.0),
-                'right', 'justify' => $leftBase + max($boxWidth - $textWidth, 0.0),
+                'right' => $leftBase + max($boxWidth - $textWidth, 0.0),
                 default => $leftBase,
             };
 
@@ -145,7 +147,7 @@ final readonly class LinearLayoutEngine
 
     private function containsStructuredLayoutRules(StyleMap $style): bool
     {
-        if (strtolower(trim($this->styleValue($style, 'display', ''))) === 'flex') {
+        if (strtolower($this->styleValue($style, 'display', '')) === 'flex') {
             return true;
         }
 
@@ -178,18 +180,16 @@ final readonly class LinearLayoutEngine
             }
         }
 
-        if (
-            strtolower(trim($this->styleValue($style, 'text-align', ''))) === 'justify'
-        ) {
+        if (strtolower($this->styleValue($style, 'text-align', '')) === 'justify') {
             return true;
         }
 
-        $justifyContent = strtolower(trim($this->styleValue($style, 'justify-content', '')));
+        $justifyContent = strtolower($this->styleValue($style, 'justify-content', ''));
         if (in_array($justifyContent, ['center', 'flex-end', 'space-between'], true)) {
             return true;
         }
 
-        $alignItems = strtolower(trim($this->styleValue($style, 'align-items', '')));
+        $alignItems = strtolower($this->styleValue($style, 'align-items', ''));
 
         return in_array($alignItems, ['center', 'flex-end'], true);
     }

@@ -311,6 +311,37 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertEqualsWithDelta(40.0, $result->images[0]->height, 0.0001);
     }
 
+    public function testLayoutRoutesTrimmedUppercaseDisplayFlexWithoutOtherStructuredHints(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display: FLEX ;width:40;height:40'],
+                children: [
+                    new Node(
+                        tag: 'img',
+                        text: '',
+                        attributes: ['src' => '/left.png', 'style' => 'width:10;height:20'],
+                    ),
+                    new Node(
+                        tag: 'img',
+                        text: '',
+                        attributes: ['src' => '/right.png', 'style' => 'width:10;height:20'],
+                    ),
+                ],
+            ),
+        ], 40.0, 40.0);
+
+        self::assertCount(2, $result->images);
+        self::assertEqualsWithDelta(0.0, $result->images[0]->x, 0.0001);
+        self::assertEqualsWithDelta(10.0, $result->images[1]->x, 0.0001);
+        self::assertEqualsWithDelta(20.0, $result->images[0]->y, 0.0001);
+        self::assertEqualsWithDelta(20.0, $result->images[1]->y, 0.0001);
+    }
+
     public function testLayoutRoutesVectorBackgroundStylesToStructuredRenderer(): void
     {
         $engine = new LinearLayoutEngine();
