@@ -14,11 +14,15 @@ final readonly class HtmlContextInterpolator
      */
     public function interpolate(string $html, array $context): string
     {
-        if ($context === [] || !str_contains($html, '{{')) {
+        if ($context === []) {
             return $html;
         }
 
-        return (string) preg_replace_callback(
+        if (!str_contains($html, '{{')) {
+            return $html;
+        }
+
+        $interpolated = preg_replace_callback(
             '/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/',
             function (array $matches) use ($context): string {
                 $key = $matches[1] ?? '';
@@ -33,7 +37,9 @@ final readonly class HtmlContextInterpolator
                 );
             },
             $html,
-        ) ?? $html;
+        );
+
+        return $interpolated ?? $html;
     }
 
     private function normalizeScalar(string|int|float|bool $value): string
@@ -42,6 +48,6 @@ final readonly class HtmlContextInterpolator
             return $value ? 'true' : 'false';
         }
 
-        return (string) $value;
+        return strval($value);
     }
 }
