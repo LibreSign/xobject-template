@@ -98,7 +98,7 @@ final class PngFixtureFactory
         return self::createPng($width, $height, 6, $scanlines);
     }
 
-    private static function createChunk(string $type, string $data): string
+    public static function createChunk(string $type, string $data): string
     {
         $crc = crc32($type . $data);
         if ($crc < 0) {
