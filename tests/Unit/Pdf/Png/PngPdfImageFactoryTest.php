@@ -11,10 +11,16 @@ use LibreSign\XObjectTemplate\Pdf\Png\ParsedPngImage;
 use LibreSign\XObjectTemplate\Pdf\Png\PngParserInterface;
 use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactory;
 use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineUnfiltererInterface;
+use LibreSign\XObjectTemplate\Tests\Support\PngNamespaceFunctionOverrides;
 use PHPUnit\Framework\TestCase;
 
 final class PngPdfImageFactoryTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        PngNamespaceFunctionOverrides::reset();
+    }
+
     public function testCreateUsesInjectedParserForOpaqueImages(): void
     {
         $factory = new PngPdfImageFactory(
@@ -82,6 +88,54 @@ final class PngPdfImageFactoryTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unsupported PNG color type 3.');
+
+        $factory->create('not-a-real-png');
+    }
+
+    public function testCreateRejectsTruncatedAlphaPixelData(): void
+    {
+        $factory = new PngPdfImageFactory(
+            new class implements PngParserInterface {
+                public function parse(string $contents): ParsedPngImage
+                {
+                    return new ParsedPngImage(1, 1, 6, 'ignored-compressed-idat');
+                }
+            },
+            new class implements PngScanlineUnfiltererInterface {
+                public function unfilter(string $idat, int $height, int $rowLength, int $bytesPerPixel): array
+                {
+                    return ["\xff\x00\x00"];
+                }
+            },
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('PNG row data is truncated.');
+
+        $factory->create('not-a-real-png');
+    }
+
+    public function testCreateRejectsCompressionFailuresForAlphaImages(): void
+    {
+        PngNamespaceFunctionOverrides::overrideGzcompress(static fn (): false => false);
+
+        $factory = new PngPdfImageFactory(
+            new class implements PngParserInterface {
+                public function parse(string $contents): ParsedPngImage
+                {
+                    return new ParsedPngImage(1, 1, 6, 'ignored-compressed-idat');
+                }
+            },
+            new class implements PngScanlineUnfiltererInterface {
+                public function unfilter(string $idat, int $height, int $rowLength, int $bytesPerPixel): array
+                {
+                    return ["\xff\x00\x00\x80"];
+                }
+            },
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('PNG scanlines could not be compressed.');
 
         $factory->create('not-a-real-png');
     }

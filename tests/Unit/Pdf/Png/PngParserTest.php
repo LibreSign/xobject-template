@@ -8,11 +8,17 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Png;
 
 use LibreSign\XObjectTemplate\Pdf\Png\PngParser;
+use LibreSign\XObjectTemplate\Tests\Support\PngNamespaceFunctionOverrides;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use PHPUnit\Framework\TestCase;
 
 final class PngParserTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        PngNamespaceFunctionOverrides::reset();
+    }
+
     public function testParseReturnsStructuredImageData(): void
     {
         $parser = new PngParser();
@@ -155,6 +161,17 @@ final class PngParserTest extends TestCase
         $this->expectExceptionMessage('Unable to parse the PNG IHDR chunk.');
 
         $parser->parseHeader('short-header');
+    }
+
+    public function testParseHeaderRejectsUnpackFailures(): void
+    {
+        PngNamespaceFunctionOverrides::overrideUnpack(static fn (): false => false);
+        $parser = new PngParser();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse the PNG IHDR chunk.');
+
+        $parser->parseHeader(pack('NNCCCCC', 1, 1, 8, 2, 0, 0, 0));
     }
 
     public function testParseRejectsMissingTrailerChunkWhenTrailingBytesAreTooShort(): void
