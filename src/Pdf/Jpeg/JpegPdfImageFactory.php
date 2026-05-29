@@ -5,9 +5,11 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Pdf;
+namespace LibreSign\XObjectTemplate\Pdf\Jpeg;
 
 use InvalidArgumentException;
+use LibreSign\XObjectTemplate\Pdf\EmbeddedPdfImage;
+use LibreSign\XObjectTemplate\Pdf\Jpeg\JpegPdfImageFactoryInterface;
 
 /** @internal */
 final readonly class JpegPdfImageFactory implements JpegPdfImageFactoryInterface

@@ -8,6 +8,10 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Pdf;
 
 use InvalidArgumentException;
+use LibreSign\XObjectTemplate\Pdf\Jpeg\JpegPdfImageFactory;
+use LibreSign\XObjectTemplate\Pdf\Jpeg\JpegPdfImageFactoryInterface;
+use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactory;
+use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactoryInterface;
 
 final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInterface
 {

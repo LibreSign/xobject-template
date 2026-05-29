@@ -5,7 +5,9 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Pdf;
+namespace LibreSign\XObjectTemplate\Pdf\Png;
+
+use LibreSign\XObjectTemplate\Pdf\EmbeddedPdfImage;
 
 /** @internal */
 interface PngPdfImageFactoryInterface
