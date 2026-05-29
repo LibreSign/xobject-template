@@ -57,6 +57,16 @@ final class StandardFontMetricsTest extends TestCase
         );
     }
 
+    public function testMeasureStringUsesExpectedBuiltInGlyphWidths(): void
+    {
+        $metrics = new StandardFontMetrics();
+
+        self::assertEqualsWithDelta(0.3335, $metrics->measureString('F1', 0.5, 'A'), 0.0001);
+        self::assertEqualsWithDelta(0.667, $metrics->measureString('F1', 1.0, 'A'), 0.0001);
+        self::assertEqualsWithDelta(6.67, $metrics->measureString('F1', 10.0, 'A'), 0.0001);
+        self::assertEqualsWithDelta(7.22, $metrics->measureString('F3', 10.0, 'A'), 0.0001);
+    }
+
     public function testMeasureStringFallsBackToReasonableWidthForUnknownGlyphs(): void
     {
         $metrics = new StandardFontMetrics();
