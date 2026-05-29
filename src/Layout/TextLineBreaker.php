@@ -115,17 +115,13 @@ final readonly class TextLineBreaker
         float $fontSize,
         string $hyphens,
     ): array {
-        if ($hyphens === 'none') {
+        if ($hyphens === 'none' || ($hyphens !== 'manual' && $hyphens !== 'auto')) {
             return [$word];
         }
 
         $manualSegments = $this->resolveManualBreaks($word, $maxWidth, $fontAlias, $fontSize, $hyphens);
         if ($manualSegments !== null) {
             return $manualSegments;
-        }
-
-        if ($hyphens !== 'auto') {
-            return [$word];
         }
 
         return $this->breakWordAutomatically($word, $maxWidth, $fontAlias, $fontSize);
@@ -163,27 +159,30 @@ final readonly class TextLineBreaker
         string $fontAlias,
         float $fontSize,
     ): array {
-        $remaining = $this->splitCharacters($word);
-        if ($remaining === []) {
+        $characters = $this->splitCharacters($word);
+        if ($characters === []) {
             return [$word];
         }
 
         $segments = [];
         $hyphenWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, '-');
+        $offset = 0;
+        $characterCount = count($characters);
 
-        while ($remaining !== []) {
+        while (isset($characters[$offset])) {
             $segment = $this->resolveAutoSegment(
-                $remaining,
+                array_slice($characters, $offset),
                 $maxWidth,
                 $fontAlias,
                 $fontSize,
                 $hyphenWidth,
             );
 
-            $consumed = count($this->splitCharacters($segment));
-
-            $remaining = array_slice($remaining, $consumed);
-            $segments[] = $remaining === [] ? $segment : ($segment . '-');
+            $segmentCharacters = $this->splitCharacters($segment);
+            $fallbackCount = count($this->splitCharacters($characters[$offset]));
+            $consumedCount = max(count($segmentCharacters) + $fallbackCount - 1, $fallbackCount);
+            $offset = min($offset + $consumedCount, $characterCount);
+            $segments[] = !isset($characters[$offset]) ? $segment : ($segment . '-');
         }
 
         return $segments;
