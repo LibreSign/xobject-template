@@ -87,11 +87,11 @@ final readonly class TextBoxLayouter
                 $this->styleResolver->styleValue($style, 'font-family', 'helvetica'),
                 $this->styleResolver->styleValue($style, 'font-weight', 'normal'),
             ),
-            'align' => strtolower(trim($this->styleResolver->styleValue($style, 'text-align', 'left'))),
-            'overflow' => strtolower(trim($this->styleResolver->styleValue($style, 'overflow', 'visible'))),
-            'textOverflow' => strtolower(trim($this->styleResolver->styleValue($style, 'text-overflow', 'clip'))),
-            'hyphens' => strtolower(trim($this->styleResolver->styleValue($style, 'hyphens', 'none'))),
-            'whiteSpace' => strtolower(trim($this->styleResolver->styleValue($style, 'white-space', 'normal'))),
+            'align' => strtolower($this->styleResolver->styleValue($style, 'text-align', 'left')),
+            'overflow' => strtolower($this->styleResolver->styleValue($style, 'overflow', 'visible')),
+            'textOverflow' => strtolower($this->styleResolver->styleValue($style, 'text-overflow', 'clip')),
+            'hyphens' => strtolower($this->styleResolver->styleValue($style, 'hyphens', 'none')),
+            'whiteSpace' => strtolower($this->styleResolver->styleValue($style, 'white-space', 'normal')),
             'color' => $this->styleResolver->styleValue($style, 'color', '#000000'),
         ];
     }
@@ -129,13 +129,8 @@ final readonly class TextBoxLayouter
 
         $effectiveClipBox = $clipBox ?? $box;
         $maxVisibleLines = $this->resolveMaxVisibleLines($box['height'], $settings['lineHeight']);
-        if ($maxVisibleLines === 0) {
-            return ['lines' => [], 'truncated' => true, 'clipBox' => $effectiveClipBox];
-        }
-
-        $truncated = false;
-        if (count($lines) > $maxVisibleLines) {
-            $truncated = true;
+        $truncated = count($lines) > $maxVisibleLines;
+        if ($truncated) {
             $lines = array_slice($lines, 0, $maxVisibleLines);
             if ($settings['textOverflow'] === 'ellipsis' && $lines !== []) {
                 $lastIndex = count($lines) - 1;
@@ -146,9 +141,7 @@ final readonly class TextBoxLayouter
                     $settings['fontSize'],
                 );
             }
-        }
-
-        if ($lines !== [] && $this->shouldApplyEllipsis($lines, $truncated, $box['width'], $settings)) {
+        } elseif ($lines !== [] && $this->shouldApplyEllipsis($lines, $box['width'], $settings)) {
             $lastIndex = count($lines) - 1;
             $lines[$lastIndex] = $this->overflowTruncator->truncateWithEllipsis(
                 $lines[$lastIndex],
@@ -178,16 +171,11 @@ final readonly class TextBoxLayouter
      */
     private function shouldApplyEllipsis(
         array $lines,
-        bool $truncated,
         float $boxWidth,
         array $settings,
     ): bool {
         if ($settings['textOverflow'] !== 'ellipsis' || $lines === []) {
             return false;
-        }
-
-        if ($truncated) {
-            return true;
         }
 
         $lastLine = $lines[count($lines) - 1];
@@ -290,7 +278,7 @@ final readonly class TextBoxLayouter
 
     private function resolveMaxVisibleLines(float $boxHeight, float $lineHeight): int
     {
-        return max((int) ceil($boxHeight / max($lineHeight, 0.0001)), 0);
+        return (int) ceil($boxHeight / max($lineHeight, 0.0001));
     }
 
     private function resolveWordSpacing(
@@ -329,11 +317,11 @@ final readonly class TextBoxLayouter
     private function calculateWordSpacing(string $text, float $lineWidth, float $boxWidth): float
     {
         $spaceCount = substr_count($text, ' ');
-        if ($spaceCount === 0 || $boxWidth <= $lineWidth) {
+        if ($spaceCount === 0) {
             return 0.0;
         }
 
-        return ($boxWidth - $lineWidth) / $spaceCount;
+        return max($boxWidth - $lineWidth, 0.0) / $spaceCount;
     }
 
     /**
