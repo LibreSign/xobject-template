@@ -60,4 +60,15 @@ final class TextOverflowTruncatorTest extends TestCase
 
         self::assertSame('...', $truncator->forceEllipsis("\xc3\x28", 10.0, 'F1', 10.0));
     }
+
+    public function testForceEllipsisUsesSuffixWidthWhenCheckingFit(): void
+    {
+        $metrics = new StandardFontMetrics();
+        $truncator = new TextOverflowTruncator($metrics);
+
+        self::assertSame(
+            'i...',
+            $truncator->forceEllipsis('iW', $metrics->measureString('F1', 10.0, 'i...'), 'F1', 10.0),
+        );
+    }
 }

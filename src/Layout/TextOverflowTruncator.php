@@ -36,15 +36,13 @@ final readonly class TextOverflowTruncator
         float $fontSize,
     ): string {
         $ellipsis = '...';
+        $ellipsisWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, $ellipsis);
         $characters = $this->splitCharacters($text);
 
-        while ($characters !== []) {
-            $candidate = implode('', $characters) . $ellipsis;
-            if ($this->fontMetrics->measureString($fontAlias, $fontSize, $candidate) <= $maxWidth) {
-                return rtrim(implode('', $characters)) . $ellipsis;
+        foreach ($this->buildCandidates($characters) as $candidate) {
+            if (($this->fontMetrics->measureString($fontAlias, $fontSize, $candidate) + $ellipsisWidth) <= $maxWidth) {
+                return rtrim($candidate) . $ellipsis;
             }
-
-            array_pop($characters);
         }
 
         return $ellipsis;
@@ -58,5 +56,22 @@ final readonly class TextOverflowTruncator
         $characters = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
 
         return $characters === false ? [] : $characters;
+    }
+
+    /**
+     * @param list<string> $characters
+     * @return list<string>
+     */
+    private function buildCandidates(array $characters): array
+    {
+        $candidates = [];
+        $candidate = '';
+
+        foreach ($characters as $character) {
+            $candidate .= $character;
+            $candidates[] = $candidate;
+        }
+
+        return array_reverse($candidates);
     }
 }

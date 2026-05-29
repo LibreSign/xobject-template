@@ -13,21 +13,11 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
 {
     public function embed(string $source): EmbeddedPdfImage
     {
-        if (!is_file($source) || !is_readable($source)) {
-            throw new InvalidArgumentException(sprintf('Image source "%s" must be a readable file.', $source));
-        }
+        $this->assertReadableSource($source);
 
-        $contents = file_get_contents($source);
-        if ($contents === false) {
-            throw new InvalidArgumentException(sprintf('Failed to read image source "%s".', $source));
-        }
-
-        $imageInfo = getimagesizefromstring($contents);
-        if ($imageInfo === false || !isset($imageInfo['mime'])) {
-            throw new InvalidArgumentException(sprintf('Unable to detect the image format for "%s".', $source));
-        }
-
-        $mime = $imageInfo['mime'];
+        $contents = $this->readSourceContents($source);
+        $imageInfo = $this->detectImageInfo($contents, $source);
+        $mime = $this->resolveMimeType($imageInfo, $source);
 
         return match ($mime) {
             'image/jpeg' => $this->embedJpeg($contents, $imageInfo),
@@ -45,20 +35,16 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
     {
         $width = $imageInfo[0] ?? null;
         $height = $imageInfo[1] ?? null;
-        if (!is_int($width) || !is_int($height)) {
+
+        if (!is_int($width)) {
             throw new InvalidArgumentException('JPEG metadata must expose width and height.');
         }
 
-        $channels = $imageInfo['channels'] ?? 3;
-        if (!is_int($channels)) {
-            $channels = 3;
+        if (!is_int($height)) {
+            throw new InvalidArgumentException('JPEG metadata must expose width and height.');
         }
 
-        $colorSpace = match ($channels) {
-            1 => '/DeviceGray',
-            4 => '/DeviceCMYK',
-            default => '/DeviceRGB',
-        };
+        $colorSpace = $this->resolveJpegColorSpace($imageInfo['channels'] ?? null);
 
         return new EmbeddedPdfImage(
             dictionary: [
@@ -136,11 +122,15 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
     {
         $this->assertPngSignature($contents);
 
+        $contentLength = strlen($contents);
         $offset = 8;
         $header = null;
         $idat = '';
+        $iendOffset = null;
 
-        while ($offset + 8 <= strlen($contents)) {
+        while (($contentLength - $offset) >= 12) {
+            $this->assertNoPngChunksAfterIend($iendOffset);
+
             ['data' => $data, 'type' => $type] = $this->readPngChunk($contents, $offset);
 
             if ($type === 'IHDR') {
@@ -152,9 +142,15 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
             }
 
             if ($type === 'IEND') {
-                break;
+                $iendOffset = $offset;
             }
         }
+
+        if ($iendOffset === null) {
+            throw new InvalidArgumentException('PNG trailer chunk is missing.');
+        }
+
+        $this->assertPngEndsAtIend($iendOffset, $contentLength);
 
         if ($header === null) {
             throw new InvalidArgumentException('PNG metadata is incomplete.');
@@ -186,21 +182,23 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
      */
     private function readPngChunk(string $contents, int &$offset): array
     {
-        $chunkLength = unpack('Nvalue', substr($contents, $offset, 4));
+        $chunkLengthBytes = substr($contents, $offset, 4);
+        $chunkLength = $this->parseChunkLength($chunkLengthBytes);
+
         $offset += 4;
         $type = substr($contents, $offset, 4);
         $offset += 4;
 
-        if ($chunkLength === false || !isset($chunkLength['value'])) {
-            throw new InvalidArgumentException('Invalid PNG chunk length.');
+        if (strlen($type) !== 4) {
+            throw new InvalidArgumentException('Invalid PNG chunk type.');
         }
 
-        $data = substr($contents, $offset, $chunkLength['value']);
-        if (strlen($data) !== $chunkLength['value']) {
+        $data = substr($contents, $offset, $chunkLength);
+        if (strlen($data) !== $chunkLength) {
             throw new InvalidArgumentException('PNG chunk data is truncated.');
         }
 
-        $offset += $chunkLength['value'] + 4;
+        $offset += $chunkLength + 4;
 
         return [
             'data' => $data,
@@ -221,13 +219,14 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
      */
     private function parsePngHeader(string $data): array
     {
+        if (strlen($data) !== 13) {
+            throw new InvalidArgumentException('Unable to parse the PNG IHDR chunk.');
+        }
+
         $header = unpack(
             'Nwidth/Nheight/CbitDepth/CcolorType/Ccompression/Cfilter/Cinterlace',
             $data,
         );
-        if ($header === false) {
-            throw new InvalidArgumentException('Unable to parse the PNG IHDR chunk.');
-        }
 
         return $header;
     }
@@ -285,8 +284,8 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
      */
     private function unfilterPngScanlines(string $idat, int $height, int $rowLength, int $bytesPerPixel): array
     {
-        $inflated = gzuncompress($idat);
-        if ($inflated === false) {
+        $inflated = @gzuncompress($idat);
+        if (!is_string($inflated)) {
             throw new InvalidArgumentException('PNG image data could not be decompressed.');
         }
 
@@ -323,12 +322,13 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
     ): string {
         $row = '';
         $rowLength = strlen($filteredRow);
+        $previousRowWithPadding = str_repeat("\x00", $bytesPerPixel) . $previousRow;
 
         for ($index = 0; $index < $rowLength; $index++) {
             $rawByte = ord($filteredRow[$index]);
             $left = $index >= $bytesPerPixel ? ord($row[$index - $bytesPerPixel]) : 0;
             $above = ord($previousRow[$index]);
-            $upperLeft = $index >= $bytesPerPixel ? ord($previousRow[$index - $bytesPerPixel]) : 0;
+            $upperLeft = ord($previousRowWithPadding[$index]);
 
             $decodedByte = match ($filterType) {
                 0 => $rawByte,
@@ -354,14 +354,110 @@ final readonly class FilesystemPdfImageEmbedder implements PdfImageEmbedderInter
         $aboveDistance = abs($prediction - $above);
         $upperLeftDistance = abs($prediction - $upperLeft);
 
-        if ($leftDistance <= $aboveDistance && $leftDistance <= $upperLeftDistance) {
-            return $left;
+        $bestDistance = $leftDistance;
+        $bestValue = $left;
+
+        if ($aboveDistance < $bestDistance) {
+            $bestDistance = $aboveDistance;
+            $bestValue = $above;
         }
 
-        if ($aboveDistance <= $upperLeftDistance) {
-            return $above;
+        if ($upperLeftDistance < $bestDistance) {
+            return $upperLeft;
         }
 
-        return $upperLeft;
+        return $bestValue;
+    }
+
+    private function parseChunkLength(string $chunkLengthBytes): int
+    {
+        if (strlen($chunkLengthBytes) !== 4) {
+            throw new InvalidArgumentException('Invalid PNG chunk length.');
+        }
+
+        return (ord($chunkLengthBytes[0]) << 24)
+            | (ord($chunkLengthBytes[1]) << 16)
+            | (ord($chunkLengthBytes[2]) << 8)
+            | ord($chunkLengthBytes[3]);
+    }
+
+    private function assertNoPngChunksAfterIend(?int $iendOffset): void
+    {
+        if ($iendOffset !== null) {
+            throw new InvalidArgumentException('PNG data after IEND is not supported.');
+        }
+    }
+
+    private function assertPngEndsAtIend(int $iendOffset, int $contentLength): void
+    {
+        if ($iendOffset !== $contentLength) {
+            throw new InvalidArgumentException('PNG data after IEND is not supported.');
+        }
+    }
+
+    private function assertReadableSource(string $source): void
+    {
+        if (!is_file($source)) {
+            throw new InvalidArgumentException(sprintf('Image source "%s" must be an existing file.', $source));
+        }
+
+        if (!is_readable($source)) {
+            throw new InvalidArgumentException(sprintf('Image source "%s" must be readable.', $source));
+        }
+    }
+
+    private function readSourceContents(string $source): string
+    {
+        $contents = @file_get_contents($source);
+        if (!is_string($contents)) {
+            throw new InvalidArgumentException(sprintf('Failed to read image source "%s".', $source));
+        }
+
+        return $contents;
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    private function detectImageInfo(string $contents, string $source): array
+    {
+        $imageInfo = getimagesizefromstring($contents);
+        if (!is_array($imageInfo)) {
+            throw new InvalidArgumentException(sprintf('Unable to detect the image format for "%s".', $source));
+        }
+
+        return $imageInfo;
+    }
+
+    /**
+     * @param array<int|string, mixed> $imageInfo
+     */
+    private function resolveMimeType(array $imageInfo, string $source): string
+    {
+        if (!array_key_exists('mime', $imageInfo)) {
+            throw new InvalidArgumentException(sprintf(
+                'Image metadata for "%s" does not expose a mime type.',
+                $source,
+            ));
+        }
+
+        $mime = $imageInfo['mime'];
+        if (!is_string($mime)) {
+            throw new InvalidArgumentException(sprintf(
+                'Image metadata for "%s" must expose the mime type as a string.',
+                $source,
+            ));
+        }
+
+        return $mime;
+    }
+
+    private function resolveJpegColorSpace(mixed $channels): string
+    {
+        return match ($channels) {
+            1 => '/DeviceGray',
+            4 => '/DeviceCMYK',
+            default => '/DeviceRGB',
+        };
     }
 }
