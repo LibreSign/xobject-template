@@ -5,9 +5,12 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Pdf;
+namespace LibreSign\XObjectTemplate\Pdf\Png;
 
 use InvalidArgumentException;
+use LibreSign\XObjectTemplate\Pdf\PhpWarningToExceptionConverter;
+use LibreSign\XObjectTemplate\Pdf\WarningToExceptionConverterInterface;
+use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineUnfiltererInterface;
 
 /** @internal */
 final readonly class PngScanlineUnfilterer implements PngScanlineUnfiltererInterface

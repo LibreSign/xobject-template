@@ -5,9 +5,17 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Pdf;
+namespace LibreSign\XObjectTemplate\Pdf\Png;
 
 use InvalidArgumentException;
+use LibreSign\XObjectTemplate\Pdf\EmbeddedPdfImage;
+use LibreSign\XObjectTemplate\Pdf\Png\ParsedPngImage;
+use LibreSign\XObjectTemplate\Pdf\Png\PngColorTypeDescription;
+use LibreSign\XObjectTemplate\Pdf\Png\PngParser;
+use LibreSign\XObjectTemplate\Pdf\Png\PngParserInterface;
+use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactoryInterface;
+use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineUnfilterer;
+use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineUnfiltererInterface;
 
 /** @internal */
 final readonly class PngPdfImageFactory implements PngPdfImageFactoryInterface
