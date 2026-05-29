@@ -10,17 +10,12 @@ namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Png;
 use LibreSign\XObjectTemplate\Pdf\Png\ParsedPngImage;
 use LibreSign\XObjectTemplate\Pdf\Png\PngParserInterface;
 use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactory;
+use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineCompressorInterface;
 use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineUnfiltererInterface;
-use LibreSign\XObjectTemplate\Tests\Support\PngNamespaceFunctionOverrides;
 use PHPUnit\Framework\TestCase;
 
 final class PngPdfImageFactoryTest extends TestCase
 {
-    protected function tearDown(): void
-    {
-        PngNamespaceFunctionOverrides::reset();
-    }
-
     public function testCreateUsesInjectedParserForOpaqueImages(): void
     {
         $factory = new PngPdfImageFactory(
@@ -117,8 +112,6 @@ final class PngPdfImageFactoryTest extends TestCase
 
     public function testCreateRejectsCompressionFailuresForAlphaImages(): void
     {
-        PngNamespaceFunctionOverrides::overrideGzcompress(static fn (): false => false);
-
         $factory = new PngPdfImageFactory(
             new class implements PngParserInterface {
                 public function parse(string $contents): ParsedPngImage
@@ -130,6 +123,12 @@ final class PngPdfImageFactoryTest extends TestCase
                 public function unfilter(string $idat, int $height, int $rowLength, int $bytesPerPixel): array
                 {
                     return ["\xff\x00\x00\x80"];
+                }
+            },
+            new class implements PngScanlineCompressorInterface {
+                public function compress(string $scanlines): string|false
+                {
+                    return false;
                 }
             },
         );
