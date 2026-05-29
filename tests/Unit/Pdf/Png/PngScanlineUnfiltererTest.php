@@ -35,6 +35,21 @@ final class PngScanlineUnfiltererTest extends TestCase
         self::assertSame(["\x7f"], $unfilterer->unfilter('ignored-idat', 1, 1, 1));
     }
 
+    public function testUnfilterRejectsNonStringWarningConverterResult(): void
+    {
+        $unfilterer = new PngScanlineUnfilterer(new class implements WarningToExceptionConverterInterface {
+            public function run(callable $operation, string $message): mixed
+            {
+                return false;
+            }
+        });
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('PNG image data could not be decompressed.');
+
+        $unfilterer->unfilter('ignored-idat', 1, 1, 1);
+    }
+
     public function testUnfilterRejectsMissingRowFilterBytes(): void
     {
         $unfilterer = new PngScanlineUnfilterer();

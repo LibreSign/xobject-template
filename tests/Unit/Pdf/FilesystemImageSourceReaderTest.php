@@ -42,6 +42,22 @@ final class FilesystemImageSourceReaderTest extends TestCase
         self::assertSame('converted-contents', $reader->read($path));
     }
 
+    public function testReadRejectsNonStringWarningConverterResult(): void
+    {
+        $reader = new FilesystemImageSourceReader(new class implements WarningToExceptionConverterInterface {
+            public function run(callable $operation, string $message): mixed
+            {
+                return false;
+            }
+        });
+        $path = $this->createTemporaryFile('png', 'disk-contents');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(sprintf('Failed to read image source "%s".', $path));
+
+        $reader->read($path);
+    }
+
     public function testReadRejectsMissingSources(): void
     {
         $reader = new FilesystemImageSourceReader();
