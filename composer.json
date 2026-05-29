@@ -25,9 +25,6 @@
     }
   },
   "autoload-dev": {
-    "files": [
-      "tests/Support/PngNamespaceFunctionOverrides.php"
-    ],
     "psr-4": {
       "LibreSign\\XObjectTemplate\\Tests\\": "tests/"
     }
