@@ -207,8 +207,12 @@ final readonly class SinglePagePdfExporter
             return $this->serializeArrayValue($value);
         }
 
-        if (is_int($value) || is_float($value)) {
-            return $this->formatNumber((float) $value);
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        if (is_float($value)) {
+            return $this->formatNumber($value);
         }
 
         if (is_string($value)) {
@@ -265,8 +269,8 @@ final readonly class SinglePagePdfExporter
 
         $pdf .= sprintf("xref\n0 %d\n", $objectCount + 1);
         $pdf .= "0000000000 65535 f \n";
-        for ($reference = 1; $reference <= $objectCount; $reference++) {
-            $pdf .= sprintf("%010d 00000 n \n", $offsets[$reference]);
+        foreach ($offsets as $offset) {
+            $pdf .= sprintf("%010d 00000 n \n", $offset);
         }
 
         $pdf .= "trailer\n";
