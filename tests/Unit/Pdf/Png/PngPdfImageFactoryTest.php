@@ -5,12 +5,12 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
+namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Png;
 
-use LibreSign\XObjectTemplate\Pdf\ParsedPngImage;
-use LibreSign\XObjectTemplate\Pdf\PngParserInterface;
-use LibreSign\XObjectTemplate\Pdf\PngPdfImageFactory;
-use LibreSign\XObjectTemplate\Pdf\PngScanlineUnfiltererInterface;
+use LibreSign\XObjectTemplate\Pdf\Png\ParsedPngImage;
+use LibreSign\XObjectTemplate\Pdf\Png\PngParserInterface;
+use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactory;
+use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineUnfiltererInterface;
 use PHPUnit\Framework\TestCase;
 
 final class PngPdfImageFactoryTest extends TestCase

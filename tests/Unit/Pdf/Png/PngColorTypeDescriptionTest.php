@@ -5,10 +5,10 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
+namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Png;
 
 use InvalidArgumentException;
-use LibreSign\XObjectTemplate\Pdf\PngColorTypeDescription;
+use LibreSign\XObjectTemplate\Pdf\Png\PngColorTypeDescription;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

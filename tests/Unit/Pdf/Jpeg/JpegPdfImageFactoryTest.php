@@ -5,9 +5,9 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
+namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Jpeg;
 
-use LibreSign\XObjectTemplate\Pdf\JpegPdfImageFactory;
+use LibreSign\XObjectTemplate\Pdf\Jpeg\JpegPdfImageFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

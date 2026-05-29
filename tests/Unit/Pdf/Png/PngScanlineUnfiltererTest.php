@@ -5,9 +5,9 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
+namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Png;
 
-use LibreSign\XObjectTemplate\Pdf\PngScanlineUnfilterer;
+use LibreSign\XObjectTemplate\Pdf\Png\PngScanlineUnfilterer;
 use LibreSign\XObjectTemplate\Pdf\WarningToExceptionConverterInterface;
 use PHPUnit\Framework\TestCase;
 
