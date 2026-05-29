@@ -18,17 +18,59 @@ final class PngFixtureFactory
         string $scanlines,
         int $bitDepth = 8,
         int $interlace = 0,
+        int $compression = 0,
+        int $filter = 0,
     ): string {
-        $ihdr = pack('NNCCCCC', $width, $height, $bitDepth, $colorType, 0, 0, $interlace);
+        $ihdr = pack('NNCCCCC', $width, $height, $bitDepth, $colorType, $compression, $filter, $interlace);
         $idat = gzcompress($scanlines);
         if ($idat === false) {
             throw new InvalidArgumentException('Failed to compress PNG scanlines.');
         }
 
-        return "\x89PNG\r\n\x1a\n"
-            . self::createChunk('IHDR', $ihdr)
-            . self::createChunk('IDAT', $idat)
+        return self::createPngFromCompressedIdatChunks(
+            $width,
+            $height,
+            $colorType,
+            [$idat],
+            $bitDepth,
+            $interlace,
+            $compression,
+            $filter,
+        );
+    }
+
+    /**
+     * @param list<string> $idatChunks
+     */
+    public static function createPngFromCompressedIdatChunks(
+        int $width,
+        int $height,
+        int $colorType,
+        array $idatChunks,
+        int $bitDepth = 8,
+        int $interlace = 0,
+        int $compression = 0,
+        int $filter = 0,
+    ): string {
+        $ihdr = pack('NNCCCCC', $width, $height, $bitDepth, $colorType, $compression, $filter, $interlace);
+        $png = "\x89PNG\r\n\x1a\n" . self::createChunk('IHDR', $ihdr);
+
+        foreach ($idatChunks as $idatChunk) {
+            $png .= self::createChunk('IDAT', $idatChunk);
+        }
+
+        return $png
             . self::createChunk('IEND', '');
+    }
+
+    public static function compressScanlines(string $scanlines): string
+    {
+        $idat = gzcompress($scanlines);
+        if ($idat === false) {
+            throw new InvalidArgumentException('Failed to compress PNG scanlines.');
+        }
+
+        return $idat;
     }
 
     /**
@@ -56,7 +98,7 @@ final class PngFixtureFactory
         return self::createPng($width, $height, 6, $scanlines);
     }
 
-    private static function createChunk(string $type, string $data): string
+    public static function createChunk(string $type, string $data): string
     {
         $crc = crc32($type . $data);
         if ($crc < 0) {

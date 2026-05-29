@@ -65,7 +65,7 @@ final readonly class TextLineBreaker
             $lines[] = $currentLine;
         }
 
-        return $lines === [] ? [$text] : $lines;
+        return $lines;
     }
 
     private function fitsOnCurrentLine(
@@ -98,14 +98,9 @@ final readonly class TextLineBreaker
         string &$currentLine,
     ): void {
         $segments = $this->breakWord($word, $maxWidth, $fontAlias, $fontSize, $hyphens);
-        $lastIndex = count($segments) - 1;
+        $currentLine = array_pop($segments) ?? '';
 
-        foreach ($segments as $index => $segment) {
-            if ($index === $lastIndex) {
-                $currentLine = $segment;
-                continue;
-            }
-
+        foreach ($segments as $segment) {
             $lines[] = $segment;
         }
     }
@@ -120,17 +115,13 @@ final readonly class TextLineBreaker
         float $fontSize,
         string $hyphens,
     ): array {
-        if ($hyphens === 'none') {
+        if ($hyphens === 'none' || ($hyphens !== 'manual' && $hyphens !== 'auto')) {
             return [$word];
         }
 
         $manualSegments = $this->resolveManualBreaks($word, $maxWidth, $fontAlias, $fontSize, $hyphens);
         if ($manualSegments !== null) {
             return $manualSegments;
-        }
-
-        if ($hyphens !== 'auto') {
-            return [$word];
         }
 
         return $this->breakWordAutomatically($word, $maxWidth, $fontAlias, $fontSize);
@@ -146,15 +137,17 @@ final readonly class TextLineBreaker
         float $fontSize,
         string $hyphens,
     ): ?array {
-        if ($hyphens !== 'manual' || !str_contains($word, "\u{00AD}")) {
+        if ($hyphens !== 'manual') {
+            return null;
+        }
+
+        if (!str_contains($word, "\u{00AD}")) {
             return null;
         }
 
         $manualBreaks = explode("\u{00AD}", $word);
 
-        return count($manualBreaks) > 1
-            ? $this->packManualSegments($manualBreaks, $maxWidth, $fontAlias, $fontSize)
-            : null;
+        return $this->packManualSegments($manualBreaks, $maxWidth, $fontAlias, $fontSize);
     }
 
     /**
@@ -166,64 +159,67 @@ final readonly class TextLineBreaker
         string $fontAlias,
         float $fontSize,
     ): array {
-        $segments = [];
-        $remaining = $this->splitCharacters($word);
+        $characters = $this->splitCharacters($word);
+        if ($characters === []) {
+            return [$word];
+        }
 
-        while ($remaining !== []) {
-            ['segment' => $segment, 'consumed' => $consumed] = $this->resolveAutoSegment(
-                $remaining,
+        $segments = [];
+        $hyphenWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, '-');
+        $offset = 0;
+        $characterCount = count($characters);
+
+        while (isset($characters[$offset])) {
+            $segment = $this->resolveAutoSegment(
+                array_slice($characters, $offset),
                 $maxWidth,
                 $fontAlias,
                 $fontSize,
+                $hyphenWidth,
             );
 
-            if ($consumed <= 0) {
-                break;
-            }
-
-            $remaining = array_slice($remaining, $consumed);
-            $segments[] = $remaining === [] ? $segment : ($segment . '-');
+            $segmentCharacters = $this->splitCharacters($segment);
+            $fallbackCount = count($this->splitCharacters($characters[$offset]));
+            $consumedCount = max(count($segmentCharacters) + $fallbackCount - 1, $fallbackCount);
+            $offset = min($offset + $consumedCount, $characterCount);
+            $segments[] = !isset($characters[$offset]) ? $segment : ($segment . '-');
         }
 
-        return $segments === [] ? [$word] : $segments;
+        return $segments;
     }
 
     /**
      * @param list<string> $remaining
-     * @return array{segment: string, consumed: int}
+     * @return string
      */
     private function resolveAutoSegment(
         array $remaining,
         float $maxWidth,
         string $fontAlias,
         float $fontSize,
-    ): array {
+        float $hyphenWidth,
+    ): string {
         $segment = '';
-        $consumed = 0;
         $remainingCount = count($remaining);
 
         foreach ($remaining as $index => $character) {
             $candidate = $segment . $character;
-            $isLastCharacter = $index === ($remainingCount - 1);
-            $candidateWidth = $this->fontMetrics->measureString(
-                $fontAlias,
-                $fontSize,
-                $candidate . ($isLastCharacter ? '' : '-'),
-            );
+            $hasMoreCharacters = ($index + 1) < $remainingCount;
+            $candidateWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, $candidate)
+                + ($hasMoreCharacters ? $hyphenWidth : 0.0);
 
             if ($candidateWidth > $maxWidth && $segment !== '') {
                 break;
             }
 
             if ($candidateWidth > $maxWidth) {
-                return ['segment' => $character, 'consumed' => 1];
+                return $character;
             }
 
             $segment = $candidate;
-            $consumed = $index + 1;
         }
 
-        return ['segment' => $segment, 'consumed' => $consumed];
+        return $segment;
     }
 
     /**
@@ -239,13 +235,15 @@ final readonly class TextLineBreaker
         $packed = [];
         $current = '';
         $lastIndex = count($segments) - 1;
+        $hyphenWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, '-');
 
         foreach ($segments as $index => $segment) {
             $candidate = $current . $segment;
-            $candidateWithHyphen = $candidate . ($index === $lastIndex ? '' : '-');
+            $candidateWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, $candidate)
+                + ($index === $lastIndex ? 0.0 : $hyphenWidth);
             if (
                 $current !== ''
-                && $this->fontMetrics->measureString($fontAlias, $fontSize, $candidateWithHyphen) > $maxWidth
+                && $candidateWidth > $maxWidth
             ) {
                 $packed[] = $current . '-';
                 $current = $segment;

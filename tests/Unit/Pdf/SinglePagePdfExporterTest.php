@@ -13,6 +13,7 @@ use LibreSign\XObjectTemplate\Pdf\PdfImageEmbedderInterface;
 use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class SinglePagePdfExporterTest extends TestCase
 {
@@ -308,6 +309,54 @@ final class SinglePagePdfExporterTest extends TestCase
         self::assertStringContainsString($expectedFormStreamFragment, $pdf);
     }
 
+    public function testSerializeValueFormatsNumbersListsAndRawPdfValues(): void
+    {
+        $exporter = new SinglePagePdfExporter();
+
+        self::assertSame('3', $this->invokeExporterMethod($exporter, 'serializeValue', 3));
+        self::assertSame('12.5', $this->invokeExporterMethod($exporter, 'serializeValue', 12.5));
+        self::assertSame(
+            '[/Name 2 0 R (text) true 3]',
+            $this->invokeExporterMethod($exporter, 'serializeValue', ['/Name', '2 0 R', 'text', true, 3]),
+        );
+    }
+
+    public function testRenderDocumentSortsObjectsAndRejectsReservedGaps(): void
+    {
+        $exporter = new SinglePagePdfExporter();
+        $rendered = $this->invokeExporterMethod($exporter, 'renderDocument', [
+            2 => '<< /Type /Pages /Count 0 >>',
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+        ], 1);
+
+        self::assertStringContainsString(
+            "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj",
+            (string) $rendered,
+        );
+        self::assertStringContainsString("xref\n0 3\n", $rendered);
+        self::assertStringContainsString(
+            sprintf(
+                "0000000000 65535 f \n%010d 00000 n \n%010d 00000 n \n",
+                strpos((string) $rendered, "1 0 obj\n"),
+                strpos((string) $rendered, "2 0 obj\n"),
+            ),
+            (string) $rendered,
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('PDF object 2 was reserved but not written.');
+
+        $this->invokeExporterMethod($exporter, 'renderDocument', [1 => '<< /Type /Catalog >>', 2 => null], 1);
+    }
+
+    #[DataProvider('rawPdfValueProvider')]
+    public function testIsRawPdfValueMatchesOnlyPdfNamesAndReferences(string $value, bool $expected): void
+    {
+        $exporter = new SinglePagePdfExporter();
+
+        self::assertSame($expected, $this->invokeExporterMethod($exporter, 'isRawPdfValue', $value));
+    }
+
     #[DataProvider('invalidCompileResultProvider')]
     public function testExportRejectsInvalidCompileResults(CompileResult $result, string $expectedMessage): void
     {
@@ -432,5 +481,24 @@ final class SinglePagePdfExporterTest extends TestCase
             ),
             'expectedMessage' => 'Image resource "Im0" must expose a non-empty Source.',
         ];
+    }
+
+    /**
+     * @return iterable<string, array{value: string, expected: bool}>
+     */
+    public static function rawPdfValueProvider(): iterable
+    {
+        yield 'name' => ['value' => '/Helvetica', 'expected' => true];
+        yield 'reference' => ['value' => '12 0 R', 'expected' => true];
+        yield 'missing start anchor' => ['value' => 'prefix 12 0 R', 'expected' => false];
+        yield 'missing end anchor' => ['value' => '12 0 R suffix', 'expected' => false];
+        yield 'literal string' => ['value' => 'hello', 'expected' => false];
+    }
+
+    private function invokeExporterMethod(SinglePagePdfExporter $exporter, string $method, mixed ...$arguments): mixed
+    {
+        $reflectionMethod = new ReflectionMethod($exporter, $method);
+
+        return $reflectionMethod->invoke($exporter, ...$arguments);
     }
 }
