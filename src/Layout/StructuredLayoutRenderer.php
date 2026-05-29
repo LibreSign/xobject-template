@@ -211,7 +211,7 @@ final readonly class StructuredLayoutRenderer
             return $this->renderImage($node, $box, $canvasHeight, $images, $imageCount, $activeClipBox);
         }
 
-        if (strtolower(trim($this->styleResolver->styleValue($style, 'display', ''))) === 'flex') {
+        if (strtolower($this->styleResolver->styleValue($style, 'display', '')) === 'flex') {
             return $this->renderFlexContainer(
                 $node,
                 $style,
@@ -259,10 +259,7 @@ final readonly class StructuredLayoutRenderer
         ['padding' => $padding, 'contentBox' => $contentBox] = $this->boxResolver->resolveContentBox($style, $box);
         $localClipBox = $this->resolveClipBox($style, $box, $activeClipBox);
 
-        $contentHeight = 0.0;
-        if (trim($node->text) !== '') {
-            $contentHeight += $this->renderTextLine($node, $style, $contentBox, $canvasHeight, $lines, $localClipBox);
-        }
+        $contentHeight = $this->renderTextLine($node, $style, $contentBox, $canvasHeight, $lines, $localClipBox);
 
         if ($node->children !== []) {
             $contentHeight += $this->layoutNodes(
@@ -310,8 +307,8 @@ final readonly class StructuredLayoutRenderer
         $direction = $this->flexPlanner->normalizeDirection(
             $this->styleResolver->styleValue($style, 'flex-direction', 'row'),
         );
-        $justifyContent = strtolower(trim($this->styleResolver->styleValue($style, 'justify-content', 'flex-start')));
-        $alignItems = strtolower(trim($this->styleResolver->styleValue($style, 'align-items', 'flex-start')));
+        $justifyContent = strtolower($this->styleResolver->styleValue($style, 'justify-content', 'flex-start'));
+        $alignItems = strtolower($this->styleResolver->styleValue($style, 'align-items', 'flex-start'));
         $gap = $this->flexPlanner->resolveGap($style, $direction, $contentBox);
 
         $items = $this->collectFlexItems(

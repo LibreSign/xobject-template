@@ -65,6 +65,29 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(60.0, $result->images[1]->y);
     }
 
+    public function testLayoutSupportsTrimmedUppercaseDisplayFlexWithoutOtherFlexHints(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display: FLEX ;width:40;height:40'],
+                children: [
+                    $this->imageNode('/left.png', 'width:10;height:20'),
+                    $this->imageNode('/right.png', 'width:10;height:20'),
+                ],
+            ),
+        ], 40.0, 40.0);
+
+        self::assertCount(2, $result->images);
+        self::assertSame(0.0, $result->images[0]->x);
+        self::assertSame(10.0, $result->images[1]->x);
+        self::assertSame(20.0, $result->images[0]->y);
+        self::assertSame(20.0, $result->images[1]->y);
+    }
+
     public function testLayoutUsesAutoFlexHeightToPositionFollowingSiblings(): void
     {
         $renderer = $this->createRenderer();
@@ -141,6 +164,23 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(40.0, $result->decorations[0]->y);
     }
 
+    public function testLayoutUsesAutoHeightForDecoratedBlockContainersWithoutClipping(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: 'Auto height',
+                attributes: ['style' => 'width:100;height:12;padding:10;background-color:#abcdef;font-size:10'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame(32.0, $result->decorations[0]->height);
+        self::assertSame(48.0, $result->decorations[0]->y);
+    }
+
     public function testLayoutAppliesClipBoxesWhenOverflowIsHidden(): void
     {
         $renderer = $this->createRenderer();
@@ -158,6 +198,29 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertCount(1, $result->lines);
         self::assertStringEndsWith('...', $result->lines[0]->text);
         self::assertSame(['x' => 0.0, 'y' => 68.0, 'width' => 50.0, 'height' => 12.0], $result->lines[0]->clipBox);
+    }
+
+    public function testLayoutKeepsFixedHeightAndDecorationForClippedFlexContainers(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: [
+                    'style' => 'display:flex;overflow:hidden;width:100;height:60;padding:2;'
+                        . 'background-color:#abcdef',
+                ],
+                children: [
+                    $this->imageNode('/flex.png', 'width:10;height:20'),
+                ],
+            ),
+        ], 120.0, 100.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame(60.0, $result->decorations[0]->height);
+        self::assertSame(40.0, $result->decorations[0]->y);
     }
 
     public function testLayoutUsesAccumulatedConsumedHeightForLaterPercentageSizedNodes(): void
