@@ -7,24 +7,108 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
 
+use LibreSign\XObjectTemplate\Pdf\EmbeddedPdfImage;
 use LibreSign\XObjectTemplate\Pdf\FilesystemPdfImageEmbedder;
+use LibreSign\XObjectTemplate\Pdf\FilesystemImageSourceReaderInterface;
+use LibreSign\XObjectTemplate\Pdf\ImageMetadataInspectorInterface;
+use LibreSign\XObjectTemplate\Pdf\JpegPdfImageFactoryInterface;
+use LibreSign\XObjectTemplate\Pdf\PngPdfImageFactoryInterface;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
+use LibreSign\XObjectTemplate\Tests\Support\UsesTemporaryFiles;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 
 final class FilesystemPdfImageEmbedderTest extends TestCase
 {
-    /** @var list<string> */
-    private array $temporaryFiles = [];
+    use UsesTemporaryFiles;
 
     protected function tearDown(): void
     {
-        foreach ($this->temporaryFiles as $temporaryFile) {
-            @unlink($temporaryFile);
-        }
+        $this->tearDownTemporaryFiles();
+    }
 
-        $this->temporaryFiles = [];
+    public function testEmbedUsesInjectedCollaboratorsForJpegImages(): void
+    {
+        $expectedImage = new EmbeddedPdfImage(['Type' => '/Image'], 'jpeg-stream');
+        $embedder = new FilesystemPdfImageEmbedder(
+            new class implements FilesystemImageSourceReaderInterface {
+                public function read(string $source): string
+                {
+                    return 'jpeg-binary';
+                }
+            },
+            new class implements ImageMetadataInspectorInterface {
+                public function detect(string $contents, string $source): array
+                {
+                    return [0 => 1, 1 => 1, 'mime' => 'image/jpeg'];
+                }
+
+                public function resolveMimeType(array $imageInfo, string $source): string
+                {
+                    return 'image/jpeg';
+                }
+            },
+            new class ($expectedImage) implements JpegPdfImageFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $expectedImage)
+                {
+                }
+
+                public function create(string $contents, array $imageInfo): EmbeddedPdfImage
+                {
+                    return $this->expectedImage;
+                }
+            },
+            new class implements PngPdfImageFactoryInterface {
+                public function create(string $contents): EmbeddedPdfImage
+                {
+                    throw new \RuntimeException('PNG factory should not be used for JPEG images.');
+                }
+            },
+        );
+
+        self::assertSame($expectedImage, $embedder->embed('/tmp/virtual-image.jpg'));
+    }
+
+    public function testEmbedUsesInjectedCollaboratorsForPngImages(): void
+    {
+        $expectedImage = new EmbeddedPdfImage(['Type' => '/Image'], 'png-stream');
+        $embedder = new FilesystemPdfImageEmbedder(
+            new class implements FilesystemImageSourceReaderInterface {
+                public function read(string $source): string
+                {
+                    return 'not-a-real-png';
+                }
+            },
+            new class implements ImageMetadataInspectorInterface {
+                public function detect(string $contents, string $source): array
+                {
+                    return [0 => 1, 1 => 1, 'mime' => 'image/png'];
+                }
+
+                public function resolveMimeType(array $imageInfo, string $source): string
+                {
+                    return 'image/png';
+                }
+            },
+            new class implements JpegPdfImageFactoryInterface {
+                public function create(string $contents, array $imageInfo): EmbeddedPdfImage
+                {
+                    throw new \RuntimeException('JPEG factory should not be used for PNG images.');
+                }
+            },
+            new class ($expectedImage) implements PngPdfImageFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $expectedImage)
+                {
+                }
+
+                public function create(string $contents): EmbeddedPdfImage
+                {
+                    return $this->expectedImage;
+                }
+            },
+        );
+
+        self::assertSame($expectedImage, $embedder->embed('/tmp/virtual-image.png'));
     }
 
     public function testEmbedReturnsPredictorBackedImageForOpaqueRgbPng(): void
@@ -207,58 +291,6 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         self::assertNull($image->softMask);
     }
 
-    #[DataProvider('jpegChannelProvider')]
-    public function testEmbedJpegMapsChannelMetadataToPdfColorSpaces(
-        int|string $channels,
-        string $expectedColorSpace,
-    ): void {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'embedJpeg');
-
-        $image = $method->invoke($embedder, 'jpeg-binary', [0 => 4, 1 => 3, 'channels' => $channels]);
-
-        self::assertSame($expectedColorSpace, $image->dictionary['ColorSpace']);
-        self::assertSame(4, $image->dictionary['Width']);
-        self::assertSame(3, $image->dictionary['Height']);
-        self::assertSame('jpeg-binary', $image->stream);
-    }
-
-    public function testEmbedJpegRejectsMissingDimensions(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'embedJpeg');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('JPEG metadata must expose width and height.');
-
-        $method->invoke($embedder, 'jpeg-binary', ['channels' => 3]);
-    }
-
-    public function testEmbedJpegRejectsMissingWidthOrHeightIndividually(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'embedJpeg');
-
-        foreach ([[1 => 3, 'channels' => 3], [0 => 4, 'channels' => 3]] as $metadata) {
-            try {
-                $method->invoke($embedder, 'jpeg-binary', $metadata);
-                self::fail('Expected missing JPEG dimensions to be rejected.');
-            } catch (\InvalidArgumentException $exception) {
-                self::assertSame('JPEG metadata must expose width and height.', $exception->getMessage());
-            }
-        }
-    }
-
-    public function testEmbedJpegDefaultsMissingChannelMetadataToRgb(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'embedJpeg');
-
-        $image = $method->invoke($embedder, 'jpeg-binary', [0 => 4, 1 => 3]);
-
-        self::assertSame('/DeviceRGB', $image->dictionary['ColorSpace']);
-    }
-
     public function testEmbedRejectsUnreadableFiles(): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
@@ -296,23 +328,6 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         $embedder->embed($pngPath);
     }
 
-    public function testEmbedRejectsPngsWithInvalidSignature(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'parsePng');
-        $png = PngFixtureFactory::createPng(
-            width: 1,
-            height: 1,
-            colorType: 2,
-            scanlines: "\x00\xff\x00\x00",
-        );
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid PNG signature.');
-
-        $method->invoke($embedder, 'BROKEN!!' . substr($png, 8));
-    }
-
     public function testEmbedRejectsTrailingDataAfterIendChunk(): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
@@ -322,29 +337,15 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
             colorType: 2,
             scanlines: "\x00\xff\x00\x00",
         );
-        $trailingDataPath = $this->createTemporaryFile('png', $png . self::createPngChunk('tEXt', 'tail'));
+        $trailingDataPath = $this->createTemporaryFile(
+            'png',
+            $png . PngFixtureFactory::createChunk('tEXt', 'tail'),
+        );
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('PNG data after IEND is not supported.');
 
         $embedder->embed($trailingDataPath);
-    }
-
-    public function testParsePngRejectsAdditionalChunksAfterIend(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'parsePng');
-        $png = PngFixtureFactory::createPng(
-            width: 1,
-            height: 1,
-            colorType: 2,
-            scanlines: "\x00\xff\x00\x00",
-        ) . self::createPngChunk('tEXt', 'tail');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG data after IEND is not supported.');
-
-        $method->invoke($embedder, $png);
     }
 
     public function testEmbedRejectsUnsupportedPngCompressionAndFilterMethods(): void
@@ -439,330 +440,6 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         self::assertSame("\x00\x40\x80\x00\xc0\xff", gzuncompress($image->softMask->stream));
     }
 
-    public function testUnfilterPngRowSupportsAverageFilterWithMultiPixelContext(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
-
-        $decodedRow = $method->invoke(
-            $embedder,
-            3,
-            "\x55\x5a\x5f\x64\x3c\x3c\x3c\x3c",
-            "\x0a\x14\x1e\x28\x32\x3c\x46\x50",
-            4,
-        );
-
-        self::assertSame("\x5a\x64\x6e\x78\x82\x8c\x96\xa0", $decodedRow);
-    }
-
-    public function testUnfilterPngRowSupportsPaethFilterWithMultiPixelContext(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
-
-        $decodedRow = $method->invoke(
-            $embedder,
-            4,
-            "\x0a\x0a\x0a\x0a\x0a\x14\x1e\x28",
-            "\x0a\x14\x1e\x28\x3c\x46\x50\x5a",
-            4,
-        );
-
-        self::assertSame("\x14\x1e\x28\x32\x46\x5a\x6e\x82", $decodedRow);
-    }
-
-    public function testPaethPredictorSelectsExpectedNeighborAcrossTieCases(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'paethPredictor');
-
-        self::assertSame(20, $method->invoke($embedder, 20, 20, 10));
-        self::assertSame(50, $method->invoke($embedder, 50, 10, 20));
-        self::assertSame(50, $method->invoke($embedder, 10, 50, 20));
-        self::assertSame(20, $method->invoke($embedder, 10, 30, 20));
-        self::assertSame(0, $method->invoke($embedder, 0, 3, 2));
-        self::assertSame(3, $method->invoke($embedder, 0, 3, 1));
-    }
-
-    public function testResolveMimeTypeRejectsMissingMimeKey(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'resolveMimeType');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Image metadata for "fixture.png" does not expose a mime type.');
-
-        $method->invoke($embedder, [0 => 1, 1 => 1], 'fixture.png');
-    }
-
-    public function testResolveMimeTypeRejectsNonStringMimeValues(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'resolveMimeType');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Image metadata for "fixture.png" must expose the mime type as a string.');
-
-        $method->invoke($embedder, ['mime' => 123], 'fixture.png');
-    }
-
-    public function testReadPngChunkRejectsTruncatedLengthField(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'readPngChunk');
-        $offset = 0;
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid PNG chunk length.');
-
-        $method->invokeArgs($embedder, ["\x00\x00\x00", &$offset]);
-    }
-
-    public function testParseChunkLengthPreservesAllFourBytes(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'parseChunkLength');
-
-        self::assertSame(0x01020304, $method->invoke($embedder, "\x01\x02\x03\x04"));
-    }
-
-    public function testParsePngRejectsMissingMetadataWhenIhdrChunkIsAbsent(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'parsePng');
-        $png = "\x89PNG\r\n\x1a\n"
-            . self::createPngChunk('IDAT', PngFixtureFactory::compressScanlines("\x00\xff\x00\x00"))
-            . self::createPngChunk('IEND', '');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG metadata is incomplete.');
-
-        $method->invoke($embedder, $png);
-    }
-
-    public function testParsePngRejectsMissingImageDataWhenIdatChunkIsAbsent(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'parsePng');
-        $ihdr = pack('NNCCCCC', 1, 1, 8, 2, 0, 0, 0);
-        $png = "\x89PNG\r\n\x1a\n"
-            . self::createPngChunk('IHDR', $ihdr)
-            . self::createPngChunk('IEND', '');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG image data is missing.');
-
-        $method->invoke($embedder, $png);
-    }
-
-    public function testReadPngChunkRejectsInvalidChunkTypeLength(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'readPngChunk');
-        $offset = 0;
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid PNG chunk type.');
-
-        $method->invokeArgs($embedder, [pack('N', 0) . 'ABC', &$offset]);
-    }
-
-    public function testReadPngChunkRejectsTruncatedChunkPayload(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'readPngChunk');
-        $offset = 0;
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG chunk data is truncated.');
-
-        $method->invokeArgs($embedder, [pack('N', 1) . 'IHDR', &$offset]);
-    }
-
-    public function testParsePngHeaderRejectsUnexpectedHeaderLength(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'parsePngHeader');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unable to parse the PNG IHDR chunk.');
-
-        $method->invoke($embedder, 'short-header');
-    }
-
-    public function testUnfilterPngScanlinesRejectsInvalidCompressedData(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngScanlines');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG image data could not be decompressed.');
-
-        $method->invoke($embedder, 'not-compressed', 1, 1, 1);
-    }
-
-    public function testUnfilterPngScanlinesRejectsMissingRowFilterBytes(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngScanlines');
-        $compressed = gzcompress('');
-        if (!is_string($compressed)) {
-            self::fail('Failed to compress empty scanlines fixture.');
-        }
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG scanlines are truncated.');
-
-        $method->invoke($embedder, $compressed, 1, 1, 1);
-    }
-
-    public function testUnfilterPngScanlinesRejectsMissingRowPayloadBytes(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngScanlines');
-        $compressed = gzcompress("\x00");
-        if (!is_string($compressed)) {
-            self::fail('Failed to compress truncated row scanlines fixture.');
-        }
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG row data is truncated.');
-
-        $method->invoke($embedder, $compressed, 1, 1, 1);
-    }
-
-    public function testUnfilterPngRowSupportsSubFilterWithMultiPixelContext(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
-
-        $decodedRow = $method->invoke(
-            $embedder,
-            1,
-            "\x05\x06\x02\x03",
-            "\x00\x00\x00\x00",
-            2,
-        );
-
-        self::assertSame("\x05\x06\x07\x09", $decodedRow);
-    }
-
-    public function testUnfilterPngRowSupportsUpFilterWithPriorRowContext(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
-
-        $decodedRow = $method->invoke(
-            $embedder,
-            2,
-            "\x05\x06\x07\x08",
-            "\x01\x02\x03\x04",
-            2,
-        );
-
-        self::assertSame("\x06\x08\x0a\x0c", $decodedRow);
-    }
-
-    public function testUnfilterPngRowUsesPreviousUpperLeftAtBoundary(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
-
-        $decodedRow = $method->invoke(
-            $embedder,
-            4,
-            "\xff\x00",
-            "\x01\x01",
-            1,
-        );
-
-        self::assertSame('0000', bin2hex((string) $decodedRow));
-    }
-
-    public function testUnfilterPngRowUsesZeroUpperLeftFallbackForFirstByte(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'unfilterPngRow');
-
-        $decodedRow = $method->invoke(
-            $embedder,
-            4,
-            "\x00",
-            "\x01",
-            1,
-        );
-
-        self::assertSame("\x01", $decodedRow);
-    }
-
-    public function testParsePngRejectsMissingTrailerChunkWhenTrailingBytesAreTooShort(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'parsePng');
-        $png = PngFixtureFactory::createPng(
-            width: 1,
-            height: 1,
-            colorType: 2,
-            scanlines: "\x00\xff\x00\x00",
-        );
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG trailer chunk is missing.');
-
-        $method->invoke($embedder, substr($png, 0, -12) . "\x00\x00\x00");
-    }
-
-    public function testAssertReadableSourceRejectsUnreadableFiles(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'assertReadableSource');
-        $path = $this->createTemporaryFile('png', 'contents');
-        chmod($path, 0);
-
-        try {
-            $this->expectException(\InvalidArgumentException::class);
-            $this->expectExceptionMessage(sprintf('Image source "%s" must be readable.', $path));
-
-            $method->invoke($embedder, $path);
-        } finally {
-            chmod($path, 0644);
-        }
-    }
-
-    public function testReadSourceContentsRejectsUnreadableSources(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'readSourceContents');
-        $missingPath = sys_get_temp_dir() . '/xobject-template-missing-image.bin';
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('Failed to read image source "%s".', $missingPath));
-
-        $method->invoke($embedder, $missingPath);
-    }
-
-    public function testAssertNoPngChunksAfterIendRejectsAdditionalChunks(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'assertNoPngChunksAfterIend');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG data after IEND is not supported.');
-
-        $method->invoke($embedder, 12);
-    }
-
-    public function testAssertPngEndsAtIendRejectsTrailingData(): void
-    {
-        $embedder = new FilesystemPdfImageEmbedder();
-        $method = new ReflectionMethod($embedder, 'assertPngEndsAtIend');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PNG data after IEND is not supported.');
-
-        $method->invoke($embedder, 12, 16);
-    }
-
     /**
      * @return iterable<string, array{filterType: int}>
      */
@@ -772,17 +449,6 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         yield 'up filter' => ['filterType' => 2];
         yield 'average filter' => ['filterType' => 3];
         yield 'paeth filter' => ['filterType' => 4];
-    }
-
-    /**
-     * @return iterable<string, array{channels: int|string, expectedColorSpace: string}>
-     */
-    public static function jpegChannelProvider(): iterable
-    {
-        yield 'grayscale' => ['channels' => 1, 'expectedColorSpace' => '/DeviceGray'];
-        yield 'rgb default' => ['channels' => 3, 'expectedColorSpace' => '/DeviceRGB'];
-        yield 'cmyk' => ['channels' => 4, 'expectedColorSpace' => '/DeviceCMYK'];
-        yield 'invalid channel metadata defaults to rgb' => ['channels' => '4', 'expectedColorSpace' => '/DeviceRGB'];
     }
 
     /**
@@ -801,33 +467,5 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
             'interlace' => 1,
             'expectedMessage' => 'Interlaced PNG images are not supported.',
         ];
-    }
-
-    private function createTemporaryFile(string $extension, string $contents): string
-    {
-        $temporaryFile = tempnam(sys_get_temp_dir(), 'xot_');
-        if ($temporaryFile === false) {
-            self::fail('Failed to create a temporary file for image export tests.');
-        }
-
-        $pathWithExtension = $temporaryFile . '.' . $extension;
-        rename($temporaryFile, $pathWithExtension);
-        file_put_contents($pathWithExtension, $contents);
-        $this->temporaryFiles[] = $pathWithExtension;
-
-        return $pathWithExtension;
-    }
-
-    private static function createPngChunk(string $type, string $data): string
-    {
-        $crc = crc32($type . $data);
-        if ($crc < 0) {
-            $crc += 4_294_967_296;
-        }
-
-        return pack('N', strlen($data))
-            . $type
-            . $data
-            . pack('N', $crc);
     }
 }
