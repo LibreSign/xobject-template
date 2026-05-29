@@ -191,7 +191,7 @@ final readonly class TextLineBreaker
 
     /**
      * @param list<string> $remaining
-     * @return non-empty-string
+     * @return string
      */
     private function resolveAutoSegment(
         array $remaining,
