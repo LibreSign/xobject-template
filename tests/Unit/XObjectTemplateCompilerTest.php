@@ -129,4 +129,22 @@ final class XObjectTemplateCompilerTest extends TestCase
         self::assertSame($htmlParser, $htmlParserProperty->getValue($compiler));
         self::assertSame($layoutEngine, $layoutEngineProperty->getValue($compiler));
     }
+
+    public function testCompilerConstructorKeepsProvidedContextInterpolatorInstance(): void
+    {
+        $contextInterpolatorClass = \LibreSign\XObjectTemplate\Html\HtmlContextInterpolator::class;
+        $contextInterpolator = new $contextInterpolatorClass();
+        $compiler = (new \ReflectionClass(XObjectTemplateCompiler::class))->newInstanceArgs([
+            null,
+            null,
+            null,
+            null,
+            null,
+            $contextInterpolator,
+        ]);
+
+        $contextInterpolatorProperty = new ReflectionProperty($compiler, 'contextInterpolator');
+
+        self::assertSame($contextInterpolator, $contextInterpolatorProperty->getValue($compiler));
+    }
 }
