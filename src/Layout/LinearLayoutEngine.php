@@ -10,17 +10,20 @@ namespace LibreSign\XObjectTemplate\Layout;
 use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Css\StyleMap;
 use LibreSign\XObjectTemplate\Html\Node;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 final readonly class LinearLayoutEngine
 {
     private InlineStyleParser $styleParser;
     private LayoutStyleResolver $styleResolver;
     private StructuredLayoutRenderer $structuredRenderer;
+    private StandardFontMetrics $fontMetrics;
 
     public function __construct(?InlineStyleParser $styleParser = null)
     {
         $this->styleParser = $styleParser ?? new InlineStyleParser();
         $this->styleResolver = new LayoutStyleResolver();
+        $this->fontMetrics = new StandardFontMetrics();
         $this->structuredRenderer = new StructuredLayoutRenderer($this->styleParser, $this->styleResolver);
     }
 
@@ -64,10 +67,12 @@ final readonly class LinearLayoutEngine
 
             $boxWidth = $this->toPoints($this->styleValue($style, 'width', '0'));
             if ($boxWidth <= 0) {
-                $boxWidth = max($width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'], 0);
+                $boxWidth = max(
+                    $width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'],
+                    $this->toPoints('0'),
+                );
             }
             $leftBase = $margin['left'] + $padding['left'];
-            $rightBase = $leftBase + $boxWidth;
 
             if ($node->tag === 'img') {
                 $imgWidth = $this->toPoints($this->styleValue($style, 'width', '32'));
@@ -103,10 +108,11 @@ final readonly class LinearLayoutEngine
             }
 
             $align = strtolower($this->styleValue($style, 'text-align', 'left'));
+            $textWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, $text);
             $lineX = match ($align) {
-                'center' => $leftBase + ($boxWidth / 2.0),
-                'right' => max($rightBase - 8.0, 0),
-                default => $leftBase + 8.0,
+                'center' => $leftBase + max(($boxWidth - $textWidth) / 2.0, 0.0),
+                'right' => $leftBase + max($boxWidth - $textWidth, 0.0),
+                default => $leftBase,
             };
 
             $lines[] = new LayoutLine(
@@ -141,7 +147,7 @@ final readonly class LinearLayoutEngine
 
     private function containsStructuredLayoutRules(StyleMap $style): bool
     {
-        if (strtolower(trim($this->styleValue($style, 'display', ''))) === 'flex') {
+        if (strtolower($this->styleValue($style, 'display', '')) === 'flex') {
             return true;
         }
 
@@ -149,20 +155,36 @@ final readonly class LinearLayoutEngine
             return true;
         }
 
-        foreach (['width', 'height', 'left', 'top', 'right', 'bottom', 'gap'] as $property) {
+        foreach (
+            [
+                'background-color',
+                'border-color',
+                'border-width',
+                'border-radius',
+                'overflow',
+                'text-overflow',
+                'hyphens',
+                'white-space',
+            ] as $property
+        ) {
+            if ($this->styleValue($style, $property, '') !== '') {
+                return true;
+            }
+        }
+
+        foreach (
+            ['width', 'height', 'left', 'top', 'right', 'bottom', 'gap'] as $property
+        ) {
             if (str_contains($this->styleValue($style, $property, ''), '%')) {
                 return true;
             }
         }
 
-        $justifyContent = strtolower(trim($this->styleValue($style, 'justify-content', '')));
-        if (in_array($justifyContent, ['center', 'flex-end', 'space-between'], true)) {
+        if (strtolower($this->styleValue($style, 'text-align', '')) === 'justify') {
             return true;
         }
 
-        $alignItems = strtolower(trim($this->styleValue($style, 'align-items', '')));
-
-        return in_array($alignItems, ['center', 'flex-end'], true);
+        return false;
     }
 
     private function styleValue(StyleMap $style, string $property, string $default): string

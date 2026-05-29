@@ -21,8 +21,10 @@ final class SubsetHtmlParser
         'font-family' => true,
         'font-size' => true,
         'font-weight' => true,
+        'hyphens' => true,
         'line-height' => true,
         'text-align' => true,
+        'white-space' => true,
     ];
 
     /** @var array<string, true> */
@@ -158,20 +160,16 @@ final class SubsetHtmlParser
         }
 
         $resolvedDeclarations = [];
+        $matches = [];
 
-        foreach (explode(';', $style) as $declaration) {
-            $trimmedDeclaration = trim($declaration);
-            if ($trimmedDeclaration === '') {
-                continue;
-            }
+        preg_match_all('/(?:^|;)\s*([A-Za-z-]+)\s*:\s*([^;]+)\s*/', $style, $matches, PREG_SET_ORDER);
+        if ($matches === []) {
+            return '';
+        }
 
-            $segments = explode(':', $trimmedDeclaration, 2);
-            if (count($segments) !== 2) {
-                continue;
-            }
-
-            $property = strtolower(trim($segments[0]));
-            $value = trim($segments[1]);
+        foreach ($matches as $match) {
+            $property = strtolower($match[1]);
+            $value = trim($match[2]);
             if ($value === '' || !isset(self::INHERITABLE_STYLE_PROPERTIES[$property])) {
                 continue;
             }
@@ -179,6 +177,6 @@ final class SubsetHtmlParser
             $resolvedDeclarations[$property] = $property . ':' . $value;
         }
 
-        return implode(';', array_values($resolvedDeclarations));
+        return implode(';', $resolvedDeclarations);
     }
 }

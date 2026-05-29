@@ -136,7 +136,8 @@ final class VisibleStampTemplateScenarioTest extends TestCase
             'expectedTexts' => [
                 'Signed with LibreSign',
                 'Preview Issuer',
-                'Date: 2026-05-28T16:40:21+00:00',
+                'Date:',
+                '2026-05-28T16:40:21+00:00',
             ],
         ];
     }

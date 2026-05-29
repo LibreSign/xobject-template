@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
 
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
+use LibreSign\XObjectTemplate\Layout\LayoutDecoration;
 use LibreSign\XObjectTemplate\Layout\LayoutImage;
 use LibreSign\XObjectTemplate\Layout\LayoutLine;
 use LibreSign\XObjectTemplate\Layout\LayoutResult;
@@ -162,6 +163,324 @@ final class TemplateDocumentBuilderTest extends TestCase
         self::assertStringContainsString('1 0 0 1 18.000000 72.000000 Tm', $stream);
         self::assertStringContainsString('1 0 0 1 120.000000 40.000000 Tm', $stream);
         self::assertStringNotContainsString(' Td', $stream);
+    }
+
+    public function testBuildContentStreamKeepsGroupedTextInSingleTextObjectAndResetsWordSpacingOnlyWhenNeeded(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [
+                new LayoutLine(
+                    text: 'Alpha',
+                    x: 10.0,
+                    y: 60.0,
+                    fontSize: 10.0,
+                    fontAlias: 'F1',
+                    rgbColor: '#000000',
+                ),
+                new LayoutLine(
+                    text: 'Beta',
+                    x: 10.0,
+                    y: 48.0,
+                    fontSize: 10.0,
+                    fontAlias: 'F1',
+                    rgbColor: '#000000',
+                    wordSpacing: 2.5,
+                ),
+                new LayoutLine(
+                    text: 'Gamma',
+                    x: 10.0,
+                    y: 36.0,
+                    fontSize: 10.0,
+                    fontAlias: 'F1',
+                    rgbColor: '#000000',
+                ),
+            ],
+            images: [],
+        ));
+
+        $this->assertSame(1, substr_count($stream, 'BT'));
+        $this->assertSame(1, substr_count($stream, 'ET'));
+        $this->assertSame(1, substr_count($stream, '2.500000 Tw'));
+        $this->assertSame(1, substr_count($stream, '0.000000 Tw'));
+        $this->assertStringNotContainsString("0.000000 Tw\n1 0 0 1 10.000000 60.000000 Tm", $stream);
+        $this->assertStringContainsString("0.000000 Tw\n1 0 0 1 10.000000 36.000000 Tm", $stream);
+    }
+
+    public function testBuildContentStreamSupportsWordSpacingAndTextClipping(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [
+                new LayoutLine(
+                    text: 'Wrap this',
+                    x: 10.0,
+                    y: 50.0,
+                    fontSize: 10.0,
+                    fontAlias: 'F1',
+                    rgbColor: '#000000',
+                    wordSpacing: 2.5,
+                    clipBox: ['x' => 8.0, 'y' => 48.0, 'width' => 60.0, 'height' => 12.0],
+                ),
+            ],
+            images: [],
+        ));
+
+        self::assertStringContainsString('8.000000 48.000000 60.000000 12.000000 re W n', $stream);
+        self::assertStringContainsString('2.500000 Tw', $stream);
+        self::assertStringContainsString('(Wrap this) Tj', $stream);
+    }
+
+    public function testBuildContentStreamOmitsWordSpacingOperatorForClippedZeroSpacingText(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [
+                new LayoutLine(
+                    text: 'Clip',
+                    x: 10.0,
+                    y: 50.0,
+                    fontSize: 10.0,
+                    fontAlias: 'F1',
+                    rgbColor: '#000000',
+                    clipBox: ['x' => 8.0, 'y' => 48.0, 'width' => 60.0, 'height' => 12.0],
+                ),
+            ],
+            images: [],
+        ));
+
+        $this->assertStringContainsString(
+            implode("\n", [
+            'q',
+                'q',
+                '8.000000 48.000000 60.000000 12.000000 re W n',
+                'BT',
+                '/F1 10.000000 Tf',
+            '0 0 0 rg',
+                '1 0 0 1 10.000000 50.000000 Tm',
+                '(Clip) Tj',
+                'ET',
+                'Q',
+            ]),
+            $stream,
+        );
+        $this->assertStringNotContainsString(' Tw', $stream);
+    }
+
+    public function testBuildContentStreamSupportsClippedImages(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [],
+            images: [
+                new LayoutImage(
+                    alias: 'Im4',
+                    x: 9.0,
+                    y: 10.0,
+                    width: 7.0,
+                    height: 8.0,
+                    source: '/clip.png',
+                    clipBox: ['x' => 1.0, 'y' => 2.0, 'width' => 3.0, 'height' => 4.0],
+                ),
+            ],
+        ));
+
+        $this->assertSame(
+            implode("\n", [
+                'q',
+                'q',
+                '1.000000 2.000000 3.000000 4.000000 re W n',
+                '7.000000 0 0 8.000000 9.000000 10.000000 cm /Im4 Do',
+                'Q',
+                'Q',
+            ]),
+            $stream,
+        );
+    }
+
+    public function testBuildContentStreamRendersRoundedVectorDecorations(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [],
+            images: [],
+            decorations: [
+                new LayoutDecoration(
+                    x: 5.0,
+                    y: 6.0,
+                    width: 40.0,
+                    height: 20.0,
+                    fillColor: '#abcdef',
+                    strokeColor: '#123456',
+                    strokeWidth: 1.5,
+                    borderRadius: 4.0,
+                ),
+            ],
+        ));
+
+        self::assertStringContainsString('0.6706 0.8039 0.9373 rg', $stream);
+        self::assertStringContainsString('0.0706 0.2039 0.3373 RG', $stream);
+        self::assertStringContainsString('1.500000 w', $stream);
+        self::assertStringContainsString(" c\n", $stream);
+        self::assertStringContainsString('B', $stream);
+    }
+
+    public function testBuildContentStreamRendersRoundedVectorDecorationWithExactPathGeometry(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [],
+            images: [],
+            decorations: [
+                new LayoutDecoration(
+                    x: 5.0,
+                    y: 6.0,
+                    width: 40.0,
+                    height: 20.0,
+                    fillColor: '#abcdef',
+                    strokeColor: '#123456',
+                    strokeWidth: 1.5,
+                    borderRadius: 4.0,
+                ),
+            ],
+        ));
+
+        $this->assertSame(
+            implode("\n", [
+                'q',
+                'q',
+                '0.6706 0.8039 0.9373 rg',
+                '0.0706 0.2039 0.3373 RG',
+                '1.500000 w',
+                '9.000000 6.000000 m',
+                '41.000000 6.000000 l',
+                '43.209139 6.000000 45.000000 7.790861 45.000000 10.000000 c',
+                '45.000000 22.000000 l',
+                '45.000000 24.209139 43.209139 26.000000 41.000000 26.000000 c',
+                '9.000000 26.000000 l',
+                '6.790861 26.000000 5.000000 24.209139 5.000000 22.000000 c',
+                '5.000000 10.000000 l',
+                '5.000000 7.790861 6.790861 6.000000 9.000000 6.000000 c',
+                'h',
+                'B',
+                'Q',
+                'Q',
+            ]),
+            $stream,
+        );
+    }
+
+    public function testBuildContentStreamClampsRoundedVectorRadiusToHalfTheSmallestDimension(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $stream = $builder->buildContentStream(new LayoutResult(
+            lines: [],
+            images: [],
+            decorations: [
+                new LayoutDecoration(
+                    x: 2.0,
+                    y: 3.0,
+                    width: 8.0,
+                    height: 8.0,
+                    fillColor: '#ffffff',
+                    borderRadius: 10.0,
+                ),
+            ],
+        ));
+
+        $this->assertSame(
+            implode("\n", [
+                'q',
+                'q',
+                '1 1 1 rg',
+                '6.000000 3.000000 m',
+                '6.000000 3.000000 l',
+                '8.209139 3.000000 10.000000 4.790861 10.000000 7.000000 c',
+                '10.000000 7.000000 l',
+                '10.000000 9.209139 8.209139 11.000000 6.000000 11.000000 c',
+                '6.000000 11.000000 l',
+                '3.790861 11.000000 2.000000 9.209139 2.000000 7.000000 c',
+                '2.000000 7.000000 l',
+                '2.000000 4.790861 3.790861 3.000000 6.000000 3.000000 c',
+                'h',
+                'f',
+                'Q',
+                'Q',
+            ]),
+            $stream,
+        );
+    }
+
+    public function testBuildContentStreamRendersFillOnlyStrokeOnlyAndEmptyDecorationsDistinctly(): void
+    {
+        $builder = new TemplateDocumentBuilder();
+
+        $fillOnlyStream = $builder->buildContentStream(new LayoutResult(
+            lines: [],
+            images: [],
+            decorations: [
+                new LayoutDecoration(x: 1.0, y: 2.0, width: 5.0, height: 6.0, fillColor: '#010203'),
+            ],
+        ));
+        $strokeOnlyStream = $builder->buildContentStream(new LayoutResult(
+            lines: [],
+            images: [],
+            decorations: [
+                new LayoutDecoration(
+                    x: 1.0,
+                    y: 2.0,
+                    width: 5.0,
+                    height: 6.0,
+                    strokeColor: '#040506',
+                    strokeWidth: 1.5,
+                ),
+            ],
+        ));
+        $emptyStream = $builder->buildContentStream(new LayoutResult(
+            lines: [],
+            images: [],
+            decorations: [
+                new LayoutDecoration(x: 1.0, y: 2.0, width: 5.0, height: 6.0),
+            ],
+        ));
+
+        $this->assertSame(
+            implode("\n", [
+                'q',
+                'q',
+                '0.0039 0.0078 0.0118 rg',
+                '1.000000 2.000000 5.000000 6.000000 re',
+                'f',
+                'Q',
+                'Q',
+            ]),
+            $fillOnlyStream,
+        );
+        $this->assertSame(
+            implode("\n", [
+                'q',
+                'q',
+                '0.0157 0.0196 0.0235 RG',
+                '1.500000 w',
+                '1.000000 2.000000 5.000000 6.000000 re',
+                'S',
+                'Q',
+                'Q',
+            ]),
+            $strokeOnlyStream,
+        );
+        $this->assertSame(2, substr_count($emptyStream, 'q'));
+        $this->assertSame(2, substr_count($emptyStream, 'Q'));
+        $this->assertStringNotContainsString(' re', $emptyStream);
+        $this->assertStringNotContainsString(' rg', $emptyStream);
+        $this->assertStringNotContainsString(' RG', $emptyStream);
     }
 
     public function testBuildResourcesExposesImageDictionaryAndCustomFontsFromDerivedBuilder(): void

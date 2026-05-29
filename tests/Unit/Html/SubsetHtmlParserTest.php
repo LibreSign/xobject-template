@@ -167,6 +167,43 @@ final class SubsetHtmlParserTest extends TestCase
         self::assertSame('ação € 😀', $nodes[0]->children[0]->text);
     }
 
+    public function testParseKeepsAllTopLevelNodesInOrder(): void
+    {
+        $parser = new SubsetHtmlParser();
+
+        $nodes = $parser->parse('<span>First</span><span>Second</span>');
+
+        $this->assertCount(2, $nodes);
+        $this->assertSame('First', $nodes[0]->children[0]->text);
+        $this->assertSame('Second', $nodes[1]->children[0]->text);
+    }
+
+    public function testParseFiltersInheritedStylesAfterMalformedDeclarationsAndPreservesColonValues(): void
+    {
+        $parser = new SubsetHtmlParser();
+
+        $nodes = $parser->parse(
+            '<div style=" ; COLOR : #fff ; broken ; font-family : Times:Bold ; invalid: ; '
+            . 'white-space : nowrap ; hyphens : auto ; color : #abc ; line-height : 12 ; ">'
+            . '<span style="font-weight:bold">Hello</span>'
+            . '</div>',
+        );
+
+        $this->assertSame(
+            '; COLOR : #fff ; broken ; font-family : Times:Bold ; invalid: ; white-space : nowrap ; '
+            . 'hyphens : auto ; color : #abc ; line-height : 12 ;',
+            $nodes[0]->attributes['style'],
+        );
+        $this->assertSame(
+            'color:#abc;font-family:Times:Bold;white-space:nowrap;hyphens:auto;line-height:12;font-weight:bold',
+            $nodes[0]->children[0]->attributes['style'],
+        );
+        $this->assertSame(
+            'color:#abc;font-family:Times:Bold;white-space:nowrap;hyphens:auto;line-height:12;font-weight:bold',
+            $nodes[0]->children[0]->children[0]->attributes['style'],
+        );
+    }
+
     public function testParseClearsPreExistingLibxmlErrorBuffer(): void
     {
         $parser = new SubsetHtmlParser();

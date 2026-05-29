@@ -47,7 +47,7 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertCount(1, $result->images);
         self::assertSame('Approved', $result->lines[0]->text);
         self::assertSame('F1', $result->lines[0]->fontAlias);
-        self::assertSame(8.0, $result->lines[0]->x);
+        self::assertSame(0.0, $result->lines[0]->x);
         self::assertSame(78.0, $result->lines[0]->y);
         self::assertSame('/fixture/sign.png', $result->images[0]->source);
         self::assertSame('Im0', $result->images[0]->alias);
@@ -95,8 +95,8 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertCount(2, $result->lines);
         self::assertSame('Right', $result->lines[0]->text);
         self::assertSame('Center', $result->lines[1]->text);
-        self::assertEqualsWithDelta(84.0, $result->lines[0]->x, 0.0001);
-        self::assertEqualsWithDelta(52.0, $result->lines[1]->x, 0.0001);
+        self::assertEqualsWithDelta(68.66, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(36.995, $result->lines[1]->x, 0.0001);
         self::assertEqualsWithDelta(82.0, $result->lines[0]->y, 0.0001);
     }
 
@@ -190,9 +190,9 @@ final class LinearLayoutEngineTest extends TestCase
         ], 100.0, 100.0);
 
         self::assertCount(3, $result->lines);
-        self::assertEqualsWithDelta(10.0, $result->lines[0]->x, 0.0001);
-        self::assertEqualsWithDelta(10.0, $result->lines[1]->x, 0.0001);
-        self::assertEqualsWithDelta(12.0, $result->lines[2]->x, 0.0001);
+        self::assertEqualsWithDelta(2.0, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(2.0, $result->lines[1]->x, 0.0001);
+        self::assertEqualsWithDelta(4.0, $result->lines[2]->x, 0.0001);
         self::assertEqualsWithDelta(87.0, $result->lines[0]->y, 0.0001);
         self::assertEqualsWithDelta(73.0, $result->lines[1]->y, 0.0001);
         self::assertEqualsWithDelta(57.0, $result->lines[2]->y, 0.0001);
@@ -252,7 +252,7 @@ final class LinearLayoutEngineTest extends TestCase
             new Node(
                 tag: 'div',
                 text: '',
-                attributes: ['style' => 'display:flex;flex-direction:row;width:200;height:100'],
+                attributes: ['style' => 'display: FLEX ; flex-direction: ROW ; width:200;height:100'],
                 children: [
                     new Node(
                         tag: 'div',
@@ -292,7 +292,7 @@ final class LinearLayoutEngineTest extends TestCase
                 tag: 'div',
                 text: '',
                 attributes: [
-                    'style' => 'display:flex;justify-content:center;align-items:center;width:200;height:100',
+                    'style' => 'display: FLEX ; justify-content: CENTER ; align-items: CENTER ; width:200;height:100',
                 ],
                 children: [
                     new Node(
@@ -309,6 +309,143 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertEqualsWithDelta(30.0, $result->images[0]->y, 0.0001);
         self::assertEqualsWithDelta(80.0, $result->images[0]->width, 0.0001);
         self::assertEqualsWithDelta(40.0, $result->images[0]->height, 0.0001);
+    }
+
+    public function testLayoutRoutesTrimmedUppercaseDisplayFlexWithoutOtherStructuredHints(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display: FLEX ;width:40;height:40'],
+                children: [
+                    new Node(
+                        tag: 'img',
+                        text: '',
+                        attributes: ['src' => '/left.png', 'style' => 'width:10;height:20'],
+                    ),
+                    new Node(
+                        tag: 'img',
+                        text: '',
+                        attributes: ['src' => '/right.png', 'style' => 'width:10;height:20'],
+                    ),
+                ],
+            ),
+        ], 40.0, 40.0);
+
+        self::assertCount(2, $result->images);
+        self::assertEqualsWithDelta(0.0, $result->images[0]->x, 0.0001);
+        self::assertEqualsWithDelta(10.0, $result->images[1]->x, 0.0001);
+        self::assertEqualsWithDelta(20.0, $result->images[0]->y, 0.0001);
+        self::assertEqualsWithDelta(20.0, $result->images[1]->y, 0.0001);
+    }
+
+    public function testLayoutRoutesVectorBackgroundStylesToStructuredRenderer(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: 'Decorated',
+                attributes: [
+                    'style' => 'background-color:#ddeeff;border-color:#123456;border-width:2;width:80;height:24',
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame('#ddeeff', $result->decorations[0]->fillColor);
+        self::assertSame('#123456', $result->decorations[0]->strokeColor);
+    }
+
+    public function testLayoutRoutesBackgroundColorAloneToStructuredRenderer(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: 'Tinted',
+                attributes: ['style' => 'background-color:#ddeeff;width:80;height:24;font-size:10'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame('#ddeeff', $result->decorations[0]->fillColor);
+        self::assertNull($result->decorations[0]->strokeColor);
+    }
+
+    public function testLayoutRoutesPercentageWidthToStructuredRenderer(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: 'Half width',
+                attributes: ['style' => 'width:50%;height:20;text-align:right;font-size:10'],
+            ),
+        ], 200.0, 80.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame('Half width', $result->lines[0]->text);
+        self::assertGreaterThan(50.0, $result->lines[0]->x);
+    }
+
+    public function testLayoutRoutesOverflowEllipsisRulesToStructuredRenderer(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: 'Wrap this text nicely',
+                attributes: [
+                    'style' => 'overflow:hidden;text-overflow:ellipsis;width:50;height:12;font-size:10',
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertStringEndsWith('...', $result->lines[0]->text);
+        self::assertNotNull($result->lines[0]->clipBox);
+    }
+
+    public function testLayoutRoutesJustifyAndTrimmedFlexEndTokensToStructuredRenderer(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $justifyResult = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: 'Wrap this text nicely',
+                attributes: ['style' => 'text-align: JUSTIFY ; width:50;font-size:10'],
+            ),
+        ], 120.0, 80.0);
+        $flexEndResult = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: [
+                    'style' => 'display:flex;justify-content: FLEX-END ;align-items: FLEX-END ;width:200;height:100',
+                ],
+                children: [
+                    new Node(
+                        tag: 'img',
+                        text: '',
+                        attributes: ['src' => '/fixture/end.png', 'style' => 'width:80;height:40'],
+                    ),
+                ],
+            ),
+        ], 200.0, 100.0);
+
+        self::assertGreaterThan(0.0, $justifyResult->lines[0]->wordSpacing);
+        self::assertCount(1, $flexEndResult->images);
+        self::assertEqualsWithDelta(120.0, $flexEndResult->images[0]->x, 0.0001);
+        self::assertEqualsWithDelta(0.0, $flexEndResult->images[0]->y, 0.0001);
     }
 
     public function testConstructorKeepsProvidedInlineStyleParserInstance(): void
@@ -338,7 +475,7 @@ final class LinearLayoutEngineTest extends TestCase
 
         self::assertCount(1, $result->lines);
         self::assertSame('Trimmed', $result->lines[0]->text);
-        self::assertEqualsWithDelta(81.5, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(59.92, $result->lines[0]->x, 0.0001);
         self::assertEqualsWithDelta(73.5, $result->lines[0]->y, 0.0001);
         self::assertEqualsWithDelta(7.5, $result->lines[0]->fontSize, 0.0001);
         self::assertSame('#123456', $result->lines[0]->rgbColor);
@@ -452,7 +589,39 @@ final class LinearLayoutEngineTest extends TestCase
         ], 100.0, 100.0);
 
         self::assertCount(1, $result->lines);
-        self::assertEqualsWithDelta(72.0, $result->lines[0]->x, 0.0001);
+        self::assertEqualsWithDelta(22.2, $result->lines[0]->x, 0.0001);
+    }
+
+    public function testLayoutUsesMeasuredTextWidthForCenterAndRightAlignment(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'span',
+                text: 'iiii',
+                attributes: ['style' => 'text-align:center;width:100;font-size:10'],
+            ),
+            new Node(
+                tag: 'span',
+                text: 'WWWW',
+                attributes: ['style' => 'text-align:center;width:100;font-size:10'],
+            ),
+            new Node(
+                tag: 'span',
+                text: 'iiii',
+                attributes: ['style' => 'text-align:right;width:100;font-size:10'],
+            ),
+            new Node(
+                tag: 'span',
+                text: 'WWWW',
+                attributes: ['style' => 'text-align:right;width:100;font-size:10'],
+            ),
+        ], 120.0, 120.0);
+
+        self::assertCount(4, $result->lines);
+        self::assertGreaterThan($result->lines[1]->x, $result->lines[0]->x);
+        self::assertGreaterThan($result->lines[3]->x, $result->lines[2]->x);
     }
 
     public function testLayoutRecognizesTrimmedUppercaseBoldTokens(): void

@@ -9,12 +9,15 @@ namespace LibreSign\XObjectTemplate\Layout;
 
 use LibreSign\XObjectTemplate\Css\StyleMap;
 use LibreSign\XObjectTemplate\Html\Node;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 /** @internal */
 final readonly class StructuredFlexLayoutPlanner
 {
-    public function __construct(private LayoutStyleResolver $styleResolver)
-    {
+    public function __construct(
+        private LayoutStyleResolver $styleResolver,
+        private StandardFontMetrics $fontMetrics = new StandardFontMetrics(),
+    ) {
     }
 
     public function normalizeDirection(string $direction): string
@@ -39,12 +42,24 @@ final readonly class StructuredFlexLayoutPlanner
      */
     public function measureItem(Node $node, StyleMap $style, array $container): array
     {
+        $text = trim($node->text);
         $width = $this->styleResolver->resolveRelativeDimension(
             $this->styleResolver->styleValue($style, 'width', ''),
             $container['width'],
         );
         if ($width <= 0.0) {
-            $width = $node->tag === 'img' ? 32.0 : 0.0;
+            $width = match (true) {
+                $node->tag === 'img' => 32.0,
+                $text !== '' => $this->fontMetrics->measureString(
+                    $this->styleResolver->resolveFontAlias(
+                        $this->styleResolver->styleValue($style, 'font-family', 'helvetica'),
+                        $this->styleResolver->styleValue($style, 'font-weight', 'normal'),
+                    ),
+                    $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'font-size', '10')),
+                    $text,
+                ),
+                default => 0.0,
+            };
         }
 
         $height = $this->styleResolver->resolveRelativeDimension(
@@ -54,7 +69,7 @@ final readonly class StructuredFlexLayoutPlanner
         if ($height <= 0.0) {
             $height = match (true) {
                 $node->tag === 'img' => 32.0,
-                trim($node->text) !== '' => $this->styleResolver->resolveLineHeight(
+                $text !== '' => $this->styleResolver->resolveLineHeight(
                     $style,
                     $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'font-size', '10')),
                 ),

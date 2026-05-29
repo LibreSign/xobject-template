@@ -9,6 +9,9 @@ namespace LibreSign\XObjectTemplate\Layout;
 
 final readonly class LayoutLine
 {
+    /**
+     * @param array{x: float, y: float, width: float, height: float}|null $clipBox
+     */
     public function __construct(
         public string $text,
         public float $x,
@@ -16,6 +19,8 @@ final readonly class LayoutLine
         public float $fontSize,
         public string $fontAlias,
         public string $rgbColor,
+        public float $wordSpacing = 0.0,
+        public ?array $clipBox = null,
     ) {
     }
 }

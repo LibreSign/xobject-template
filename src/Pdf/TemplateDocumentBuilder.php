@@ -10,7 +10,9 @@ namespace LibreSign\XObjectTemplate\Pdf;
 use Closure;
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Dto\CompileResult;
+use LibreSign\XObjectTemplate\Layout\LayoutDecoration;
 use LibreSign\XObjectTemplate\Layout\LayoutImage;
+use LibreSign\XObjectTemplate\Layout\LayoutLine;
 use LibreSign\XObjectTemplate\Layout\LayoutResult;
 
 final readonly class TemplateDocumentBuilder
@@ -80,18 +82,16 @@ final readonly class TemplateDocumentBuilder
     {
         $stream = ['q'];
 
+        foreach ($layout->decorations as $decoration) {
+            $stream[] = $this->buildDecorationCommand($decoration);
+        }
+
         foreach ($layout->images as $image) {
             $stream[] = $this->buildImageCommand($image);
         }
 
-        $stream[] = 'BT';
-        foreach ($layout->lines as $line) {
-            $stream[] = sprintf('/%s %F Tf', $line->fontAlias, $line->fontSize);
-            $stream[] = $this->colorParser->toPdfRgb($line->rgbColor);
-            $stream[] = sprintf('1 0 0 1 %F %F Tm', $line->x, $line->y);
-            $stream[] = sprintf('(%s) Tj', $this->pdfEscaper->escapeLiteralString($line->text));
-        }
-        $stream[] = 'ET';
+        $this->appendTextCommands($stream, $layout->lines);
+
         $stream[] = 'Q';
 
         return implode("\n", $stream);
@@ -140,13 +140,219 @@ final readonly class TemplateDocumentBuilder
 
     private function buildImageCommand(LayoutImage $image): string
     {
-        return sprintf(
-            'q %F 0 0 %F %F %F cm /%s Do Q',
-            $image->width,
-            $image->height,
-            $image->x,
-            $image->y,
-            $image->alias,
+        if ($image->clipBox === null) {
+            return sprintf(
+                'q %F 0 0 %F %F %F cm /%s Do Q',
+                $image->width,
+                $image->height,
+                $image->x,
+                $image->y,
+                $image->alias,
+            );
+        }
+
+        return implode("\n", [
+            'q',
+            $this->buildClipCommand($image->clipBox),
+            sprintf(
+                '%F 0 0 %F %F %F cm /%s Do',
+                $image->width,
+                $image->height,
+                $image->x,
+                $image->y,
+                $image->alias,
+            ),
+            'Q',
+        ]);
+    }
+
+    /**
+     * @param list<LayoutLine> $lines
+     * @param list<string> $stream
+     */
+    private function appendTextCommands(array &$stream, array $lines): void
+    {
+        if ($lines === []) {
+            return;
+        }
+
+        if ($this->hasClippedText($lines)) {
+            foreach ($lines as $line) {
+                $stream[] = $this->buildTextCommand($line);
+            }
+
+            return;
+        }
+
+        foreach ($this->buildGroupedTextCommands($lines) as $command) {
+            $stream[] = $command;
+        }
+    }
+
+    /**
+     * @param list<LayoutLine> $lines
+     */
+    private function hasClippedText(array $lines): bool
+    {
+        foreach ($lines as $line) {
+            if ($line->clipBox !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<LayoutLine> $lines
+     * @return list<string>
+     */
+    private function buildGroupedTextCommands(array $lines): array
+    {
+        $commands = ['BT'];
+        $currentWordSpacing = 0.0;
+
+        foreach ($lines as $line) {
+            $commands[] = sprintf('/%s %F Tf', $line->fontAlias, $line->fontSize);
+            $commands[] = $this->colorParser->toPdfRgb($line->rgbColor);
+            if ($line->wordSpacing !== $currentWordSpacing) {
+                $commands[] = sprintf('%F Tw', $line->wordSpacing);
+                $currentWordSpacing = $line->wordSpacing;
+            }
+
+            $commands[] = sprintf('1 0 0 1 %F %F Tm', $line->x, $line->y);
+            $commands[] = sprintf('(%s) Tj', $this->pdfEscaper->escapeLiteralString($line->text));
+        }
+
+        $commands[] = 'ET';
+
+        return $commands;
+    }
+
+    private function buildTextCommand(LayoutLine $line): string
+    {
+        $commands = ['q'];
+        if ($line->clipBox !== null) {
+            $commands[] = $this->buildClipCommand($line->clipBox);
+        }
+
+        $commands[] = 'BT';
+        $commands[] = sprintf('/%s %F Tf', $line->fontAlias, $line->fontSize);
+        $commands[] = $this->colorParser->toPdfRgb($line->rgbColor);
+        if ($line->wordSpacing !== 0.0) {
+            $commands[] = sprintf('%F Tw', $line->wordSpacing);
+        }
+
+        $commands[] = sprintf('1 0 0 1 %F %F Tm', $line->x, $line->y);
+        $commands[] = sprintf('(%s) Tj', $this->pdfEscaper->escapeLiteralString($line->text));
+        $commands[] = 'ET';
+        $commands[] = 'Q';
+
+        return implode("\n", $commands);
+    }
+
+    private function buildDecorationCommand(LayoutDecoration $decoration): string
+    {
+        $hasFill = $decoration->fillColor !== null && $decoration->fillColor !== '';
+        $hasStroke = $decoration->strokeColor !== null
+            && $decoration->strokeColor !== ''
+            && $decoration->strokeWidth > 0.0;
+
+        if (!$hasFill && !$hasStroke) {
+            return 'q\nQ';
+        }
+
+        $commands = ['q'];
+        if ($hasFill) {
+            $commands[] = $this->colorParser->toPdfRgb($decoration->fillColor);
+        }
+
+        if ($hasStroke) {
+            $commands[] = $this->colorParser->toPdfStrokeRgb($decoration->strokeColor);
+            $commands[] = sprintf('%F w', $decoration->strokeWidth);
+        }
+
+        $commands[] = $this->buildDecorationPath($decoration);
+        $commands[] = match (true) {
+            $hasFill && $hasStroke => 'B',
+            $hasFill => 'f',
+            default => 'S',
+        };
+        $commands[] = 'Q';
+
+        return implode("\n", $commands);
+    }
+
+    /**
+     * @param array{x: float, y: float, width: float, height: float} $clipBox
+     */
+    private function buildClipCommand(array $clipBox): string
+    {
+        return sprintf('%F %F %F %F re W n', $clipBox['x'], $clipBox['y'], $clipBox['width'], $clipBox['height']);
+    }
+
+    private function buildDecorationPath(LayoutDecoration $decoration): string
+    {
+        $radius = min(
+            max($decoration->borderRadius, 0.0),
+            $decoration->width / 2.0,
+            $decoration->height / 2.0,
         );
+
+        if ($radius <= 0.0) {
+            return sprintf('%F %F %F %F re', $decoration->x, $decoration->y, $decoration->width, $decoration->height);
+        }
+
+        $kappa = 0.5522847498;
+        $control = $radius * $kappa;
+        $left = $decoration->x;
+        $bottom = $decoration->y;
+        $right = $decoration->x + $decoration->width;
+        $top = $decoration->y + $decoration->height;
+
+        return implode("\n", [
+            sprintf('%F %F m', $left + $radius, $bottom),
+            sprintf('%F %F l', $right - $radius, $bottom),
+            sprintf(
+                '%F %F %F %F %F %F c',
+                $right - $radius + $control,
+                $bottom,
+                $right,
+                $bottom + $radius - $control,
+                $right,
+                $bottom + $radius,
+            ),
+            sprintf('%F %F l', $right, $top - $radius),
+            sprintf(
+                '%F %F %F %F %F %F c',
+                $right,
+                $top - $radius + $control,
+                $right - $radius + $control,
+                $top,
+                $right - $radius,
+                $top,
+            ),
+            sprintf('%F %F l', $left + $radius, $top),
+            sprintf(
+                '%F %F %F %F %F %F c',
+                $left + $radius - $control,
+                $top,
+                $left,
+                $top - $radius + $control,
+                $left,
+                $top - $radius,
+            ),
+            sprintf('%F %F l', $left, $bottom + $radius),
+            sprintf(
+                '%F %F %F %F %F %F c',
+                $left,
+                $bottom + $radius - $control,
+                $left + $radius - $control,
+                $bottom,
+                $left + $radius,
+                $bottom,
+            ),
+            'h',
+        ]);
     }
 }

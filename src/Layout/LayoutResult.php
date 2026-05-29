@@ -12,10 +12,12 @@ final readonly class LayoutResult
     /**
      * @param list<LayoutLine> $lines
      * @param list<LayoutImage> $images
+     * @param list<LayoutDecoration> $decorations
      */
     public function __construct(
         public array $lines,
         public array $images,
+        public array $decorations = [],
     ) {
     }
 }
