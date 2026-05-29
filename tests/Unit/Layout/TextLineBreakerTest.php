@@ -10,6 +10,7 @@ namespace LibreSign\XObjectTemplate\Tests\Unit\Layout;
 use LibreSign\XObjectTemplate\Layout\TextLineBreaker;
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class TextLineBreakerTest extends TestCase
 {
@@ -70,6 +71,72 @@ final class TextLineBreakerTest extends TestCase
         );
     }
 
+    public function testWrapAutomaticallyHyphenatesIntoMultipleSegmentsAndLeavesLastSegmentPlain(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(
+            ['ab-', 'cd-', 'efg'],
+            $breaker->wrap('abcdefg', 18.0, 'F5', 10.0, 'auto', 'normal'),
+        );
+    }
+
+    public function testWrapPacksManualSegmentsInOrderAtExactWidthBoundary(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(
+            ['abc-', 'de'],
+            $breaker->wrap("ab\u{00AD}c\u{00AD}de", 24.0, 'F5', 10.0, 'manual', 'normal'),
+        );
+    }
+
+    public function testResolveManualBreaksOnlyRunsForManualSoftHyphenatedWords(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertNull(
+            $this->invokeBreakerMethod($breaker, 'resolveManualBreaks', "ab\u{00AD}cd", 24.0, 'F5', 10.0, 'auto'),
+        );
+        self::assertNull(
+            $this->invokeBreakerMethod($breaker, 'resolveManualBreaks', 'abcd', 24.0, 'F5', 10.0, 'manual'),
+        );
+        self::assertSame(
+            ['ab-', 'cd'],
+            $this->invokeBreakerMethod($breaker, 'resolveManualBreaks', "ab\u{00AD}cd", 18.0, 'F5', 10.0, 'manual'),
+        );
+    }
+
+    public function testPackManualSegmentsContinuesAcrossMultipleOverflowsAndKeepsLastSegmentPlain(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(
+            ['ab-', 'cd-', 'efg'],
+            $this->invokeBreakerMethod($breaker, 'packManualSegments', ['ab', 'cd', 'ef', 'g'], 18.0, 'F5', 10.0),
+        );
+    }
+
+    public function testPackManualSegmentsReturnsFallbackForEmptySegmentList(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(
+            [''],
+            $this->invokeBreakerMethod($breaker, 'packManualSegments', [], 18.0, 'F5', 10.0),
+        );
+    }
+
+    public function testSplitWordsDropsEmptyChunksAndReindexesValues(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame(
+            ['alpha', 'beta'],
+            $this->invokeBreakerMethod($breaker, 'splitWords', "  alpha\n\tbeta  "),
+        );
+    }
+
     public function testWrapFallsBackToSingleCharactersWhenTheFirstAutoSegmentDoesNotFit(): void
     {
         $breaker = new TextLineBreaker(new StandardFontMetrics());
@@ -86,5 +153,19 @@ final class TextLineBreakerTest extends TestCase
         $invalidUtf8 = "\xc3\x28";
 
         self::assertSame([$invalidUtf8], $breaker->wrap($invalidUtf8, 1.0, 'F1', 10.0, 'auto', 'normal'));
+    }
+
+    public function testSplitCharactersReturnsEmptyListForInvalidUtf8(): void
+    {
+        $breaker = new TextLineBreaker(new StandardFontMetrics());
+
+        self::assertSame([], $this->invokeBreakerMethod($breaker, 'splitCharacters', "\xc3\x28"));
+    }
+
+    private function invokeBreakerMethod(TextLineBreaker $breaker, string $method, mixed ...$arguments): mixed
+    {
+        $reflectionMethod = new ReflectionMethod($breaker, $method);
+
+        return $reflectionMethod->invoke($breaker, ...$arguments);
     }
 }
