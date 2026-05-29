@@ -14,6 +14,13 @@ use LibreSign\XObjectTemplate\Pdf\Png\PngParserInterface;
 /** @internal */
 final readonly class PngParser implements PngParserInterface
 {
+    private PngHeaderUnpackerInterface $headerUnpacker;
+
+    public function __construct(?PngHeaderUnpackerInterface $headerUnpacker = null)
+    {
+        $this->headerUnpacker = $headerUnpacker ?? new PhpPngHeaderUnpacker();
+    }
+
     public function parse(string $contents): ParsedPngImage
     {
         $this->assertPngSignature($contents);
@@ -107,10 +114,7 @@ final readonly class PngParser implements PngParserInterface
             throw new InvalidArgumentException('Unable to parse the PNG IHDR chunk.');
         }
 
-        $header = unpack(
-            'Nwidth/Nheight/CbitDepth/CcolorType/Ccompression/Cfilter/Cinterlace',
-            $data,
-        );
+        $header = $this->headerUnpacker->unpack($data);
         if (!is_array($header)) {
             throw new InvalidArgumentException('Unable to parse the PNG IHDR chunk.');
         }
