@@ -181,6 +181,112 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(48.0, $result->decorations[0]->y);
     }
 
+    public function testLayoutTrimsDecorationColorsFromInlineStyles(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: [
+                    'style' => 'width:100;height:20;background-color:  #abcdef  ;border-color:  #123456  ;'
+                        . 'border-width:2',
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame('#abcdef', $result->decorations[0]->fillColor);
+        self::assertSame('#123456', $result->decorations[0]->strokeColor);
+    }
+
+    public function testLayoutCreatesBorderOnlyDecorationWhenStrokeHasPositiveWidth(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'width:100;height:20;border-color:#123456;border-width:2'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertNull($result->decorations[0]->fillColor);
+        self::assertSame('#123456', $result->decorations[0]->strokeColor);
+        self::assertSame(2.0, $result->decorations[0]->strokeWidth);
+    }
+
+    public function testLayoutSkipsBorderOnlyDecorationWhenStrokeWidthIsZero(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'width:100;height:20;border-color:#123456;border-width:0'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(0, $result->decorations);
+    }
+
+    public function testLayoutSkipsDecorationsForZeroWidthFlexItems(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display:flex;width:20;height:20'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: ['style' => 'width:0;height:10;background-color:#abcdef'],
+                    ),
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(0, $result->decorations);
+    }
+
+    public function testLayoutSkipsDecorationsForZeroHeightBlocks(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'width:20;height:0;background-color:#abcdef'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(0, $result->decorations);
+    }
+
+    public function testLayoutClampsDecorationYAtZeroWhenBoxExtendsBelowCanvas(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'position:absolute;left:0;top:70;width:20;height:20;background-color:#abcdef'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame(0.0, $result->decorations[0]->y);
+    }
+
     public function testLayoutAppliesClipBoxesWhenOverflowIsHidden(): void
     {
         $renderer = $this->createRenderer();
@@ -200,6 +306,154 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(['x' => 0.0, 'y' => 68.0, 'width' => 50.0, 'height' => 12.0], $result->lines[0]->clipBox);
     }
 
+    public function testLayoutAppliesClipBoxesWhenOverflowHiddenIsTrimmedAndUppercase(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: 'Wrap this text nicely',
+                attributes: [
+                    'style' => 'width:50;height:12;overflow: HIDDEN ;text-overflow:ellipsis;font-size:10',
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame(['x' => 0.0, 'y' => 68.0, 'width' => 50.0, 'height' => 12.0], $result->lines[0]->clipBox);
+    }
+
+    public function testLayoutDoesNotApplyClipBoxesWhenOverflowHiddenContainerWidthIsZero(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'display:flex;width:20;height:20'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: ['style' => 'overflow:hidden;width:0;height:10'],
+                        children: [$this->imageNode('/clip-width-zero.png', 'width:10;height:10')],
+                    ),
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->images);
+        self::assertNull($result->images[0]->clipBox);
+    }
+
+    public function testLayoutDoesNotApplyClipBoxesWhenOverflowHiddenContainerHeightIsZero(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'width:20;height:0;overflow:hidden'],
+                children: [$this->imageNode('/clip-height-zero.png', 'width:10;height:10')],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->images);
+        self::assertNull($result->images[0]->clipBox);
+    }
+
+    public function testLayoutIntersectsNestedTrimmedUppercaseHiddenClipBoxes(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'overflow: HIDDEN ;width:50;height:40'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: ['style' => 'margin:10 0 0 30;overflow: HIDDEN ;width:40;height:30'],
+                        children: [$this->imageNode('/nested-clip.png', 'width:40;height:30')],
+                    ),
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(['x' => 30.0, 'y' => 40.0, 'width' => 20.0, 'height' => 30.0], $result->images[0]->clipBox);
+    }
+
+    public function testLayoutKeepsZeroWidthForNestedHiddenClipBoxIntersection(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'overflow:hidden;width:20;height:40'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: ['style' => 'margin:0 0 0 30;overflow:hidden;width:10;height:10'],
+                        children: [$this->imageNode('/zero-width-clip.png', 'width:10;height:10')],
+                    ),
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(['x' => 30.0, 'y' => 70.0, 'width' => 0.0, 'height' => 10.0], $result->images[0]->clipBox);
+    }
+
+    public function testLayoutKeepsZeroHeightForNestedHiddenClipBoxIntersection(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'overflow:hidden;width:40;height:20'],
+                children: [
+                    new Node(
+                        tag: 'div',
+                        text: '',
+                        attributes: ['style' => 'margin:30 0 0 0;overflow:hidden;width:10;height:10'],
+                        children: [$this->imageNode('/zero-height-clip.png', 'width:10;height:10')],
+                    ),
+                ],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(['x' => 0.0, 'y' => 50.0, 'width' => 10.0, 'height' => 0.0], $result->images[0]->clipBox);
+    }
+
+    public function testLayoutClampsClipBoxYAtZeroWhenContainerExtendsBelowCanvas(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            new Node(
+                tag: 'div',
+                text: '',
+                attributes: ['style' => 'position:absolute;left:0;top:70;overflow:hidden;width:20;height:20'],
+                children: [$this->imageNode('/below-canvas-clip.png', 'width:20;height:20')],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(['x' => 0.0, 'y' => 0.0, 'width' => 20.0, 'height' => 20.0], $result->images[0]->clipBox);
+    }
+
     public function testLayoutKeepsFixedHeightAndDecorationForClippedFlexContainers(): void
     {
         $renderer = $this->createRenderer();
@@ -213,7 +467,7 @@ final class StructuredLayoutRendererTest extends TestCase
                         . 'background-color:#abcdef',
                 ],
                 children: [
-                    $this->imageNode('/flex.png', 'width:10;height:20'),
+                    $this->imageNode('/flex.png', 'width:10;height:80'),
                 ],
             ),
         ], 120.0, 100.0);
@@ -267,6 +521,34 @@ final class StructuredLayoutRendererTest extends TestCase
         self::assertSame(32.0, $result->images[0]->height);
         self::assertSame(0.0, $result->images[0]->x);
         self::assertSame(0.0, $result->images[0]->y);
+    }
+
+    public function testLayoutFallsBackToDefaultImageSizeWhenResolvedDimensionsAreZero(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            $this->imageNode('/zero-dimension.png', 'width:0;height:0'),
+        ], 100.0, 100.0);
+
+        self::assertCount(1, $result->images);
+        self::assertSame(32.0, $result->images[0]->width);
+        self::assertSame(32.0, $result->images[0]->height);
+        self::assertSame(68.0, $result->images[0]->y);
+    }
+
+    public function testLayoutAssignsSequentialAliasesToRenderedImages(): void
+    {
+        $renderer = $this->createRenderer();
+
+        $result = $renderer->layout([
+            $this->imageNode('/first.png', 'width:10;height:10'),
+            $this->imageNode('/second.png', 'width:10;height:10'),
+        ], 100.0, 100.0);
+
+        self::assertCount(2, $result->images);
+        self::assertSame('Im0', $result->images[0]->alias);
+        self::assertSame('Im1', $result->images[1]->alias);
     }
 
     public function testLayoutKeepsZeroCanvasHeightWhenRenderingTinyText(): void

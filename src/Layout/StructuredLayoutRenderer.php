@@ -401,8 +401,8 @@ final readonly class StructuredLayoutRenderer
         int &$imageCount,
         ?array $activeClipBox,
     ): float {
-        $width = $box['width'] > 0.0 ? $box['width'] : 32.0;
-        $height = $box['height'] > 0.0 ? $box['height'] : 32.0;
+        $width = $box['width'];
+        $height = $box['height'];
 
         $images[] = new LayoutImage(
             alias: 'Im' . $imageCount,
@@ -482,18 +482,21 @@ final readonly class StructuredLayoutRenderer
         float $canvasHeight,
         array &$decorations,
     ): void {
-        $fillColor = trim($this->styleResolver->styleValue($style, 'background-color', ''));
-        $strokeColor = trim($this->styleResolver->styleValue($style, 'border-color', ''));
+        $fillColor = $this->styleResolver->styleValue($style, 'background-color', '');
+        $strokeColor = $this->styleResolver->styleValue($style, 'border-color', '');
         $strokeWidth = $this->styleResolver->toPoints(
             $this->styleResolver->styleValue($style, 'border-width', '0'),
         );
         $borderRadius = $this->styleResolver->toPoints($this->styleResolver->styleValue($style, 'border-radius', '0'));
 
-        if ($fillColor === '' && ($strokeColor === '' || $strokeWidth <= 0.0)) {
+        $hasFill = $fillColor !== '';
+        $hasVisibleStroke = $strokeColor !== '' && $strokeWidth > 0.0;
+
+        if (!$hasFill && !$hasVisibleStroke) {
             return;
         }
 
-        $height = $renderedHeight > 0.0 ? $renderedHeight : $box['height'];
+        $height = max($renderedHeight, $box['height']);
         if ($box['width'] <= 0.0 || $height <= 0.0) {
             return;
         }
@@ -503,7 +506,7 @@ final readonly class StructuredLayoutRenderer
             y: max($canvasHeight - ($box['y'] + $height), 0.0),
             width: $box['width'],
             height: $height,
-            fillColor: $fillColor !== '' ? $fillColor : null,
+            fillColor: $hasFill ? $fillColor : null,
             strokeColor: $strokeColor !== '' ? $strokeColor : null,
             strokeWidth: $strokeWidth,
             borderRadius: $borderRadius,
@@ -519,7 +522,7 @@ final readonly class StructuredLayoutRenderer
     {
         $currentClipBox = $activeClipBox;
         if (
-            strtolower(trim($this->styleResolver->styleValue($style, 'overflow', 'visible'))) === 'hidden'
+            strtolower($this->styleResolver->styleValue($style, 'overflow', 'visible')) === 'hidden'
             && $box['width'] > 0.0
             && $box['height'] > 0.0
         ) {
