@@ -55,7 +55,15 @@ final readonly class StandardFontMetrics
 
     public function measureString(string $fontAlias, float $fontSize, string $text): float
     {
-        if ($text === '' || $fontSize <= 0.0) {
+        if ($text === '') {
+            return 0.0;
+        }
+
+        if ($fontSize === 0.0) {
+            return 0.0;
+        }
+
+        if (max($fontSize, 0.0) !== $fontSize) {
             return 0.0;
         }
 
