@@ -313,6 +313,7 @@ final class SinglePagePdfExporterTest extends TestCase
     {
         $exporter = new SinglePagePdfExporter();
 
+        self::assertSame('3', $this->invokeExporterMethod($exporter, 'serializeValue', 3));
         self::assertSame('12.5', $this->invokeExporterMethod($exporter, 'serializeValue', 12.5));
         self::assertSame(
             '[/Name 2 0 R (text) true 3]',
@@ -333,6 +334,14 @@ final class SinglePagePdfExporterTest extends TestCase
             (string) $rendered,
         );
         self::assertStringContainsString("xref\n0 3\n", $rendered);
+        self::assertStringContainsString(
+            sprintf(
+                "0000000000 65535 f \n%010d 00000 n \n%010d 00000 n \n",
+                strpos((string) $rendered, "1 0 obj\n"),
+                strpos((string) $rendered, "2 0 obj\n"),
+            ),
+            (string) $rendered,
+        );
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('PDF object 2 was reserved but not written.');
