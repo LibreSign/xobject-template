@@ -361,6 +361,40 @@ final class LinearLayoutEngineTest extends TestCase
         self::assertSame('#123456', $result->decorations[0]->strokeColor);
     }
 
+    public function testLayoutRoutesBackgroundColorAloneToStructuredRenderer(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: 'Tinted',
+                attributes: ['style' => 'background-color:#ddeeff;width:80;height:24;font-size:10'],
+            ),
+        ], 120.0, 80.0);
+
+        self::assertCount(1, $result->decorations);
+        self::assertSame('#ddeeff', $result->decorations[0]->fillColor);
+        self::assertNull($result->decorations[0]->strokeColor);
+    }
+
+    public function testLayoutRoutesPercentageWidthToStructuredRenderer(): void
+    {
+        $engine = new LinearLayoutEngine();
+
+        $result = $engine->layout([
+            new Node(
+                tag: 'div',
+                text: 'Half width',
+                attributes: ['style' => 'width:50%;height:20;text-align:right;font-size:10'],
+            ),
+        ], 200.0, 80.0);
+
+        self::assertCount(1, $result->lines);
+        self::assertSame('Half width', $result->lines[0]->text);
+        self::assertGreaterThan(50.0, $result->lines[0]->x);
+    }
+
     public function testLayoutRoutesOverflowEllipsisRulesToStructuredRenderer(): void
     {
         $engine = new LinearLayoutEngine();

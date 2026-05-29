@@ -151,6 +151,6 @@ final readonly class LayoutStyleResolver
 
     private function extractNumericValue(string $value): float
     {
-        return (float) preg_replace('/[^0-9.\-]/', '', strtolower($value));
+        return (float) preg_replace('/[^0-9.\-]/', '', $value);
     }
 }

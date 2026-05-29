@@ -67,10 +67,10 @@ final readonly class LinearLayoutEngine
 
             $boxWidth = $this->toPoints($this->styleValue($style, 'width', '0'));
             if ($boxWidth <= 0) {
-                $boxWidth = $width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'];
-                if ($boxWidth < 0.0) {
-                    $boxWidth = 0.0;
-                }
+                $boxWidth = max(
+                    $width - $margin['left'] - $margin['right'] - $padding['left'] - $padding['right'],
+                    $this->toPoints('0'),
+                );
             }
             $leftBase = $margin['left'] + $padding['left'];
 
@@ -184,14 +184,7 @@ final readonly class LinearLayoutEngine
             return true;
         }
 
-        $justifyContent = strtolower($this->styleValue($style, 'justify-content', ''));
-        if (in_array($justifyContent, ['center', 'flex-end', 'space-between'], true)) {
-            return true;
-        }
-
-        $alignItems = strtolower($this->styleValue($style, 'align-items', ''));
-
-        return in_array($alignItems, ['center', 'flex-end'], true);
+        return false;
     }
 
     private function styleValue(StyleMap $style, string $property, string $default): string
