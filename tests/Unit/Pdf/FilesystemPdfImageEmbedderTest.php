@@ -78,6 +78,41 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         self::assertSame('/FlateDecode', $image->softMask->dictionary['Filter']);
     }
 
+    public function testEmbedSupportsOpaqueGrayscalePng(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
+            width: 1,
+            height: 1,
+            colorType: 0,
+            scanlines: "\x00\x80",
+        ));
+
+        $image = $embedder->embed($pngPath);
+
+        self::assertSame('/DeviceGray', $image->dictionary['ColorSpace']);
+        self::assertNull($image->softMask);
+        self::assertSame("\x00\x80", gzuncompress($image->stream));
+    }
+
+    public function testEmbedCreatesSoftMaskForGrayAlphaPng(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
+            width: 1,
+            height: 1,
+            colorType: 4,
+            scanlines: "\x00\x80\x40",
+        ));
+
+        $image = $embedder->embed($pngPath);
+
+        self::assertSame('/DeviceGray', $image->dictionary['ColorSpace']);
+        self::assertNotNull($image->softMask);
+        self::assertSame("\x00\x80", gzuncompress($image->stream));
+        self::assertSame("\x00\x40", gzuncompress($image->softMask->stream));
+    }
+
     #[DataProvider('rgbaFilterProvider')]
     public function testEmbedSupportsAllRgbaPredictorFilters(int $filterType): void
     {
@@ -159,6 +194,33 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         self::assertNull($image->softMask);
     }
 
+    #[DataProvider('jpegChannelProvider')]
+    public function testEmbedJpegMapsChannelMetadataToPdfColorSpaces(
+        int|string $channels,
+        string $expectedColorSpace,
+    ): void {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'embedJpeg');
+
+        $image = $method->invoke($embedder, 'jpeg-binary', [0 => 4, 1 => 3, 'channels' => $channels]);
+
+        self::assertSame($expectedColorSpace, $image->dictionary['ColorSpace']);
+        self::assertSame(4, $image->dictionary['Width']);
+        self::assertSame(3, $image->dictionary['Height']);
+        self::assertSame('jpeg-binary', $image->stream);
+    }
+
+    public function testEmbedJpegRejectsMissingDimensions(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $method = new ReflectionMethod($embedder, 'embedJpeg');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('JPEG metadata must expose width and height.');
+
+        $method->invoke($embedder, 'jpeg-binary', ['channels' => 3]);
+    }
+
     public function testEmbedRejectsUnreadableFiles(): void
     {
         $embedder = new FilesystemPdfImageEmbedder();
@@ -194,6 +256,98 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         $this->expectExceptionMessage('Unsupported PNG row filter 5.');
 
         $embedder->embed($pngPath);
+    }
+
+    public function testEmbedRejectsUnsupportedPngCompressionAndFilterMethods(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $compressionPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
+            width: 1,
+            height: 1,
+            colorType: 2,
+            scanlines: "\x00\xff\x00\x00",
+            compression: 1,
+        ));
+
+        try {
+            $embedder->embed($compressionPath);
+            self::fail('Expected unsupported compression to be rejected.');
+        } catch (\InvalidArgumentException $exception) {
+            self::assertSame('Unsupported PNG compression or filter method.', $exception->getMessage());
+        }
+
+        $filterPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
+            width: 1,
+            height: 1,
+            colorType: 2,
+            scanlines: "\x00\xff\x00\x00",
+            filter: 1,
+        ));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported PNG compression or filter method.');
+
+        $embedder->embed($filterPath);
+    }
+
+    public function testEmbedRejectsUnsupportedPngColorTypes(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPng(
+            width: 1,
+            height: 1,
+            colorType: 3,
+            scanlines: "\x00\x00",
+        ));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported PNG color type 3.');
+
+        $embedder->embed($pngPath);
+    }
+
+    public function testEmbedConcatenatesMultipleIdatChunks(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $compressed = PngFixtureFactory::compressScanlines("\x00\xff\x00\x00");
+        $splitAt = intdiv(strlen($compressed), 2);
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createPngFromCompressedIdatChunks(
+            width: 1,
+            height: 1,
+            colorType: 2,
+            idatChunks: [
+                substr($compressed, 0, $splitAt),
+                substr($compressed, $splitAt),
+            ],
+        ));
+
+        $image = $embedder->embed($pngPath);
+
+        self::assertSame($compressed, $image->stream);
+    }
+
+    public function testEmbedSeparatesMultiRowRgbaPixelsIntoColorAndAlphaStreams(): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder();
+        $pngPath = $this->createTemporaryFile('png', PngFixtureFactory::createRgbaPngFromPixelRenderer(
+            width: 2,
+            height: 2,
+            pixelRenderer: static fn (int $x, int $y): array => match ([$x, $y]) {
+                [0, 0] => [255, 0, 0, 64],
+                [1, 0] => [0, 255, 0, 128],
+                [0, 1] => [0, 0, 255, 192],
+                default => [255, 255, 255, 255],
+            },
+        ));
+
+        $image = $embedder->embed($pngPath);
+
+        self::assertNotNull($image->softMask);
+        self::assertSame(
+            "\x00\xff\x00\x00\x00\xff\x00\x00\x00\x00\xff\xff\xff\xff",
+            gzuncompress($image->stream),
+        );
+        self::assertSame("\x00\x40\x80\x00\xc0\xff", gzuncompress($image->softMask->stream));
     }
 
     public function testUnfilterPngRowSupportsAverageFilterWithMultiPixelContext(): void
@@ -248,6 +402,17 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         yield 'up filter' => ['filterType' => 2];
         yield 'average filter' => ['filterType' => 3];
         yield 'paeth filter' => ['filterType' => 4];
+    }
+
+    /**
+     * @return iterable<string, array{channels: int|string, expectedColorSpace: string}>
+     */
+    public static function jpegChannelProvider(): iterable
+    {
+        yield 'grayscale' => ['channels' => 1, 'expectedColorSpace' => '/DeviceGray'];
+        yield 'rgb default' => ['channels' => 3, 'expectedColorSpace' => '/DeviceRGB'];
+        yield 'cmyk' => ['channels' => 4, 'expectedColorSpace' => '/DeviceCMYK'];
+        yield 'invalid channel metadata defaults to rgb' => ['channels' => '4', 'expectedColorSpace' => '/DeviceRGB'];
     }
 
     /**
