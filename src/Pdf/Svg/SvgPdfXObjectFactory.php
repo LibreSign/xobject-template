@@ -554,77 +554,43 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         ]);
     }
 
-    /** @param array<string, string> $classFills */
     /**
-     * @SuppressWarnings(PHPMD.CyclomaticComplexity,PHPMD.NPathComplexity)
+     * @param array<string, string> $classFills
      */
     private function resolveFillColor(DOMElement $element, array $classFills): ?string
     {
-        $inlineFill = $this->normalizeColor($element->getAttribute('fill'));
-        if ($inlineFill === 'none') {
-            return null;
-        }
-
-        if ($inlineFill !== null) {
-            return $inlineFill;
-        }
-
-        $inlineStyle = $this->extractColorFromStyleAttribute($element->getAttribute('style'), 'fill');
-        if ($inlineStyle === 'none') {
-            return null;
-        }
-
-        if ($inlineStyle !== null) {
-            return $inlineStyle;
-        }
-
-        $classes = preg_split('/\s+/', trim($element->getAttribute('class')));
-        if (is_array($classes)) {
-            foreach ($classes as $class) {
-                if ($class !== '' && isset($classFills[$class])) {
-                    $cv = $classFills[$class];
-                    return $cv === 'none' ? null : $cv;
-                }
-            }
-        }
-
-        // Inherit fill from nearest ancestor <g> that declares one
-        $ancestor = $element->parentNode;
-        while ($ancestor instanceof DOMElement) {
-            $ancestorFill = $this->normalizeColor($ancestor->getAttribute('fill'));
-            if ($ancestorFill !== null) {
-                return $ancestorFill === 'none' ? null : $ancestorFill;
-            }
-
-            $ancestorStyleFill = $this->extractColorFromStyleAttribute($ancestor->getAttribute('style'), 'fill');
-            if ($ancestorStyleFill !== null) {
-                return $ancestorStyleFill === 'none' ? null : $ancestorStyleFill;
-            }
-
-            $ancestor = $ancestor->parentNode;
-        }
-
-        return '#000000';
+        return $this->resolveColorAttribute($element, 'fill', $classFills, '#000000');
     }
 
     /**
      * @param array<string, string> $classStrokes
      */
-    /**
-     * @SuppressWarnings(PHPMD.CyclomaticComplexity,PHPMD.NPathComplexity)
-     */
     private function resolveStrokeColor(DOMElement $element, array $classStrokes): ?string
     {
-        $inlineStroke = $this->normalizeColor($element->getAttribute('stroke'));
-        if ($inlineStroke === 'none') {
+        return $this->resolveColorAttribute($element, 'stroke', $classStrokes, null);
+    }
+
+    /**
+     * @param array<string, string> $classColors
+     */
+    private function resolveColorAttribute(
+        DOMElement $element,
+        string $attributeName,
+        array $classColors,
+        ?string $defaultFallback,
+    ): ?string {
+        // Check inline attribute
+        $inlineColor = $this->normalizeColor($element->getAttribute($attributeName));
+        if ($inlineColor === 'none') {
             return null;
         }
 
-        if ($inlineStroke !== null) {
-            return $inlineStroke;
+        if ($inlineColor !== null) {
+            return $inlineColor;
         }
 
-        $inlineStyle = $this->extractColorFromStyleAttribute($element->getAttribute('style'), 'stroke');
+        // Check inline style attribute
+        $inlineStyle = $this->extractColorFromStyleAttribute($element->getAttribute('style'), $attributeName);
         if ($inlineStyle === 'none') {
             return null;
         }
@@ -633,27 +599,34 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             return $inlineStyle;
         }
 
+        // Check CSS classes
         $classes = preg_split('/\s+/', trim($element->getAttribute('class')));
         if (is_array($classes)) {
             foreach ($classes as $class) {
-                if ($class !== '' && isset($classStrokes[$class])) {
-                    return $classStrokes[$class] === 'none' ? null : $classStrokes[$class];
+                if ($class !== '' && isset($classColors[$class])) {
+                    $classColor = $classColors[$class];
+                    return $classColor === 'none' ? null : $classColor;
                 }
             }
         }
 
-        // Inherit stroke from nearest ancestor <g> that declares one
+        // Check ancestors
         $ancestor = $element->parentNode;
         while ($ancestor instanceof DOMElement) {
-            $ancestorStroke = $this->normalizeColor($ancestor->getAttribute('stroke'));
-            if ($ancestorStroke !== null) {
-                return $ancestorStroke === 'none' ? null : $ancestorStroke;
+            $ancestorColor = $this->normalizeColor($ancestor->getAttribute($attributeName));
+            if ($ancestorColor !== null) {
+                return $ancestorColor === 'none' ? null : $ancestorColor;
+            }
+
+            $ancestorStyle = $this->extractColorFromStyleAttribute($ancestor->getAttribute('style'), $attributeName);
+            if ($ancestorStyle !== null) {
+                return $ancestorStyle === 'none' ? null : $ancestorStyle;
             }
 
             $ancestor = $ancestor->parentNode;
         }
 
-        return null;
+        return $defaultFallback;
     }
 
     private function resolveStrokeWidth(DOMElement $element): float
