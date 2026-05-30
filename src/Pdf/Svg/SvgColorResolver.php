@@ -92,17 +92,21 @@ final class SvgColorResolver
         }
 
         // Check CSS classes
-        $classes = preg_split('/\s+/', trim($element->getAttribute('class')));
-        if (is_array($classes)) {
-            foreach ($classes as $class) {
-                if ($class !== '' && isset($classColors[$class])) {
-                    $classColor = $classColors[$class];
-                    return $classColor === 'none' ? null : $classColor;
-                }
+        $classes = preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($classes as $class) {
+            if (isset($classColors[$class])) {
+                return $classColors[$class] === 'none' ? null : $classColors[$class];
             }
         }
 
-        // Check ancestors
+        return $this->checkAncestorForColor($element, $attributeName, $defaultFallback);
+    }
+
+    /**
+     * Walk ancestor elements looking for an inherited color value.
+     */
+    private function checkAncestorForColor(DOMElement $element, string $attributeName, ?string $defaultFallback): ?string
+    {
         $ancestor = $element->parentNode;
         while ($ancestor instanceof DOMElement) {
             $ancestorColor = $this->normalizeColor($ancestor->getAttribute($attributeName));
