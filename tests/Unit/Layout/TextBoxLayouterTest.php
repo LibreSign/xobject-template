@@ -11,6 +11,7 @@ use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Layout\LayoutStyleResolver;
 use LibreSign\XObjectTemplate\Layout\TextBoxLayouter;
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class TextBoxLayouterTest extends TestCase
@@ -24,17 +25,82 @@ final class TextBoxLayouterTest extends TestCase
         yield 'right' => ['right'];
     }
 
+    /**
+     * @return iterable<string, array{0: string}>
+     */
+    public static function justifyStyleProvider(): iterable
+    {
+        yield 'normalized justify' => ['font-size:10;text-align:justify'];
+        yield 'uppercase trimmed justify' => ['font-size:10;text-align: JUSTIFY '];
+    }
+
+    /**
+     * @return iterable<string, array{0: string}>
+     */
+    public static function autoHyphenationStyleProvider(): iterable
+    {
+        yield 'normalized auto hyphenation' => ['font-size:10;hyphens:auto'];
+        yield 'uppercase trimmed auto hyphenation' => ['font-size:10;hyphens: AUTO '];
+    }
+
+    /**
+     * @return iterable<string, array{inlineStyle: string, expectedText: string, expectedTruncated: bool}>
+     */
+    public static function clipOverflowProvider(): iterable
+    {
+        yield 'clip with nowrap keeps full text' => [
+            'inlineStyle' => 'font-size:10;overflow:hidden;text-overflow:clip;white-space:nowrap;height:12',
+            'expectedText' => 'Wrap this text nicely',
+            'expectedTruncated' => false,
+        ];
+
+        yield 'clip with wrapping truncates without ellipsis' => [
+            'inlineStyle' => 'font-size:10;overflow:hidden;text-overflow:clip;height:12',
+            'expectedText' => 'Wrap this',
+            'expectedTruncated' => true,
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{inlineStyle: string}>
+     */
+    public static function singleLineEllipsisProvider(): iterable
+    {
+        yield 'ellipsis with nowrap' => [
+            'inlineStyle' => 'font-size:10;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;height:12',
+        ];
+
+        yield 'ellipsis with wrapping' => [
+            'inlineStyle' => 'font-size:10;overflow:hidden;text-overflow:ellipsis;height:12',
+        ];
+
+        yield 'uppercase trimmed overflow and ellipsis' => [
+            'inlineStyle' => 'font-size:10;overflow: HIDDEN ;text-overflow: ELLIPSIS ;height:12',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{
+     *     clipBox: array{x: float, y: float, width: float, height: float},
+     *     expectedClipBox: array{x: float, y: float, width: float, height: float}
+     * }>
+     */
+    public static function providedClipBoxProvider(): iterable
+    {
+        yield 'preserves clip box within canvas' => [
+            'clipBox' => ['x' => 5.0, 'y' => 6.0, 'width' => 30.0, 'height' => 8.0],
+            'expectedClipBox' => ['x' => 5.0, 'y' => 86.0, 'width' => 30.0, 'height' => 8.0],
+        ];
+
+        yield 'clamps clip box below canvas to zero' => [
+            'clipBox' => ['x' => 5.0, 'y' => 95.0, 'width' => 30.0, 'height' => 8.0],
+            'expectedClipBox' => ['x' => 5.0, 'y' => 0.0, 'width' => 30.0, 'height' => 8.0],
+        ];
+    }
+
     public function testLayoutWrapsTextIntoMultipleMeasuredLines(): void
     {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse('font-size:10');
-
-        $result = $layouter->layout(
-            'Wrap this text',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 0.0],
-            100.0,
-        );
+        $result = $this->layoutWrappedText();
 
         self::assertCount(2, $result['lines']);
         self::assertSame('Wrap this', $result['lines'][0]->text);
@@ -45,15 +111,7 @@ final class TextBoxLayouterTest extends TestCase
 
     public function testLayoutUsesPdfCanvasCoordinatesForWrappedLines(): void
     {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse('font-size:10');
-
-        $result = $layouter->layout(
-            'Wrap this text',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 0.0],
-            100.0,
-        );
+        $result = $this->layoutWrappedText();
 
         self::assertCount(2, $result['lines']);
         self::assertSame(88.0, $result['lines'][0]->y);
@@ -93,70 +151,16 @@ final class TextBoxLayouterTest extends TestCase
         self::assertFalse($result['truncated']);
     }
 
-    public function testLayoutAddsWordSpacingOnlyToIntermediateJustifiedLines(): void
+    #[DataProvider('justifyStyleProvider')]
+    public function testLayoutAddsWordSpacingOnlyToIntermediateJustifiedLines(string $inlineStyle): void
     {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse('font-size:10;text-align:justify');
-
-        $result = $layouter->layout(
-            'Wrap this text nicely',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 0.0],
-            100.0,
-        );
-
-        self::assertCount(2, $result['lines']);
-        self::assertGreaterThan(0.0, $result['lines'][0]->wordSpacing);
-        self::assertSame(0.0, $result['lines'][1]->wordSpacing);
+        $this->assertIntermediateJustifiedLineSpacing($inlineStyle);
     }
 
-    public function testLayoutSupportsUppercaseTrimmedJustifyAlignment(): void
+    #[DataProvider('autoHyphenationStyleProvider')]
+    public function testLayoutHyphenatesLongWordsWhenAutoIsEnabled(string $inlineStyle): void
     {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse('font-size:10;text-align: JUSTIFY ');
-
-        $result = $layouter->layout(
-            'Wrap this text nicely',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 0.0],
-            100.0,
-        );
-
-        self::assertCount(2, $result['lines']);
-        self::assertGreaterThan(0.0, $result['lines'][0]->wordSpacing);
-        self::assertSame(0.0, $result['lines'][1]->wordSpacing);
-    }
-
-    public function testLayoutHyphenatesLongWordsWhenAutoIsEnabled(): void
-    {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse('font-size:10;hyphens:auto');
-
-        $result = $layouter->layout(
-            'Supercalifragilistic',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 35.0, 'height' => 0.0],
-            100.0,
-        );
-
-        self::assertGreaterThan(1, count($result['lines']));
-        self::assertStringEndsWith('-', $result['lines'][0]->text);
-    }
-
-    public function testLayoutSupportsUppercaseTrimmedAutoHyphenation(): void
-    {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse('font-size:10;hyphens: AUTO ');
-
-        $result = $layouter->layout(
-            'Supercalifragilistic',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 35.0, 'height' => 0.0],
-            100.0,
-        );
-
-        self::assertGreaterThan(1, count($result['lines']));
-        self::assertStringEndsWith('-', $result['lines'][0]->text);
+        $this->assertAutoHyphenation($inlineStyle);
     }
 
     public function testLayoutUsesManualSoftHyphenHints(): void
@@ -210,8 +214,11 @@ final class TextBoxLayouterTest extends TestCase
         self::assertFalse($result['truncated']);
     }
 
-    public function testLayoutPreservesProvidedClipBoxWhenOverflowIsHidden(): void
-    {
+    #[DataProvider('providedClipBoxProvider')]
+    public function testLayoutTransformsProvidedClipBoxForCanvasCoordinates(
+        array $clipBox,
+        array $expectedClipBox,
+    ): void {
         $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
         $style = (new InlineStyleParser())->parse('font-size:10;overflow:hidden;text-overflow:ellipsis;height:12');
 
@@ -220,28 +227,11 @@ final class TextBoxLayouterTest extends TestCase
             $style,
             ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 12.0],
             100.0,
-            ['x' => 5.0, 'y' => 6.0, 'width' => 30.0, 'height' => 8.0],
+            $clipBox,
         );
 
         self::assertCount(1, $result['lines']);
-        self::assertSame(['x' => 5.0, 'y' => 86.0, 'width' => 30.0, 'height' => 8.0], $result['lines'][0]->clipBox);
-    }
-
-    public function testLayoutClampsProvidedClipBoxBelowCanvasToZero(): void
-    {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse('font-size:10;overflow:hidden;text-overflow:ellipsis;height:12');
-
-        $result = $layouter->layout(
-            'Wrap this text nicely',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 12.0],
-            100.0,
-            ['x' => 5.0, 'y' => 95.0, 'width' => 30.0, 'height' => 8.0],
-        );
-
-        self::assertCount(1, $result['lines']);
-        self::assertSame(['x' => 5.0, 'y' => 0.0, 'width' => 30.0, 'height' => 8.0], $result['lines'][0]->clipBox);
+        self::assertSame($expectedClipBox, $result['lines'][0]->clipBox);
     }
 
     public function testLayoutDoesNotTruncateWhenOverflowIsHiddenButHeightIsZero(): void
@@ -261,12 +251,14 @@ final class TextBoxLayouterTest extends TestCase
         self::assertNull($result['lines'][0]->clipBox);
     }
 
-    public function testLayoutDoesNotAddEllipsisWhenTextOverflowIsClip(): void
-    {
+    #[DataProvider('clipOverflowProvider')]
+    public function testLayoutHandlesClipOverflowWithoutAddingEllipsis(
+        string $inlineStyle,
+        string $expectedText,
+        bool $expectedTruncated,
+    ): void {
         $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse(
-            'font-size:10;overflow:hidden;text-overflow:clip;white-space:nowrap;height:12',
-        );
+        $style = (new InlineStyleParser())->parse($inlineStyle);
 
         $result = $layouter->layout(
             'Wrap this text nicely',
@@ -276,47 +268,14 @@ final class TextBoxLayouterTest extends TestCase
         );
 
         self::assertCount(1, $result['lines']);
-        self::assertFalse($result['truncated']);
-        self::assertSame('Wrap this text nicely', $result['lines'][0]->text);
+        self::assertSame($expectedTruncated, $result['truncated']);
+        self::assertSame($expectedText, $result['lines'][0]->text);
     }
 
-    public function testLayoutDoesNotAddEllipsisWhenTruncationUsesClipOverflow(): void
+    #[DataProvider('singleLineEllipsisProvider')]
+    public function testLayoutTruncatesWithEllipsisUsingSupportedStyleVariants(string $inlineStyle): void
     {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse(
-            'font-size:10;overflow:hidden;text-overflow:clip;height:12',
-        );
-
-        $result = $layouter->layout(
-            'Wrap this text nicely',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 12.0],
-            100.0,
-        );
-
-        self::assertCount(1, $result['lines']);
-        self::assertTrue($result['truncated']);
-        self::assertSame('Wrap this', $result['lines'][0]->text);
-    }
-
-    public function testLayoutAddsEllipsisToSingleNowrapLineThatOverflows(): void
-    {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse(
-            'font-size:10;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;height:12',
-        );
-
-        $result = $layouter->layout(
-            'Wrap this text nicely',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 12.0],
-            100.0,
-        );
-
-        self::assertCount(1, $result['lines']);
-        self::assertTrue($result['truncated']);
-        self::assertStringEndsWith('...', $result['lines'][0]->text);
-        self::assertSame(['x' => 0.0, 'y' => 88.0, 'width' => 50.0, 'height' => 12.0], $result['lines'][0]->clipBox);
+        $this->assertSingleLineEllipsisTruncation($inlineStyle);
     }
 
     public function testLayoutDoesNotAddEllipsisWhenNowrapLineFitsExactly(): void
@@ -339,46 +298,6 @@ final class TextBoxLayouterTest extends TestCase
         self::assertCount(1, $result['lines']);
         self::assertFalse($result['truncated']);
         self::assertSame($text, $result['lines'][0]->text);
-    }
-
-    public function testLayoutTruncatesWithEllipsisWhenOverflowIsHidden(): void
-    {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse(
-            'font-size:10;overflow:hidden;text-overflow:ellipsis;height:12',
-        );
-
-        $result = $layouter->layout(
-            'Wrap this text nicely',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 12.0],
-            100.0,
-        );
-
-        self::assertCount(1, $result['lines']);
-        self::assertTrue($result['truncated']);
-        self::assertStringEndsWith('...', $result['lines'][0]->text);
-        self::assertSame(['x' => 0.0, 'y' => 88.0, 'width' => 50.0, 'height' => 12.0], $result['lines'][0]->clipBox);
-    }
-
-    public function testLayoutTruncatesWithUppercaseTrimmedOverflowAndEllipsis(): void
-    {
-        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
-        $style = (new InlineStyleParser())->parse(
-            'font-size:10;overflow: HIDDEN ;text-overflow: ELLIPSIS ;height:12',
-        );
-
-        $result = $layouter->layout(
-            'Wrap this text nicely',
-            $style,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 12.0],
-            100.0,
-        );
-
-        self::assertCount(1, $result['lines']);
-        self::assertTrue($result['truncated']);
-        self::assertStringEndsWith('...', $result['lines'][0]->text);
-        self::assertSame(['x' => 0.0, 'y' => 88.0, 'width' => 50.0, 'height' => 12.0], $result['lines'][0]->clipBox);
     }
 
     public function testLayoutTruncatesToTwoVisibleLinesWhenHeightRoundsUp(): void
@@ -478,9 +397,7 @@ final class TextBoxLayouterTest extends TestCase
         self::assertSame(0.0, $result['lines'][0]->wordSpacing);
     }
 
-    /**
-     * @dataProvider alignmentProvider
-     */
+    #[DataProvider('alignmentProvider')]
     public function testLayoutResolvesAlignedXPositions(string $alignment): void
     {
         $fontMetrics = new StandardFontMetrics();
@@ -505,9 +422,7 @@ final class TextBoxLayouterTest extends TestCase
         self::assertEqualsWithDelta($expectedX, $line->x, 0.0001);
     }
 
-    /**
-     * @dataProvider alignmentProvider
-     */
+    #[DataProvider('alignmentProvider')]
     public function testLayoutClampsOverflowedAlignedLineToBoxX(string $alignment): void
     {
         $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
@@ -522,5 +437,72 @@ final class TextBoxLayouterTest extends TestCase
 
         self::assertCount(1, $result['lines']);
         self::assertSame(7.0, $result['lines'][0]->x);
+    }
+
+    private function assertAutoHyphenation(string $inlineStyle): void
+    {
+        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
+        $style = (new InlineStyleParser())->parse($inlineStyle);
+
+        $result = $layouter->layout(
+            'Supercalifragilistic',
+            $style,
+            ['x' => 0.0, 'y' => 0.0, 'width' => 35.0, 'height' => 0.0],
+            100.0,
+        );
+
+        self::assertGreaterThan(1, count($result['lines']));
+        self::assertStringEndsWith('-', $result['lines'][0]->text);
+    }
+
+    private function assertIntermediateJustifiedLineSpacing(string $inlineStyle): void
+    {
+        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
+        $style = (new InlineStyleParser())->parse($inlineStyle);
+
+        $result = $layouter->layout(
+            'Wrap this text nicely',
+            $style,
+            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 0.0],
+            100.0,
+        );
+
+        self::assertCount(2, $result['lines']);
+        self::assertGreaterThan(0.0, $result['lines'][0]->wordSpacing);
+        self::assertSame(0.0, $result['lines'][1]->wordSpacing);
+    }
+
+    /**
+     * @return array{lines: list<\LibreSign\XObjectTemplate\Layout\LayoutLine>, consumedHeight: float, truncated: bool}
+     */
+    private function layoutWrappedText(): array
+    {
+        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
+        $style = (new InlineStyleParser())->parse('font-size:10');
+
+        return $layouter->layout(
+            'Wrap this text',
+            $style,
+            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 0.0],
+            100.0,
+        );
+    }
+
+    private function assertSingleLineEllipsisTruncation(string $inlineStyle): void
+    {
+        $layouter = new TextBoxLayouter(new LayoutStyleResolver(), new StandardFontMetrics());
+        $style = (new InlineStyleParser())->parse($inlineStyle);
+
+        $result = $layouter->layout(
+            'Wrap this text nicely',
+            $style,
+            ['x' => 0.0, 'y' => 0.0, 'width' => 50.0, 'height' => 12.0],
+            100.0,
+        );
+
+        self::assertCount(1, $result['lines']);
+        self::assertTrue($result['truncated']);
+        self::assertStringEndsWith('...', $result['lines'][0]->text);
+        self::assertSame(['x' => 0.0, 'y' => 88.0, 'width' => 50.0, 'height' => 12.0], $result['lines'][0]->clipBox);
     }
 }

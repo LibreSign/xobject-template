@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 LibreSign
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-name: duplication
+name: test-integration
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
     branches: [main]
 
 jobs:
-  duplication:
+  test-integration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -23,5 +23,5 @@ jobs:
         with:
           php-version: ${{ steps.php_min.outputs.version }}
       - run: composer install --no-interaction --prefer-dist
-      - run: composer bin phpcpd install --no-interaction --prefer-dist
-      - run: composer run duplication:check
+      - run: composer bin phpunit install --no-interaction --prefer-dist
+      - run: composer run test:integration

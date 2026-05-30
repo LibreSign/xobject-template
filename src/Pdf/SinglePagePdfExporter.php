@@ -14,9 +14,13 @@ final readonly class SinglePagePdfExporter
 {
     private const PDF_HEADER = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
 
+    private CompileResultResourceExtractor $resourceExtractor;
+
     public function __construct(
         private PdfImageEmbedderInterface $imageEmbedder = new FilesystemPdfImageEmbedder(),
+        ?CompileResultResourceExtractor $resourceExtractor = null,
     ) {
+        $this->resourceExtractor = $resourceExtractor ?? new CompileResultResourceExtractor();
     }
 
     public function export(CompileResult $result): string
@@ -36,8 +40,14 @@ final readonly class SinglePagePdfExporter
         $pageContentReference = $this->reserveObject($objects);
         $formReference = $this->reserveObject($objects);
 
-        $fontReferences = $this->createFontObjects($objects, $result->resources['Font'] ?? []);
-        $imageReferences = $this->createImageObjects($objects, $result->resources['XObject'] ?? []);
+        $fontReferences = $this->createFontObjects(
+            $objects,
+            $this->resourceExtractor->extract($result, 'Font', 'Font resource "%s" must be an array.'),
+        );
+        $imageReferences = $this->createImageObjects(
+            $objects,
+            $this->resourceExtractor->extract($result, 'XObject', 'XObject resource "%s" must be an array.'),
+        );
 
         $objects[$catalogReference] = $this->serializeDictionary([
             'Type' => '/Catalog',
@@ -91,7 +101,7 @@ final readonly class SinglePagePdfExporter
 
     /**
      * @param array<int, string|null> $objects
-     * @param array<string, mixed> $fontResources
+     * @param array<string, array<string, mixed>> $fontResources
      * @return array<string, string>
      */
     private function createFontObjects(array &$objects, array $fontResources): array
@@ -99,10 +109,6 @@ final readonly class SinglePagePdfExporter
         $fontReferences = [];
 
         foreach ($fontResources as $alias => $fontResource) {
-            if (!is_array($fontResource)) {
-                throw new InvalidArgumentException(sprintf('Font resource "%s" must be an array.', $alias));
-            }
-
             $reference = $this->reserveObject($objects);
             $objects[$reference] = $this->serializeDictionary($fontResource);
             $fontReferences[$alias] = $this->asReference($reference);
@@ -113,7 +119,7 @@ final readonly class SinglePagePdfExporter
 
     /**
      * @param array<int, string|null> $objects
-     * @param array<string, mixed> $xObjects
+     * @param array<string, array<string, mixed>> $xObjects
      * @return array<string, string>
      */
     private function createImageObjects(array &$objects, array $xObjects): array
@@ -121,10 +127,6 @@ final readonly class SinglePagePdfExporter
         $imageReferences = [];
 
         foreach ($xObjects as $alias => $resource) {
-            if (!is_array($resource)) {
-                throw new InvalidArgumentException(sprintf('XObject resource "%s" must be an array.', $alias));
-            }
-
             if (($resource['Subtype'] ?? null) !== '/Image') {
                 throw new InvalidArgumentException(sprintf('Unsupported XObject subtype for "%s".', $alias));
             }
@@ -194,8 +196,8 @@ final readonly class SinglePagePdfExporter
         }
 
         $entries = [];
-        foreach ($dictionary as $key => $value) {
-            $entries[] = sprintf('/%s %s', $key, $this->serializeValue($value));
+        foreach (array_keys($dictionary) as $key) {
+            $entries[] = sprintf('/%s %s', $key, $this->serializeValue($dictionary[$key]));
         }
 
         return '<< ' . implode(' ', $entries) . ' >>';
@@ -236,7 +238,28 @@ final readonly class SinglePagePdfExporter
             return '[' . implode(' ', array_map($this->serializeValue(...), $value)) . ']';
         }
 
-        return $this->serializeDictionary($value);
+        return $this->serializeDictionary(
+            $this->requireStringKeyedArray($value, 'PDF dictionaries must use string keys.'),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function requireStringKeyedArray(mixed $value, string $message): array
+    {
+        if (!is_array($value)) {
+            throw new InvalidArgumentException($message);
+        }
+
+        foreach (array_keys($value) as $key) {
+            if (!is_string($key)) {
+                throw new InvalidArgumentException($message);
+            }
+        }
+
+        /** @var array<string, mixed> $value */
+        return $value;
     }
 
     private function serializeStringValue(string $value): string
@@ -248,6 +271,9 @@ final readonly class SinglePagePdfExporter
         return '(' . $this->escapeLiteralString($value) . ')';
     }
 
+    /**
+     * @param array<int, string|null> $objects
+     */
     private function renderDocument(array $objects, int $catalogReference): string
     {
         ksort($objects);

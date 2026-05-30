@@ -11,299 +11,428 @@ use LibreSign\XObjectTemplate\Css\InlineStyleParser;
 use LibreSign\XObjectTemplate\Html\Node;
 use LibreSign\XObjectTemplate\Layout\LayoutStyleResolver;
 use LibreSign\XObjectTemplate\Layout\StructuredFlexLayoutPlanner;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class StructuredFlexLayoutPlannerTest extends TestCase
 {
-    public function testNormalizeDirectionAndResolveGapUseExpectedAxis(): void
+    /**
+     * @return iterable<string, array{direction: string, expectedDirection: string}>
+     */
+    public static function normalizedDirectionProvider(): iterable
     {
-        $parser = new InlineStyleParser();
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $style = $parser->parse('gap:10%');
+        yield 'uppercase row normalizes to row' => [
+            'direction' => 'ROW',
+            'expectedDirection' => 'row',
+        ];
 
-        self::assertSame('row', $planner->normalizeDirection('ROW'));
-        self::assertSame('column', $planner->normalizeDirection('column'));
-        self::assertSame('column', $planner->normalizeDirection(' COLUMN '));
-        self::assertSame('row', $planner->normalizeDirection('  unexpected  '));
-        self::assertSame(
-            20.0,
-            $planner->resolveGap($style, 'row', ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0]),
-        );
-        self::assertSame(
-            5.0,
-            $planner->resolveGap($style, 'column', ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0]),
-        );
+        yield 'column stays column' => [
+            'direction' => 'column',
+            'expectedDirection' => 'column',
+        ];
+
+        yield 'trimmed column stays column' => [
+            'direction' => ' COLUMN ',
+            'expectedDirection' => 'column',
+        ];
+
+        yield 'unexpected value falls back to row' => [
+            'direction' => '  unexpected  ',
+            'expectedDirection' => 'row',
+        ];
     }
 
-    public function testMeasureItemUsesImageAndTextFallbacks(): void
+    /**
+     * @return iterable<string, array{
+     *     direction: string,
+     *     contentBox: array{x: float, y: float, width: float, height: float},
+     *     expectedGap: float
+     * }>
+     */
+    public static function resolveGapProvider(): iterable
     {
-        $parser = new InlineStyleParser();
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
+        yield 'row gap uses container width' => [
+            'direction' => 'row',
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0],
+            'expectedGap' => 20.0,
+        ];
 
-        $imageSize = $planner->measureItem(
-            new Node(tag: 'img', text: '', attributes: ['src' => '/icon.png']),
-            $parser->parse(''),
-            ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
-        );
-        $textSize = $planner->measureItem(
-            new Node(tag: 'span', text: 'Label', attributes: []),
-            $parser->parse('font-size:10'),
-            ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
-        );
-        $trimmedTextSize = $planner->measureItem(
-            new Node(tag: 'span', text: '  Label  ', attributes: []),
-            $parser->parse('font-size:10'),
-            ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
-        );
-        $containerFallbackSize = $planner->measureItem(
-            new Node(tag: 'div', text: '', attributes: []),
-            $parser->parse(''),
-            ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
-        );
-
-        self::assertSame(['width' => 32.0, 'height' => 32.0], $imageSize);
-        self::assertSame(['width' => 24.46, 'height' => 12.0], $textSize);
-        self::assertSame(['width' => 24.46, 'height' => 12.0], $trimmedTextSize);
-        self::assertSame(['width' => 0.0, 'height' => 40.0], $containerFallbackSize);
+        yield 'column gap uses container height' => [
+            'direction' => 'column',
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0],
+            'expectedGap' => 5.0,
+        ];
     }
 
-    public function testCalculateMetricsSupportsSpaceBetween(): void
+    /**
+     * @return iterable<string, array{
+     *     node: Node,
+     *     inlineStyle: string,
+     *     container: array{x: float, y: float, width: float, height: float},
+     *     expectedSize: array{width: float, height: float}
+     * }>
+     */
+    public static function measureItemProvider(): iterable
     {
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $parser = new InlineStyleParser();
-        $items = [
-            [
-                'node' => new Node('div', '', []),
-                'style' => $parser->parse(''),
-                'size' => ['width' => 50.0, 'height' => 20.0],
+        yield 'image fallback uses default icon size' => [
+            'node' => new Node(tag: 'img', text: '', attributes: ['src' => '/icon.png']),
+            'inlineStyle' => '',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 32.0, 'height' => 32.0],
+        ];
+
+        yield 'plain text uses measured font metrics' => [
+            'node' => new Node(tag: 'span', text: 'Label', attributes: []),
+            'inlineStyle' => 'font-size:10',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 24.46, 'height' => 12.0],
+        ];
+
+        yield 'trimmed text ignores surrounding whitespace' => [
+            'node' => new Node(tag: 'span', text: '  Label  ', attributes: []),
+            'inlineStyle' => 'font-size:10',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 24.46, 'height' => 12.0],
+        ];
+
+        yield 'container fallback preserves container height' => [
+            'node' => new Node(tag: 'div', text: '', attributes: []),
+            'inlineStyle' => '',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 0.0, 'height' => 40.0],
+        ];
+
+        yield 'whitespace only text becomes empty' => [
+            'node' => new Node(tag: 'span', text: '   ', attributes: []),
+            'inlineStyle' => 'font-size:10',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 0.0],
+            'expectedSize' => ['width' => 0.0, 'height' => 0.0],
+        ];
+
+        yield 'visible text still measures when container height is zero' => [
+            'node' => new Node(tag: 'span', text: '  Label  ', attributes: []),
+            'inlineStyle' => 'font-size:10',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 0.0],
+            'expectedSize' => ['width' => 24.46, 'height' => 12.0],
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{
+     *     itemSizes: list<array{width: float, height: float}>,
+     *     direction: string,
+     *     justifyContent: string,
+     *     gap: float,
+     *     contentBox: array{x: float, y: float, width: float, height: float},
+     *     expectedMetrics: array<string, float>
+     * }>
+     */
+    public static function calculateMetricsProvider(): iterable
+    {
+        yield 'two items expand gap for row space-between' => [
+            'itemSizes' => [
+                ['width' => 50.0, 'height' => 20.0],
+                ['width' => 50.0, 'height' => 30.0],
             ],
-            [
-                'node' => new Node('div', '', []),
-                'style' => $parser->parse(''),
-                'size' => ['width' => 50.0, 'height' => 30.0],
+            'direction' => 'row',
+            'justifyContent' => 'space-between',
+            'gap' => 0.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
+            'expectedMetrics' => [
+                'gap' => 100.0,
+                'mainAxisOffset' => 0.0,
+                'totalMainAxisSize' => 200.0,
+                'crossAxisSize' => 30.0,
+                'crossContainerSize' => 100.0,
             ],
         ];
 
-        $metrics = $planner->calculateMetrics(
-            $items,
-            'row',
-            'space-between',
-            0.0,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
-        );
+        yield 'single space-between item keeps configured gap' => [
+            'itemSizes' => [
+                ['width' => 50.0, 'height' => 20.0],
+            ],
+            'direction' => 'row',
+            'justifyContent' => 'space-between',
+            'gap' => 7.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
+            'expectedMetrics' => [
+                'gap' => 7.0,
+                'totalMainAxisSize' => 50.0,
+                'crossAxisSize' => 20.0,
+            ],
+        ];
 
-        self::assertSame(100.0, $metrics['gap']);
-        self::assertSame(0.0, $metrics['mainAxisOffset']);
-        self::assertSame(200.0, $metrics['totalMainAxisSize']);
-        self::assertSame(30.0, $metrics['crossAxisSize']);
-        self::assertSame(100.0, $metrics['crossContainerSize']);
+        yield 'three items distribute space-between gap' => [
+            'itemSizes' => [
+                ['width' => 20.0, 'height' => 10.0],
+                ['width' => 20.0, 'height' => 10.0],
+                ['width' => 20.0, 'height' => 10.0],
+            ],
+            'direction' => 'row',
+            'justifyContent' => 'space-between',
+            'gap' => 0.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
+            'expectedMetrics' => [
+                'gap' => 70.0,
+                'totalMainAxisSize' => 200.0,
+            ],
+        ];
+
+        yield 'empty collections keep zero sizes' => [
+            'itemSizes' => [],
+            'direction' => 'row',
+            'justifyContent' => 'flex-start',
+            'gap' => 7.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
+            'expectedMetrics' => [
+                'totalMainAxisSize' => 0.0,
+                'crossAxisSize' => 0.0,
+                'crossContainerSize' => 100.0,
+            ],
+        ];
+
+        yield 'center alignment offset clamps to zero when content overflows' => [
+            'itemSizes' => [
+                ['width' => 250.0, 'height' => 20.0],
+            ],
+            'direction' => 'row',
+            'justifyContent' => 'center',
+            'gap' => 0.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
+            'expectedMetrics' => [
+                'mainAxisOffset' => 0.0,
+            ],
+        ];
+
+        yield 'flex-end alignment offset clamps to zero when content overflows' => [
+            'itemSizes' => [
+                ['width' => 250.0, 'height' => 20.0],
+            ],
+            'direction' => 'row',
+            'justifyContent' => 'flex-end',
+            'gap' => 0.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
+            'expectedMetrics' => [
+                'mainAxisOffset' => 0.0,
+            ],
+        ];
     }
 
-    public function testCalculateMetricsKeepsConfiguredGapForSingleSpaceBetweenItem(): void
+    /**
+     * @return iterable<string, array{
+     *     itemSize: array{width: float, height: float},
+     *     direction: string,
+     *     alignItems: string,
+     *     contentBox: array{x: float, y: float, width: float, height: float},
+     *     crossContainerSize: float,
+     *     cursor: float,
+     *     expectedChildBox: array<string, float>
+     * }>
+     */
+    public static function createChildBoxProvider(): iterable
     {
+        yield 'row layout positions centered child' => [
+            'itemSize' => ['width' => 50.0, 'height' => 20.0],
+            'direction' => 'row',
+            'alignItems' => 'center',
+            'contentBox' => ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0],
+            'crossContainerSize' => 100.0,
+            'cursor' => 30.0,
+            'expectedChildBox' => ['x' => 40.0, 'y' => 60.0, 'width' => 50.0, 'height' => 20.0],
+        ];
+
+        yield 'column layout positions flex-end child' => [
+            'itemSize' => ['width' => 50.0, 'height' => 20.0],
+            'direction' => 'column',
+            'alignItems' => 'flex-end',
+            'contentBox' => ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0],
+            'crossContainerSize' => 200.0,
+            'cursor' => 15.0,
+            'expectedChildBox' => ['x' => 160.0, 'y' => 35.0, 'width' => 50.0, 'height' => 20.0],
+        ];
+
+        yield 'row layout falls back to container height when item cross size is zero' => [
+            'itemSize' => ['width' => 50.0, 'height' => 0.0],
+            'direction' => 'row',
+            'alignItems' => 'center',
+            'contentBox' => ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0],
+            'crossContainerSize' => 100.0,
+            'cursor' => 30.0,
+            'expectedChildBox' => ['height' => 100.0],
+        ];
+
+        yield 'column layout falls back to container width when item cross size is zero' => [
+            'itemSize' => ['width' => 0.0, 'height' => 20.0],
+            'direction' => 'column',
+            'alignItems' => 'flex-end',
+            'contentBox' => ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0],
+            'crossContainerSize' => 200.0,
+            'cursor' => 15.0,
+            'expectedChildBox' => ['width' => 200.0],
+        ];
+
+        yield 'row layout clamps oversized center alignment to container top' => [
+            'itemSize' => ['width' => 50.0, 'height' => 150.0],
+            'direction' => 'row',
+            'alignItems' => 'center',
+            'contentBox' => ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0],
+            'crossContainerSize' => 100.0,
+            'cursor' => 30.0,
+            'expectedChildBox' => ['y' => 20.0],
+        ];
+
+        yield 'column layout clamps oversized flex-end alignment to container left' => [
+            'itemSize' => ['width' => 250.0, 'height' => 20.0],
+            'direction' => 'column',
+            'alignItems' => 'flex-end',
+            'contentBox' => ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0],
+            'crossContainerSize' => 200.0,
+            'cursor' => 15.0,
+            'expectedChildBox' => ['x' => 10.0],
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{
+     *     itemSize: array{width: float, height: float},
+     *     direction: string,
+     *     gap: float,
+     *     expectedAdvance: float
+     * }>
+     */
+    public static function advanceCursorProvider(): iterable
+    {
+        yield 'row cursor advances by width plus gap' => [
+            'itemSize' => ['width' => 50.0, 'height' => 20.0],
+            'direction' => 'row',
+            'gap' => 7.0,
+            'expectedAdvance' => 57.0,
+        ];
+
+        yield 'column cursor advances by height plus gap' => [
+            'itemSize' => ['width' => 50.0, 'height' => 20.0],
+            'direction' => 'column',
+            'gap' => 7.0,
+            'expectedAdvance' => 27.0,
+        ];
+    }
+
+    #[DataProvider('normalizedDirectionProvider')]
+    public function testNormalizeDirectionReturnsExpectedValue(
+        string $direction,
+        string $expectedDirection,
+    ): void {
         $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $parser = new InlineStyleParser();
-        $items = [[
-            'node' => new Node('div', '', []),
-            'style' => $parser->parse(''),
-            'size' => ['width' => 50.0, 'height' => 20.0],
-        ]];
+
+        self::assertSame($expectedDirection, $planner->normalizeDirection($direction));
+    }
+
+    #[DataProvider('resolveGapProvider')]
+    public function testResolveGapUsesExpectedAxis(
+        string $direction,
+        array $contentBox,
+        float $expectedGap,
+    ): void {
+        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
+        $style = (new InlineStyleParser())->parse('gap:10%');
+
+        self::assertSame($expectedGap, $planner->resolveGap($style, $direction, $contentBox));
+    }
+
+    #[DataProvider('measureItemProvider')]
+    public function testMeasureItemUsesExpectedFallbacks(
+        Node $node,
+        string $inlineStyle,
+        array $container,
+        array $expectedSize,
+    ): void {
+        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
+        $style = (new InlineStyleParser())->parse($inlineStyle);
+
+        self::assertSame($expectedSize, $planner->measureItem($node, $style, $container));
+    }
+
+    #[DataProvider('calculateMetricsProvider')]
+    public function testCalculateMetricsReturnsExpectedValues(
+        array $itemSizes,
+        string $direction,
+        string $justifyContent,
+        float $gap,
+        array $contentBox,
+        array $expectedMetrics,
+    ): void {
+        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
+        $items = array_map(
+            fn (array $itemSize): array => $this->createFlexItem($itemSize['width'], $itemSize['height']),
+            $itemSizes,
+        );
 
         $metrics = $planner->calculateMetrics(
             $items,
-            'row',
-            'space-between',
-            7.0,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
+            $direction,
+            $justifyContent,
+            $gap,
+            $contentBox,
         );
 
-        self::assertSame(7.0, $metrics['gap']);
-        self::assertSame(50.0, $metrics['totalMainAxisSize']);
-        self::assertSame(20.0, $metrics['crossAxisSize']);
+        foreach ($expectedMetrics as $metric => $expectedValue) {
+            self::assertSame($expectedValue, $metrics[$metric]);
+        }
     }
 
-    public function testCreateChildBoxSupportsRowAndColumnLayouts(): void
-    {
+    #[DataProvider('createChildBoxProvider')]
+    public function testCreateChildBoxReturnsExpectedGeometry(
+        array $itemSize,
+        string $direction,
+        string $alignItems,
+        array $contentBox,
+        float $crossContainerSize,
+        float $cursor,
+        array $expectedChildBox,
+    ): void {
         $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $item = [
-            'node' => new Node('div', '', []),
+        $item = $this->createFlexItem($itemSize['width'], $itemSize['height']);
+
+        $childBox = $planner->createChildBox(
+            $item,
+            $direction,
+            $alignItems,
+            $contentBox,
+            $crossContainerSize,
+            $cursor,
+        );
+
+        foreach ($expectedChildBox as $property => $expectedValue) {
+            self::assertSame($expectedValue, $childBox[$property]);
+        }
+    }
+
+    #[DataProvider('advanceCursorProvider')]
+    public function testAdvanceCursorUsesMainAxisDimension(
+        array $itemSize,
+        string $direction,
+        float $gap,
+        float $expectedAdvance,
+    ): void {
+        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
+        $item = $this->createFlexItem($itemSize['width'], $itemSize['height']);
+
+        self::assertSame($expectedAdvance, $planner->advanceCursor($item, $direction, $gap));
+    }
+
+    /**
+     * @return array{
+     *     node: Node,
+     *     style: \LibreSign\XObjectTemplate\Css\StyleMap,
+     *     size: array{width: float, height: float}
+     * }
+     */
+    private function createFlexItem(float $width, float $height): array
+    {
+        return [
+            'node' => new Node(tag: 'div', text: '', attributes: []),
             'style' => (new InlineStyleParser())->parse(''),
-            'size' => ['width' => 50.0, 'height' => 20.0],
+            'size' => ['width' => $width, 'height' => $height],
         ];
-        $contentBox = ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0];
-
-        $rowBox = $planner->createChildBox($item, 'row', 'center', $contentBox, 100.0, 30.0);
-        $columnBox = $planner->createChildBox($item, 'column', 'flex-end', $contentBox, 200.0, 15.0);
-
-        self::assertSame(['x' => 40.0, 'y' => 60.0, 'width' => 50.0, 'height' => 20.0], $rowBox);
-        self::assertSame(['x' => 160.0, 'y' => 35.0, 'width' => 50.0, 'height' => 20.0], $columnBox);
-        self::assertSame(57.0, $planner->advanceCursor($item, 'row', 7.0));
-        self::assertSame(27.0, $planner->advanceCursor($item, 'column', 7.0));
-    }
-
-    public function testCreateChildBoxFallsBackToContainerDimensionWhenItemCrossSizeIsZero(): void
-    {
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $contentBox = ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0];
-
-        $rowBox = $planner->createChildBox(
-            [
-                'node' => new Node('div', '', []),
-                'style' => (new InlineStyleParser())->parse(''),
-                'size' => ['width' => 50.0, 'height' => 0.0],
-            ],
-            'row',
-            'center',
-            $contentBox,
-            100.0,
-            30.0,
-        );
-        $columnBox = $planner->createChildBox(
-            [
-                'node' => new Node('div', '', []),
-                'style' => (new InlineStyleParser())->parse(''),
-                'size' => ['width' => 0.0, 'height' => 20.0],
-            ],
-            'column',
-            'flex-end',
-            $contentBox,
-            200.0,
-            15.0,
-        );
-
-        self::assertSame(100.0, $rowBox['height']);
-        self::assertSame(200.0, $columnBox['width']);
-    }
-
-    public function testCreateChildBoxClampsOversizedAlignmentOffsetsToZero(): void
-    {
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $contentBox = ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0];
-
-        $rowBox = $planner->createChildBox(
-            [
-                'node' => new Node('div', '', []),
-                'style' => (new InlineStyleParser())->parse(''),
-                'size' => ['width' => 50.0, 'height' => 150.0],
-            ],
-            'row',
-            'center',
-            $contentBox,
-            100.0,
-            30.0,
-        );
-        $columnBox = $planner->createChildBox(
-            [
-                'node' => new Node('div', '', []),
-                'style' => (new InlineStyleParser())->parse(''),
-                'size' => ['width' => 250.0, 'height' => 20.0],
-            ],
-            'column',
-            'flex-end',
-            $contentBox,
-            200.0,
-            15.0,
-        );
-
-        self::assertSame(20.0, $rowBox['y']);
-        self::assertSame(10.0, $columnBox['x']);
-    }
-
-    public function testMeasureItemTreatsWhitespaceOnlyTextAsEmpty(): void
-    {
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-
-        $size = $planner->measureItem(
-            new Node(tag: 'span', text: '   ', attributes: []),
-            (new InlineStyleParser())->parse('font-size:10'),
-            ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 0.0],
-        );
-
-        self::assertSame(['width' => 0.0, 'height' => 0.0], $size);
-    }
-
-    public function testMeasureItemUsesTrimmedTextWhenWhitespaceSurroundsVisibleCharacters(): void
-    {
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-
-        $size = $planner->measureItem(
-            new Node(tag: 'span', text: '  Label  ', attributes: []),
-            (new InlineStyleParser())->parse('font-size:10'),
-            ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 0.0],
-        );
-
-        self::assertSame(['width' => 24.46, 'height' => 12.0], $size);
-    }
-
-    public function testCalculateMetricsSupportsThreeItemSpaceBetweenAndEmptyCollections(): void
-    {
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $parser = new InlineStyleParser();
-        $items = [
-            [
-                'node' => new Node('div', '', []),
-                'style' => $parser->parse(''),
-                'size' => ['width' => 20.0, 'height' => 10.0],
-            ],
-            [
-                'node' => new Node('div', '', []),
-                'style' => $parser->parse(''),
-                'size' => ['width' => 20.0, 'height' => 10.0],
-            ],
-            [
-                'node' => new Node('div', '', []),
-                'style' => $parser->parse(''),
-                'size' => ['width' => 20.0, 'height' => 10.0],
-            ],
-        ];
-
-        $threeItemMetrics = $planner->calculateMetrics(
-            $items,
-            'row',
-            'space-between',
-            0.0,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
-        );
-        $emptyMetrics = $planner->calculateMetrics(
-            [],
-            'row',
-            'flex-start',
-            7.0,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
-        );
-
-        self::assertSame(70.0, $threeItemMetrics['gap']);
-        self::assertSame(200.0, $threeItemMetrics['totalMainAxisSize']);
-        self::assertSame(0.0, $emptyMetrics['totalMainAxisSize']);
-        self::assertSame(0.0, $emptyMetrics['crossAxisSize']);
-    }
-
-    public function testCalculateMetricsClampsCenterAndFlexEndOffsetsToZero(): void
-    {
-        $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $parser = new InlineStyleParser();
-        $items = [[
-            'node' => new Node('div', '', []),
-            'style' => $parser->parse(''),
-            'size' => ['width' => 250.0, 'height' => 20.0],
-        ]];
-
-        $centerMetrics = $planner->calculateMetrics(
-            $items,
-            'row',
-            'center',
-            0.0,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
-        );
-        $flexEndMetrics = $planner->calculateMetrics(
-            $items,
-            'row',
-            'flex-end',
-            0.0,
-            ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 100.0],
-        );
-
-        self::assertSame(0.0, $centerMetrics['mainAxisOffset']);
-        self::assertSame(0.0, $flexEndMetrics['mainAxisOffset']);
     }
 }

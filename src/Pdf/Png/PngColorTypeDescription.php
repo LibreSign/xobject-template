@@ -18,10 +18,6 @@ final readonly class PngColorTypeDescription
     /** @var positive-int */
     public int $bytesPerPixel;
 
-    /**
-     * @param 1|3 $colorCount
-     * @param positive-int $bytesPerPixel
-     */
     public function __construct(
         public string $colorSpace,
         int $colorCount,

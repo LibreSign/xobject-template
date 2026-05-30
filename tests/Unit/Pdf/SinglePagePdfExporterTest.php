@@ -8,9 +8,11 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
 
 use LibreSign\XObjectTemplate\Dto\CompileResult;
+use LibreSign\XObjectTemplate\Pdf\CompileResultResourceExtractor;
 use LibreSign\XObjectTemplate\Pdf\EmbeddedPdfImage;
 use LibreSign\XObjectTemplate\Pdf\PdfImageEmbedderInterface;
 use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
+use LibreSign\XObjectTemplate\Tests\Support\Pdf\RecordingPdfImageEmbedder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -54,35 +56,24 @@ final class SinglePagePdfExporterTest extends TestCase
 
     public function testExportUsesInjectedImageEmbedderForImageResources(): void
     {
-        $embedder = new class () implements PdfImageEmbedderInterface
-        {
-            /** @var list<string> */
-            public array $sources = [];
-
-            public function embed(string $source): EmbeddedPdfImage
-            {
-                $this->sources[] = $source;
-
-                return new EmbeddedPdfImage(
-                    dictionary: [
-                        'Type' => '/XObject',
-                        'Subtype' => '/Image',
-                        'Width' => 1,
-                        'Height' => 1,
-                        'ColorSpace' => '/DeviceRGB',
-                        'BitsPerComponent' => 8,
-                        'Filter' => '/FlateDecode',
-                        'DecodeParms' => [
-                            'Predictor' => 15,
-                            'Colors' => 3,
-                            'BitsPerComponent' => 8,
-                            'Columns' => 1,
-                        ],
-                    ],
-                    stream: gzcompress("\x00\xff\x00\x00"),
-                );
-            }
-        };
+        $embedder = new RecordingPdfImageEmbedder(
+            dictionary: [
+                'Type' => '/XObject',
+                'Subtype' => '/Image',
+                'Width' => 1,
+                'Height' => 1,
+                'ColorSpace' => '/DeviceRGB',
+                'BitsPerComponent' => 8,
+                'Filter' => '/FlateDecode',
+                'DecodeParms' => [
+                    'Predictor' => 15,
+                    'Colors' => 3,
+                    'BitsPerComponent' => 8,
+                    'Columns' => 1,
+                ],
+            ],
+            stream: gzcompress("\x00\xff\x00\x00"),
+        );
 
         $exporter = new SinglePagePdfExporter($embedder);
 
@@ -173,29 +164,18 @@ final class SinglePagePdfExporterTest extends TestCase
 
     public function testExportPreservesAllFontAndImageReferencesInPageTreeAndTrailer(): void
     {
-        $embedder = new class () implements PdfImageEmbedderInterface
-        {
-            /** @var list<string> */
-            public array $sources = [];
-
-            public function embed(string $source): EmbeddedPdfImage
-            {
-                $this->sources[] = $source;
-
-                return new EmbeddedPdfImage(
-                    dictionary: [
-                        'Type' => '/XObject',
-                        'Subtype' => '/Image',
-                        'Width' => 1,
-                        'Height' => 1,
-                        'ColorSpace' => '/DeviceRGB',
-                        'BitsPerComponent' => 8,
-                        'Filter' => '/FlateDecode',
-                    ],
-                    stream: 'RGB',
-                );
-            }
-        };
+        $embedder = new RecordingPdfImageEmbedder(
+            dictionary: [
+                'Type' => '/XObject',
+                'Subtype' => '/Image',
+                'Width' => 1,
+                'Height' => 1,
+                'ColorSpace' => '/DeviceRGB',
+                'BitsPerComponent' => 8,
+                'Filter' => '/FlateDecode',
+            ],
+            stream: 'RGB',
+        );
 
         $exporter = new SinglePagePdfExporter($embedder);
 
@@ -309,6 +289,61 @@ final class SinglePagePdfExporterTest extends TestCase
         self::assertStringContainsString($expectedFormStreamFragment, $pdf);
     }
 
+    public function testExportUsesInjectedResourceExtractorWhenProvided(): void
+    {
+        $calls = [];
+        $resourceExtractor = new class ($calls) extends CompileResultResourceExtractor
+        {
+            /** @var list<string> */
+            public array $calls;
+
+            /**
+             * @param list<string> $calls
+             */
+            public function __construct(array &$calls)
+            {
+                $this->calls = &$calls;
+            }
+
+            public function extract(CompileResult $result, string $resourceType, string $itemMessageTemplate): array
+            {
+                $this->calls[] = $resourceType;
+
+                if ($resourceType === 'Font') {
+                    return [
+                        'Z9' => [
+                            'Type' => '/Font',
+                            'Subtype' => '/Type1',
+                            'BaseFont' => '/Courier',
+                        ],
+                    ];
+                }
+
+                return [];
+            }
+        };
+
+        $exporter = new SinglePagePdfExporter(
+            new class () implements PdfImageEmbedderInterface
+            {
+                public function embed(string $source): EmbeddedPdfImage
+                {
+                    throw new \LogicException(sprintf('Image embedding should not be called for %s.', $source));
+                }
+            },
+            $resourceExtractor,
+        );
+
+        $pdf = $exporter->export(new CompileResult(
+            contentStream: 'BT ET',
+            resources: ['Font' => []],
+            bbox: [0.0, 0.0, 40.0, 20.0],
+        ));
+
+        self::assertSame(['Font', 'XObject'], $calls);
+        self::assertStringContainsString('/BaseFont /Courier', $pdf);
+    }
+
     public function testSerializeValueFormatsNumbersListsAndRawPdfValues(): void
     {
         $exporter = new SinglePagePdfExporter();
@@ -347,6 +382,31 @@ final class SinglePagePdfExporterTest extends TestCase
         $this->expectExceptionMessage('PDF object 2 was reserved but not written.');
 
         $this->invokeExporterMethod($exporter, 'renderDocument', [1 => '<< /Type /Catalog >>', 2 => null], 1);
+    }
+
+    public function testSerializeValueRejectsAssociativeArraysWithNonStringKeys(): void
+    {
+        $exporter = new SinglePagePdfExporter();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('PDF dictionaries must use string keys.');
+
+        $this->invokeExporterMethod($exporter, 'serializeValue', [0 => 'alpha', 2 => 'beta']);
+    }
+
+    public function testRequireStringKeyedArrayRejectsNonArrayValues(): void
+    {
+        $exporter = new SinglePagePdfExporter();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('PDF dictionaries must use string keys.');
+
+        $this->invokeExporterMethod(
+            $exporter,
+            'requireStringKeyedArray',
+            'not-an-array',
+            'PDF dictionaries must use string keys.',
+        );
     }
 
     #[DataProvider('rawPdfValueProvider')]
@@ -417,6 +477,15 @@ final class SinglePagePdfExporterTest extends TestCase
             'expectedMessage' => 'Font resource "F1" must be an array.',
         ];
 
+        yield 'font collection must be an array' => [
+            'result' => new CompileResult(
+                contentStream: 'BT ET',
+                resources: ['Font' => '/Helvetica'],
+                bbox: [0.0, 0.0, 40.0, 40.0],
+            ),
+            'expectedMessage' => 'Font resources must be an array.',
+        ];
+
         yield 'unsupported dictionary value type' => [
             'result' => new CompileResult(
                 contentStream: 'BT ET',
@@ -444,6 +513,18 @@ final class SinglePagePdfExporterTest extends TestCase
                 bbox: [0.0, 0.0, 40.0, 40.0],
             ),
             'expectedMessage' => 'XObject resource "Im0" must be an array.',
+        ];
+
+        yield 'xobject collection must be an array' => [
+            'result' => new CompileResult(
+                contentStream: 'BT ET',
+                resources: [
+                    'Font' => [],
+                    'XObject' => '/Image',
+                ],
+                bbox: [0.0, 0.0, 40.0, 40.0],
+            ),
+            'expectedMessage' => 'XObject resources must be an array.',
         ];
 
         yield 'unsupported xobject subtype' => [
