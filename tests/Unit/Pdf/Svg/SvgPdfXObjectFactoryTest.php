@@ -74,6 +74,94 @@ SVG,
     }
 
     /**
+     * @dataProvider provideInvalidViewportScenarios
+     */
+    public function testCreateRejectsInvalidViewportScenarios(string $svg, string $expectedMessage): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($expectedMessage);
+
+        $factory->create($svg, '/tmp/invalid-viewport.svg');
+    }
+
+    public function testCreateSupportsTransformOperationsAndStrokeInheritance(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="40" height="20" viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+  <style>.shape{fill:rgb(10,20,30);stroke:#ff0000;}</style>
+  <g transform="translate(2,3) rotate(10 5 5) scale(1.1,0.9) skewX(3) skewY(2)">
+    <path class="shape" d="M 1,1 L 8,1 H 10 V 5 Z"/>
+  </g>
+  <g stroke="#00ff00" transform="matrix(1,0,0,1,3,0)">
+    <line x1="0" y1="10" x2="10" y2="10" fill="none"/>
+  </g>
+</svg>
+SVG,
+            '/tmp/transforms.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 40.0, 20.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('0.0392 0.0784 0.1176 rg', $xObject->stream);
+        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
+        self::assertStringContainsString('0 1 0 RG', $xObject->stream);
+        self::assertStringContainsString('B', $xObject->stream);
+        self::assertStringContainsString('S', $xObject->stream);
+    }
+
+    public function testCreateSkipsInvalidOrUnpaintedShapesWithoutFailing(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+  <polygon fill="#ff0000" points="0,0 10,0 10"/>
+  <polyline stroke="#ff0000" points="0,0 10"/>
+  <rect x="1" y="1" width="0" height="10" fill="#000"/>
+  <circle cx="8" cy="8" r="0" fill="#000"/>
+  <ellipse cx="12" cy="12" rx="6" ry="0" fill="#000"/>
+  <path d="M 1,1 L 5,5" fill="none" stroke="none"/>
+  <path d="M 2,2 L 9,2" fill="#123456"/>
+</svg>
+SVG,
+            '/tmp/skip-invalid-shapes.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 20.0, 20.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('0.0706 0.2039 0.3373 rg', $xObject->stream);
+        self::assertStringContainsString('f', $xObject->stream);
+        self::assertStringNotContainsString('RG', $xObject->stream);
+    }
+
+    public function testCreateRejectsMalformedAndUnsupportedPathCommands(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        try {
+            $factory->create(
+                '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M 1"/></svg>',
+                '/tmp/malformed-path.svg',
+            );
+            self::fail('Expected malformed path to be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            self::assertStringContainsString('Malformed SVG path data', $exception->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('SVG path command "R" is not supported');
+
+        $factory->create(
+            '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M 1,1 R 2,2"/></svg>',
+            '/tmp/unsupported-path.svg',
+        );
+    }
+
+    /**
      * @dataProvider provideSupportedShapeScenarios
      */
     public function testCreateSupportsShapeScenarios(
@@ -210,6 +298,24 @@ SVG,
             [0.0, 0.0, 20.0, 10.0],
             ['6.000000 3.000000 m', '9.000000 1.000000 l'],
             null,
+        ];
+    }
+
+    public static function provideInvalidViewportScenarios(): iterable
+    {
+        yield 'invalid viewbox token count' => [
+            '<svg viewBox="0 0 10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'Invalid viewBox in SVG source "/tmp/invalid-viewport.svg".',
+        ];
+
+        yield 'non-positive viewbox dimensions' => [
+            '<svg viewBox="0 0 0 10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
+        ];
+
+        yield 'missing usable viewport and dimensions' => [
+            '<svg width="auto" height="" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define either a valid viewBox or positive width/height.',
         ];
     }
 
