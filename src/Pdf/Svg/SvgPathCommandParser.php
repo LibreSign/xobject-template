@@ -14,14 +14,13 @@ use InvalidArgumentException;
  *
  * Handles all SVG path commands (M, L, H, V, C, S, Q, T, A, Z) and converts
  * them to equivalent PDF drawing commands in the PDF coordinate system.
- *
- * @SuppressWarnings(PHPMD.ExcessiveClassComplexity)
  */
-final class SvgPathCommandParser
+final readonly class SvgPathCommandParser
 {
     public function __construct(
         private SvgArcConverter $arcConverter = new SvgArcConverter(),
         private SvgTransformResolver $transformResolver = new SvgTransformResolver(),
+        private SvgPathNumberReader $pathNumberReader = new SvgPathNumberReader(),
     ) {
     }
 
@@ -165,7 +164,7 @@ final class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
+        $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
         $state->currentX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
         $state->currentY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
         [$moveX, $moveY] = $this->transformResolver->applyTransformToPoint(
@@ -178,7 +177,7 @@ final class SvgPathCommandParser
         $state->lastCubicControlY = null;
 
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
             $nextX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
             $nextY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
             $this->appendLineToState($state, $context, $nextX, $nextY);
@@ -199,9 +198,9 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
-              $nextX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
-              $nextY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
+            $nextX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
+            $nextY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
             $this->appendLineToState($state, $context, $nextX, $nextY);
         }
     }
@@ -218,7 +217,7 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 1, $context->source);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 1, $context->source);
             $state->currentX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
             [$lineX, $lineY] = $this->transformResolver->applyTransformToPoint(
                 $context->transformMatrix,
@@ -243,7 +242,7 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 1, $context->source);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 1, $context->source);
             $state->currentY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[0]);
             [$lineX, $lineY] = $this->transformResolver->applyTransformToPoint(
                 $context->transformMatrix,
@@ -268,13 +267,13 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 6, $context->source);
-                $startX1 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
-                $startY1 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
-                $endX2 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
-                $endY2 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[3]);
-                $x = $this->resolveCoord($isRelative, $state->currentX, $coordinates[4]);
-                $y = $this->resolveCoord($isRelative, $state->currentY, $coordinates[5]);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 6, $context->source);
+            $startX1 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
+            $startY1 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
+            $endX2 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
+            $endY2 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[3]);
+            $x = $this->resolveCoord($isRelative, $state->currentX, $coordinates[4]);
+            $y = $this->resolveCoord($isRelative, $state->currentY, $coordinates[5]);
 
             $state->commands[] = $this->buildCubicCurveCommand(
                 $context->transformMatrix,
@@ -306,7 +305,7 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 4, $context->source);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 4, $context->source);
             $startX1 = $this->reflectControlPoint($state->lastCubicControlX, $state->currentX);
             $startY1 = $this->reflectControlPoint($state->lastCubicControlY, $state->currentY);
             $endX2 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
@@ -344,7 +343,7 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 4, $context->source);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 4, $context->source);
                 $qcpX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
                 $qcpY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
                 $x    = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
@@ -377,7 +376,7 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
             $qcpX = $this->reflectControlPoint($state->prevQuadCpX, $state->currentX);
             $qcpY = $this->reflectControlPoint($state->prevQuadCpY, $state->currentY);
             $x = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
@@ -409,7 +408,7 @@ final class SvgPathCommandParser
         PathCommandContext $context,
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-            $coordinates = $this->readPathNumbers($tokens, $index, 7, $context->source);
+            $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 7, $context->source);
             $radiusX       = abs($coordinates[0]);
             $radiusY       = abs($coordinates[1]);
             $rotation = $coordinates[2];
@@ -546,29 +545,6 @@ final class SvgPathCommandParser
         $controlY2 = $toY + (2.0 / 3.0) * ($qcpY - $toY);
 
         return [$controlX1, $controlY1, $controlX2, $controlY2];
-    }
-
-    /**
-     * @param list<string> $tokens
-     * @return list<float>
-     */
-    private function readPathNumbers(array $tokens, int &$index, int $count, string $source): array
-    {
-        $values = [];
-
-        for ($i = 0; $i < $count; ++$i) {
-            if ($index >= count($tokens) || preg_match('/^[A-Za-z]$/', $tokens[$index]) === 1) {
-                throw new InvalidArgumentException(sprintf(
-                    'Malformed SVG path data in "%s".',
-                    $source,
-                ));
-            }
-
-            $values[] = (float) $tokens[$index];
-            ++$index;
-        }
-
-        return $values;
     }
 
     /**
