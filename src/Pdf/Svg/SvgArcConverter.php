@@ -8,6 +8,36 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Pdf\Svg;
 
 /**
+ * Internal value object grouping the common arc parameters.
+ *
+ * @internal
+ */
+final readonly class ArcParams
+{
+    /**
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
+     */
+    public function __construct(
+        public float $fromX,
+        public float $fromY,
+        public float $toX,
+        public float $toY,
+        public float $rx,
+        public float $ry,
+        public float $cosTh,
+        public float $sinTh,
+        public int $largeArc,
+        public int $sweep,
+    ) {
+    }
+
+    public function withRadii(float $rx, float $ry): self
+    {
+        return new self($this->fromX, $this->fromY, $this->toX, $this->toY, $rx, $ry, $this->cosTh, $this->sinTh, $this->largeArc, $this->sweep);
+    }
+}
+
+/**
  * Converts SVG arc commands to cubic Bézier curve approximations.
  *
  * This class encapsulates the mathematical transformation of SVG arc path
@@ -57,53 +87,19 @@ final class SvgArcConverter
         }
 
         $th    = deg2rad($rotation);
-        $cosTh = cos($th);
-        $sinTh = sin($th);
+        $params = new ArcParams($fromX, $fromY, $toX, $toY, $rx, $ry, cos($th), sin($th), $largeArc, $sweep);
 
-        // Step 1: Normalize radii and compute half-distances
-        [$rx, $ry] = $this->normalizeArcRadii(
-            $fromX,
-            $fromY,
-            $toX,
-            $toY,
-            $rx,
-            $ry,
-            $cosTh,
-            $sinTh,
-        );
+        // Step 1: Normalize radii
+        $params = $this->normalizeArcRadii($params);
 
         // Step 2: Calculate center point
-        [$cx, $cy] = $this->calculateArcCenter(
-            $fromX,
-            $fromY,
-            $toX,
-            $toY,
-            $rx,
-            $ry,
-            $cosTh,
-            $sinTh,
-            $largeArc,
-            $sweep,
-        );
+        [$cx, $cy] = $this->calculateArcCenter($params);
 
         // Step 3: Calculate angles and deltas
-        [$startAngle, $dAngle] = $this->calculateArcAngles(
-            $fromX,
-            $fromY,
-            $toX,
-            $toY,
-            $cx,
-            $cy,
-            $rx,
-            $ry,
-            $cosTh,
-            $sinTh,
-            $largeArc,
-            $sweep,
-        );
+        [$startAngle, $dAngle] = $this->calculateArcAngles($params, $cx, $cy);
 
         // Step 4: Generate cubic Bézier curves
-        return $this->generateArcCurves($cx, $cy, $rx, $ry, $cosTh, $sinTh, $startAngle, $dAngle);
+        return $this->generateArcCurves($cx, $cy, $params->rx, $params->ry, $params->cosTh, $params->sinTh, $startAngle, $dAngle);
     }
 
     /**
@@ -111,99 +107,58 @@ final class SvgArcConverter
      *
      * If the given radii are too small, they are scaled up to ensure the arc
      * can connect the start and end points.
-     *
-     * @param float $fromX Starting X coordinate
-     * @param float $fromY Starting Y coordinate
-     * @param float $toX Ending X coordinate
-     * @param float $toY Ending Y coordinate
-     * @param float $rx X-axis radius
-     * @param float $ry Y-axis radius
-     * @param float $cosTh Cosine of rotation angle
-     * @param float $sinTh Sine of rotation angle
-     * @return array<int, float> [$rx, $ry] Normalized radii
      */
-    private function normalizeArcRadii(
-        float $fromX,
-        float $fromY,
-        float $toX,
-        float $toY,
-        float $rx,
-        float $ry,
-        float $cosTh,
-        float $sinTh,
-    ): array {
-        $dx2 = ($fromX - $toX) / 2.0;
-        $dy2 = ($fromY - $toY) / 2.0;
-        $px  =  $cosTh * $dx2 + $sinTh * $dy2;
-        $py  = -$sinTh * $dx2 + $cosTh * $dy2;
+    private function normalizeArcRadii(ArcParams $params): ArcParams
+    {
+        $dx2 = ($params->fromX - $params->toX) / 2.0;
+        $dy2 = ($params->fromY - $params->toY) / 2.0;
+        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
+        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
 
-        $rx2   = $rx * $rx;
-        $ry2   = $ry * $ry;
+        $rx2   = $params->rx * $params->rx;
+        $ry2   = $params->ry * $params->ry;
         $px2   = $px * $px;
         $py2   = $py * $py;
         $scale = $px2 / $rx2 + $py2 / $ry2;
-        if ($scale > 1.0) {
-            $s   = sqrt($scale);
-            $rx *= $s;
-            $ry *= $s;
+        if ($scale <= 1.0) {
+            return $params;
         }
 
-        return [$rx, $ry];
+        $s = sqrt($scale);
+
+        return $params->withRadii($params->rx * $s, $params->ry * $s);
     }
 
     /**
      * Calculate the center point of the arc.
      *
-     * Given the start point, end point, radii, and arc flags, compute the
-     * center point of the ellipse that defines the arc.
-     *
-     * @param float $fromX Starting X coordinate
-     * @param float $fromY Starting Y coordinate
-     * @param float $toX Ending X coordinate
-     * @param float $toY Ending Y coordinate
-     * @param float $rx X-axis radius
-     * @param float $ry Y-axis radius
-     * @param float $cosTh Cosine of rotation angle
-     * @param float $sinTh Sine of rotation angle
-     * @param int $largeArc Large arc flag (0 or 1)
-     * @param int $sweep Sweep flag (0 or 1)
-     * @return array<int, float> [$cx, $cy] Center coordinates
+     * @return array{0:float,1:float} [$cx, $cy]
      */
-    private function calculateArcCenter(
-        float $fromX,
-        float $fromY,
-        float $toX,
-        float $toY,
-        float $rx,
-        float $ry,
-        float $cosTh,
-        float $sinTh,
-        int $largeArc,
-        int $sweep,
-    ): array {
-        $dx2 = ($fromX - $toX) / 2.0;
-        $dy2 = ($fromY - $toY) / 2.0;
-        $px  =  $cosTh * $dx2 + $sinTh * $dy2;
-        $py  = -$sinTh * $dx2 + $cosTh * $dy2;
+    private function calculateArcCenter(ArcParams $params): array
+    {
+        $dx2 = ($params->fromX - $params->toX) / 2.0;
+        $dy2 = ($params->fromY - $params->toY) / 2.0;
+        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
+        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
 
-        $rx2   = $rx * $rx;
-        $ry2   = $ry * $ry;
+        $rx2   = $params->rx * $params->rx;
+        $ry2   = $params->ry * $params->ry;
         $px2   = $px * $px;
         $py2   = $py * $py;
         $num   = max(0.0, $rx2 * $ry2 - $rx2 * $py2 - $ry2 * $px2);
         $den   = $rx2 * $py2 + $ry2 * $px2;
         $sq    = $den > 1e-10 ? sqrt($num / $den) : 0.0;
-        if ($largeArc === $sweep) {
+        if ($params->largeArc === $params->sweep) {
             $sq = -$sq;
         }
 
-        $cx1 =  $sq * $rx * $py / $ry;
-        $cy1 = -$sq * $ry * $px / $rx;
+        $cx1 =  $sq * $params->rx * $py / $params->ry;
+        $cy1 = -$sq * $params->ry * $px / $params->rx;
 
-        $midX = ($fromX + $toX) / 2.0;
-        $midY = ($fromY + $toY) / 2.0;
-        $cx   = $cosTh * $cx1 - $sinTh * $cy1 + $midX;
-        $cy   = $sinTh * $cx1 + $cosTh * $cy1 + $midY;
+        $midX = ($params->fromX + $params->toX) / 2.0;
+        $midY = ($params->fromY + $params->toY) / 2.0;
+        $cx   = $params->cosTh * $cx1 - $params->sinTh * $cy1 + $midX;
+        $cy   = $params->sinTh * $cx1 + $params->cosTh * $cy1 + $midY;
 
         return [$cx, $cy];
     }
@@ -211,46 +166,19 @@ final class SvgArcConverter
     /**
      * Calculate start angle and total angle delta for the arc.
      *
-     * Determines the angular span of the arc in the ellipse coordinate space,
-     * accounting for the large-arc and sweep flags.
-     *
-     * @param float $fromX Starting X coordinate
-     * @param float $fromY Starting Y coordinate
-     * @param float $toX Ending X coordinate
-     * @param float $toY Ending Y coordinate
-     * @param float $cx Center X coordinate
-     * @param float $cy Center Y coordinate
-     * @param float $rx X-axis radius
-     * @param float $ry Y-axis radius
-     * @param float $cosTh Cosine of rotation angle
-     * @param float $sinTh Sine of rotation angle
-     * @param int $largeArc Large arc flag (0 or 1)
-     * @param int $sweep Sweep flag (0 or 1)
-     * @return array<int, float> [$startAngle, $dAngle] Start and delta angles in radians
+     * @return array{0:float,1:float} [$startAngle, $dAngle]
      */
-    private function calculateArcAngles(
-        float $fromX,
-        float $fromY,
-        float $toX,
-        float $toY,
-        float $cx,
-        float $cy,
-        float $rx,
-        float $ry,
-        float $cosTh,
-        float $sinTh,
-        int $largeArc,
-        int $sweep,
-    ): array {
-        $dx2 = ($fromX - $toX) / 2.0;
-        $dy2 = ($fromY - $toY) / 2.0;
-        $px  =  $cosTh * $dx2 + $sinTh * $dy2;
-        $py  = -$sinTh * $dx2 + $cosTh * $dy2;
+    private function calculateArcAngles(ArcParams $params, float $cx, float $cy): array
+    {
+        $dx2 = ($params->fromX - $params->toX) / 2.0;
+        $dy2 = ($params->fromY - $params->toY) / 2.0;
+        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
+        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
 
-        $ux = ($px - 0.0) / $rx;
-        $uy = ($py - 0.0) / $ry;
-        $vx = (-$px - 0.0) / $rx;
-        $vy = (-$py - 0.0) / $ry;
+        $ux = $px / $params->rx;
+        $uy = $py / $params->ry;
+        $vx = -$px / $params->rx;
+        $vy = -$py / $params->ry;
 
         $startAngle = atan2($uy, $ux);
         $n          = sqrt(($ux * $ux + $uy * $uy) * ($vx * $vx + $vy * $vy));
@@ -259,9 +187,9 @@ final class SvgArcConverter
         if ($ux * $vy - $uy * $vx < 0.0) {
             $dAngle = -$dAngle;
         }
-        if ($sweep === 0 && $dAngle > 0.0) {
+        if ($params->sweep === 0 && $dAngle > 0.0) {
             $dAngle -= 2.0 * M_PI;
-        } elseif ($sweep === 1 && $dAngle < 0.0) {
+        } elseif ($params->sweep === 1 && $dAngle < 0.0) {
             $dAngle += 2.0 * M_PI;
         }
 

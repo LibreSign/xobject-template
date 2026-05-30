@@ -20,8 +20,8 @@ final class PathParsingState
         public float $currentY = 0.0,
         public ?float $lastCubicControlX = null,
         public ?float $lastCubicControlY = null,
-        public ?float $lastQuadraticControlX = null,
-        public ?float $lastQuadraticControlY = null,
+        public ?float $prevQuadCpX = null,
+        public ?float $prevQuadCpY = null,
         /** @var list<string> */
         public array $commands = [],
     ) {
