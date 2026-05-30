@@ -20,14 +20,16 @@ final readonly class SvgPathNumberReader
         $values = [];
 
         for ($i = 0; $i < $count; ++$i) {
-            if ($index >= count($tokens) || preg_match('/^[A-Za-z]$/', $tokens[$index]) === 1) {
+            $token = $tokens[$index] ?? null;
+
+            if ($token === null || strlen($token) === 1 && ctype_alpha($token)) {
                 throw new InvalidArgumentException(sprintf(
                     'Malformed SVG path data in "%s".',
                     $source,
                 ));
             }
 
-            $values[] = (float) $tokens[$index];
+            $values[] = (float) $token;
             ++$index;
         }
 
