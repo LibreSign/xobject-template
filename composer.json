@@ -45,12 +45,14 @@
   },
   "scripts": {
     "lint": [
+      "@php:lint",
       "@cs:check",
       "@rector:check",
       "@psalm",
       "@duplication:check",
       "@composer:validate"
     ],
+    "php:lint": "find . -type f -name '*.php' -not -path './vendor/*' -not -path './vendor-bin/*' -not -path './build/*' -print0 | xargs -0 -n1 php -l",
     "cs:check": "vendor-bin/phpcs/vendor/squizlabs/php_codesniffer/bin/phpcs -q",
     "cs:fix": "vendor-bin/phpcs/vendor/squizlabs/php_codesniffer/bin/phpcbf -q",
     "rector:check": "vendor-bin/rector/vendor/rector/rector/bin/rector process --dry-run",
