@@ -22,8 +22,8 @@ final readonly class ArcParams
         public float $fromY,
         public float $toX,
         public float $toY,
-        public float $rx,
-        public float $ry,
+        public float $radiusX,
+        public float $radiusY,
         public float $cosTh,
         public float $sinTh,
         public int $largeArc,
@@ -31,15 +31,15 @@ final readonly class ArcParams
     ) {
     }
 
-    public function withRadii(float $rx, float $ry): self
+    public function withRadii(float $radiusX, float $radiusY): self
     {
         return new self(
             $this->fromX,
             $this->fromY,
             $this->toX,
             $this->toY,
-            $rx,
-            $ry,
+            $radiusX,
+            $radiusY,
             $this->cosTh,
             $this->sinTh,
             $this->largeArc,

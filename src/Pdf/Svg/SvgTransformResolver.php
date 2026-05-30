@@ -89,7 +89,7 @@ final class SvgTransformResolver
         }
 
         foreach ($matches as $match) {
-            $op = strtolower($match[1]);
+            $operatorName = strtolower($match[1]);
             $args = preg_split('/[\s,]+/', trim($match[2]));
             if (!is_array($args)) {
                 continue;
@@ -104,7 +104,7 @@ final class SvgTransformResolver
                 $values[] = (float) $arg;
             }
 
-            $operationMatrix = match ($op) {
+            $operationMatrix = match ($operatorName) {
                 'matrix' => count($values) >= 6
                     ? [$values[0], $values[1], $values[2], $values[3], $values[4], $values[5]]
                     : [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
@@ -140,12 +140,12 @@ final class SvgTransformResolver
             return $rotation;
         }
 
-        $cx = $values[1];
-        $cy = $values[2];
+        $centerX = $values[1];
+        $centerY = $values[2];
 
         return $this->multiplyMatrices(
-            $this->multiplyMatrices([1.0, 0.0, 0.0, 1.0, $cx, $cy], $rotation),
-            [1.0, 0.0, 0.0, 1.0, -$cx, -$cy],
+            $this->multiplyMatrices([1.0, 0.0, 0.0, 1.0, $centerX, $centerY], $rotation),
+            [1.0, 0.0, 0.0, 1.0, -$centerX, -$centerY],
         );
     }
 

@@ -40,8 +40,8 @@ final class SvgArcConverter
     public function arcToBezierCurves(
         float $fromX,
         float $fromY,
-        float $rx,
-        float $ry,
+        float $radiusX,
+        float $radiusY,
         float $rotation,
         int $largeArc,
         int $sweep,
@@ -52,20 +52,20 @@ final class SvgArcConverter
             return [];
         }
 
-        if ($rx < 1e-10 || $ry < 1e-10) {
+        if ($radiusX < 1e-10 || $radiusY < 1e-10) {
             return [[$toX, $toY, $toX, $toY, $toX, $toY]];
         }
 
-        $th    = deg2rad($rotation);
+        $theta    = deg2rad($rotation);
         $params = new ArcParams(
             $fromX,
             $fromY,
             $toX,
             $toY,
-            $rx,
-            $ry,
-            cos($th),
-            sin($th),
+            $radiusX,
+            $radiusY,
+            cos($theta),
+            sin($theta),
             $largeArc,
             $sweep,
         );
@@ -74,21 +74,21 @@ final class SvgArcConverter
         $params = $this->normalizeArcRadii($params);
 
         // Step 2: Calculate center point
-        [$cx, $cy] = $this->calculateArcCenter($params);
+        [$centerX, $centerY] = $this->calculateArcCenter($params);
 
         // Step 3: Calculate angles and deltas
-        [$startAngle, $dAngle] = $this->calculateArcAngles($params, $cx, $cy);
+        [$startAngle, $deltaAngle] = $this->calculateArcAngles($params, $centerX, $centerY);
 
         // Step 4: Generate cubic Bézier curves
         return $this->generateArcCurves(
-            $cx,
-            $cy,
-            $params->rx,
-            $params->ry,
+            $centerX,
+            $centerY,
+            $params->radiusX,
+            $params->radiusY,
             $params->cosTh,
             $params->sinTh,
             $startAngle,
-            $dAngle,
+            $deltaAngle,
         );
     }
 
@@ -100,23 +100,23 @@ final class SvgArcConverter
      */
     private function normalizeArcRadii(ArcParams $params): ArcParams
     {
-        $dx2 = ($params->fromX - $params->toX) / 2.0;
-        $dy2 = ($params->fromY - $params->toY) / 2.0;
-        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
-        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
+        $deltaX2 = ($params->fromX - $params->toX) / 2.0;
+        $deltaY2 = ($params->fromY - $params->toY) / 2.0;
+        $primeX  =  $params->cosTh * $deltaX2 + $params->sinTh * $deltaY2;
+        $primeY  = -$params->sinTh * $deltaX2 + $params->cosTh * $deltaY2;
 
-        $rx2   = $params->rx * $params->rx;
-        $ry2   = $params->ry * $params->ry;
-        $px2   = $px * $px;
-        $py2   = $py * $py;
-        $scale = $px2 / $rx2 + $py2 / $ry2;
+        $radiusX2   = $params->radiusX * $params->radiusX;
+        $radiusY2   = $params->radiusY * $params->radiusY;
+        $primeX2   = $primeX * $primeX;
+        $primeY2   = $primeY * $primeY;
+        $scale = $primeX2 / $radiusX2 + $primeY2 / $radiusY2;
         if ($scale <= 1.0) {
             return $params;
         }
 
-        $s = sqrt($scale);
+        $scaleFactor = sqrt($scale);
 
-        return $params->withRadii($params->rx * $s, $params->ry * $s);
+        return $params->withRadii($params->radiusX * $scaleFactor, $params->radiusY * $scaleFactor);
     }
 
     /**
@@ -126,28 +126,28 @@ final class SvgArcConverter
      */
     private function calculateArcCenter(ArcParams $params): array
     {
-        [$px, $py] = $this->calculatePrimeCoordinates($params);
+        [$primeX, $primeY] = $this->calculatePrimeCoordinates($params);
 
-        $rx2   = $params->rx * $params->rx;
-        $ry2   = $params->ry * $params->ry;
-        $px2   = $px * $px;
-        $py2   = $py * $py;
-        $num   = max(0.0, $rx2 * $ry2 - $rx2 * $py2 - $ry2 * $px2);
-        $den   = $rx2 * $py2 + $ry2 * $px2;
-        $sq    = $den > 1e-10 ? sqrt($num / $den) : 0.0;
+        $radiusX2   = $params->radiusX * $params->radiusX;
+        $radiusY2   = $params->radiusY * $params->radiusY;
+        $primeX2   = $primeX * $primeX;
+        $primeY2   = $primeY * $primeY;
+        $numerator   = max(0.0, $radiusX2 * $radiusY2 - $radiusX2 * $primeY2 - $radiusY2 * $primeX2);
+        $denominator   = $radiusX2 * $primeY2 + $radiusY2 * $primeX2;
+        $squareRoot    = $denominator > 1e-10 ? sqrt($numerator / $denominator) : 0.0;
         if ($params->largeArc === $params->sweep) {
-            $sq = -$sq;
+            $squareRoot = -$squareRoot;
         }
 
-        $cx1 =  $sq * $params->rx * $py / $params->ry;
-        $cy1 = -$sq * $params->ry * $px / $params->rx;
+        $centerX1 =  $squareRoot * $params->radiusX * $primeY / $params->radiusY;
+        $centerY1 = -$squareRoot * $params->radiusY * $primeX / $params->radiusX;
 
         $midX = ($params->fromX + $params->toX) / 2.0;
         $midY = ($params->fromY + $params->toY) / 2.0;
-        $cx   = $params->cosTh * $cx1 - $params->sinTh * $cy1 + $midX;
-        $cy   = $params->sinTh * $cx1 + $params->cosTh * $cy1 + $midY;
+        $centerX   = $params->cosTh * $centerX1 - $params->sinTh * $centerY1 + $midX;
+        $centerY   = $params->sinTh * $centerX1 + $params->cosTh * $centerY1 + $midY;
 
-        return [$cx, $cy];
+        return [$centerX, $centerY];
     }
 
     /**
@@ -155,29 +155,29 @@ final class SvgArcConverter
      *
      * @return array{0:float,1:float} [$startAngle, $dAngle]
      */
-    private function calculateArcAngles(ArcParams $params, float $cx, float $cy): array
+    private function calculateArcAngles(ArcParams $params, float $centerX, float $centerY): array
     {
-        [$px, $py] = $this->calculatePrimeCoordinates($params);
+        [$primeX, $primeY] = $this->calculatePrimeCoordinates($params);
 
-        $ux = $px / $params->rx;
-        $uy = $py / $params->ry;
-        $vx = -$px / $params->rx;
-        $vy = -$py / $params->ry;
+        $vectorUX = $primeX / $params->radiusX;
+        $vectorUY = $primeY / $params->radiusY;
+        $vectorVX = -$primeX / $params->radiusX;
+        $vectorVY = -$primeY / $params->radiusY;
 
-        $startAngle = atan2($uy, $ux);
-        $n          = sqrt(($ux * $ux + $uy * $uy) * ($vx * $vx + $vy * $vy));
-        $cosDA      = $n > 1e-10 ? max(-1.0, min(1.0, ($ux * $vx + $uy * $vy) / $n)) : 0.0;
-        $dAngle     = acos($cosDA);
-        if ($ux * $vy - $uy * $vx < 0.0) {
-            $dAngle = -$dAngle;
+        $startAngle = atan2($vectorUY, $vectorUX);
+        $magnitude          = sqrt(($vectorUX * $vectorUX + $vectorUY * $vectorUY) * ($vectorVX * $vectorVX + $vectorVY * $vectorVY));
+        $cosDA      = $magnitude > 1e-10 ? max(-1.0, min(1.0, ($vectorUX * $vectorVX + $vectorUY * $vectorVY) / $magnitude)) : 0.0;
+        $deltaAngle     = acos($cosDA);
+        if ($vectorUX * $vectorVY - $vectorUY * $vectorVX < 0.0) {
+            $deltaAngle = -$deltaAngle;
         }
-        if ($params->sweep === 0 && $dAngle > 0.0) {
-            $dAngle -= 2.0 * M_PI;
-        } elseif ($params->sweep === 1 && $dAngle < 0.0) {
-            $dAngle += 2.0 * M_PI;
+        if ($params->sweep === 0 && $deltaAngle > 0.0) {
+            $deltaAngle -= 2.0 * M_PI;
+        } elseif ($params->sweep === 1 && $deltaAngle < 0.0) {
+            $deltaAngle += 2.0 * M_PI;
         }
 
-        return [$startAngle, $dAngle];
+        return [$startAngle, $deltaAngle];
     }
 
     /**
@@ -187,12 +187,12 @@ final class SvgArcConverter
      */
     private function calculatePrimeCoordinates(ArcParams $params): array
     {
-        $dx2 = ($params->fromX - $params->toX) / 2.0;
-        $dy2 = ($params->fromY - $params->toY) / 2.0;
-        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
-        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
+        $deltaX2 = ($params->fromX - $params->toX) / 2.0;
+        $deltaY2 = ($params->fromY - $params->toY) / 2.0;
+        $primeX  =  $params->cosTh * $deltaX2 + $params->sinTh * $deltaY2;
+        $primeY  = -$params->sinTh * $deltaX2 + $params->cosTh * $deltaY2;
 
-        return [$px, $py];
+        return [$primeX, $primeY];
     }
 
     /**
@@ -212,55 +212,55 @@ final class SvgArcConverter
      * @return array<int, array<int, float>> Array of Bézier curve control points
      */
     private function generateArcCurves(
-        float $cx,
-        float $cy,
-        float $rx,
-        float $ry,
+        float $centerX,
+        float $centerY,
+        float $radiusX,
+        float $radiusY,
         float $cosTh,
         float $sinTh,
         float $startAngle,
-        float $dAngle,
+        float $deltaAngle,
     ): array {
-        $segments = max(1, (int) ceil(abs($dAngle) / (M_PI / 2.0)));
-        $da       = $dAngle / $segments;
-        $tanDA2   = tan($da / 2.0);
-        $alpha    = abs($da) > 1e-10
-            ? sin($da) * (sqrt(4.0 + 3.0 * $tanDA2 * $tanDA2) - 1.0) / 3.0
+        $segments = max(1, (int) ceil(abs($deltaAngle) / (M_PI / 2.0)));
+        $angleStep       = $deltaAngle / $segments;
+        $tanHalfAngleStep   = tan($angleStep / 2.0);
+        $alpha    = abs($angleStep) > 1e-10
+            ? sin($angleStep) * (sqrt(4.0 + 3.0 * $tanHalfAngleStep * $tanHalfAngleStep) - 1.0) / 3.0
             : 0.0;
 
         $curves = [];
         $angle1 = $startAngle;
         $cos1   = cos($angle1);
         $sin1   = sin($angle1);
-        $ex1    = $cx + $cosTh * $rx * $cos1 - $sinTh * $ry * $sin1;
-        $ey1    = $cy + $sinTh * $rx * $cos1 + $cosTh * $ry * $sin1;
+        $endX1    = $centerX + $cosTh * $radiusX * $cos1 - $sinTh * $radiusY * $sin1;
+        $endY1    = $centerY + $sinTh * $radiusX * $cos1 + $cosTh * $radiusY * $sin1;
 
         for ($i = 0; $i < $segments; $i++) {
-            $angle2 = $angle1 + $da;
+            $angle2 = $angle1 + $angleStep;
             $cos2   = cos($angle2);
             $sin2   = sin($angle2);
 
-            $ex2  = $cx + $cosTh * $rx * $cos2 - $sinTh * $ry * $sin2;
-            $ey2  = $cy + $sinTh * $rx * $cos2 + $cosTh * $ry * $sin2;
-            $txd1 = -$cosTh * $rx * $sin1 - $sinTh * $ry * $cos1;
-            $tyd1 = -$sinTh * $rx * $sin1 + $cosTh * $ry * $cos1;
-            $txd2 = -$cosTh * $rx * $sin2 - $sinTh * $ry * $cos2;
-            $tyd2 = -$sinTh * $rx * $sin2 + $cosTh * $ry * $cos2;
+            $endX2  = $centerX + $cosTh * $radiusX * $cos2 - $sinTh * $radiusY * $sin2;
+            $endY2  = $centerY + $sinTh * $radiusX * $cos2 + $cosTh * $radiusY * $sin2;
+            $tangentXD1 = -$cosTh * $radiusX * $sin1 - $sinTh * $radiusY * $cos1;
+            $tangentYD1 = -$sinTh * $radiusX * $sin1 + $cosTh * $radiusY * $cos1;
+            $tangentXD2 = -$cosTh * $radiusX * $sin2 - $sinTh * $radiusY * $cos2;
+            $tangentYD2 = -$sinTh * $radiusX * $sin2 + $cosTh * $radiusY * $cos2;
 
             $curves[] = [
-                $ex1 + $alpha * $txd1,
-                $ey1 + $alpha * $tyd1,
-                $ex2 - $alpha * $txd2,
-                $ey2 - $alpha * $tyd2,
-                $ex2,
-                $ey2,
+                $endX1 + $alpha * $tangentXD1,
+                $endY1 + $alpha * $tangentYD1,
+                $endX2 - $alpha * $tangentXD2,
+                $endY2 - $alpha * $tangentYD2,
+                $endX2,
+                $endY2,
             ];
 
             $angle1 = $angle2;
             $cos1   = $cos2;
             $sin1   = $sin2;
-            $ex1    = $ex2;
-            $ey1    = $ey2;
+            $endX1    = $endX2;
+            $endY1    = $endY2;
         }
 
         return $curves;

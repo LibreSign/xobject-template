@@ -15,7 +15,7 @@ use DOMElement;
  * Handles path, polygon, polyline, rect, circle, ellipse, and line SVG elements,
  * converting their geometry to PDF path operators while applying coordinate transforms.
  */
-final class SvgElementPathBuilder
+final readonly class SvgElementPathBuilder
 {
     public function __construct(
         private SvgTransformResolver $transformResolver = new SvgTransformResolver(),
@@ -64,12 +64,12 @@ final class SvgElementPathBuilder
         string $source,
         array $transformMatrix,
     ): ?string {
-        $d = trim($element->getAttribute('d'));
-        if ($d === '') {
+        $pathData = trim($element->getAttribute('d'));
+        if ($pathData === '') {
             return null;
         }
 
-        return $this->pathParser->convertPathData($d, $minX, $maxY, $source, $transformMatrix);
+        return $this->pathParser->convertPathData($pathData, $minX, $maxY, $source, $transformMatrix);
     }
 
     /**
@@ -97,16 +97,16 @@ final class SvgElementPathBuilder
         }
 
         $commands = [];
-        $x = (float) $raw[0];
-        $y = (float) $raw[1];
-        [$x, $y] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x, $y);
-        $commands[] = sprintf('%F %F m', $x - $minX, $maxY - $y);
+        $startX = (float) $raw[0];
+        $startY = (float) $raw[1];
+        [$startX, $startY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $startX, $startY);
+        $commands[] = sprintf('%F %F m', $startX - $minX, $maxY - $startY);
 
         for ($index = 2; $index < $rawCount; $index += 2) {
-            $px = (float) $raw[$index];
-            $py = (float) $raw[$index + 1];
-            [$px, $py] = $this->transformResolver->applyTransformToPoint($transformMatrix, $px, $py);
-            $commands[] = sprintf('%F %F l', $px - $minX, $maxY - $py);
+            $pointX = (float) $raw[$index];
+            $pointY = (float) $raw[$index + 1];
+            [$pointX, $pointY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $pointX, $pointY);
+            $commands[] = sprintf('%F %F l', $pointX - $minX, $maxY - $pointY);
         }
 
         $commands[] = 'h';
@@ -140,9 +140,9 @@ final class SvgElementPathBuilder
         ];
 
         $commands = [];
-        foreach ($points as $index => [$px, $py]) {
-            [$tx, $ty] = $this->transformResolver->applyTransformToPoint($transformMatrix, $px, $py);
-            $commands[] = sprintf('%F %F %s', $tx - $minX, $maxY - $ty, $index === 0 ? 'm' : 'l');
+        foreach ($points as $index => [$pointX, $pointY]) {
+            [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $pointX, $pointY);
+            $commands[] = sprintf('%F %F %s', $transformedX - $minX, $maxY - $transformedY, $index === 0 ? 'm' : 'l');
         }
 
         $commands[] = 'h';
@@ -183,12 +183,12 @@ final class SvgElementPathBuilder
         $commands[] = sprintf('%F %F m', $firstX - $minX, $maxY - $firstY);
 
         for ($index = 2; $index < $rawCount; $index += 2) {
-            [$tx, $ty] = $this->transformResolver->applyTransformToPoint(
+            [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint(
                 $transformMatrix,
                 (float) $raw[$index],
                 (float) $raw[$index + 1],
             );
-            $commands[] = sprintf('%F %F l', $tx - $minX, $maxY - $ty);
+            $commands[] = sprintf('%F %F l', $transformedX - $minX, $maxY - $transformedY);
         }
 
         return implode("\n", $commands);
@@ -203,15 +203,15 @@ final class SvgElementPathBuilder
         float $maxY,
         array $transformMatrix,
     ): ?string {
-        $cx = $this->extractNumericSvgLength($element->getAttribute('cx'));
-        $cy = $this->extractNumericSvgLength($element->getAttribute('cy'));
-        $r  = $this->extractNumericSvgLength($element->getAttribute('r'));
+        $centerX = $this->extractNumericSvgLength($element->getAttribute('cx'));
+        $centerY = $this->extractNumericSvgLength($element->getAttribute('cy'));
+        $radius  = $this->extractNumericSvgLength($element->getAttribute('r'));
 
-        if ($r <= 0.0) {
+        if ($radius <= 0.0) {
             return null;
         }
 
-        return $this->buildEllipsePath($cx, $cy, $r, $r, $minX, $maxY, $transformMatrix);
+        return $this->buildEllipsePath($centerX, $centerY, $radius, $radius, $minX, $maxY, $transformMatrix);
     }
 
     /**
@@ -223,16 +223,16 @@ final class SvgElementPathBuilder
         float $maxY,
         array $transformMatrix,
     ): ?string {
-        $cx = $this->extractNumericSvgLength($element->getAttribute('cx'));
-        $cy = $this->extractNumericSvgLength($element->getAttribute('cy'));
-        $rx = $this->extractNumericSvgLength($element->getAttribute('rx'));
-        $ry = $this->extractNumericSvgLength($element->getAttribute('ry'));
+        $centerX = $this->extractNumericSvgLength($element->getAttribute('cx'));
+        $centerY = $this->extractNumericSvgLength($element->getAttribute('cy'));
+        $radiusX = $this->extractNumericSvgLength($element->getAttribute('rx'));
+        $radiusY = $this->extractNumericSvgLength($element->getAttribute('ry'));
 
-        if ($rx <= 0.0 || $ry <= 0.0) {
+        if ($radiusX <= 0.0 || $radiusY <= 0.0) {
             return null;
         }
 
-        return $this->buildEllipsePath($cx, $cy, $rx, $ry, $minX, $maxY, $transformMatrix);
+        return $this->buildEllipsePath($centerX, $centerY, $radiusX, $radiusY, $minX, $maxY, $transformMatrix);
     }
 
     /**
@@ -242,26 +242,26 @@ final class SvgElementPathBuilder
      * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
      */
     private function buildEllipsePath(
-        float $cx,
-        float $cy,
-        float $rx,
-        float $ry,
+        float $centerX,
+        float $centerY,
+        float $radiusX,
+        float $radiusY,
         float $minX,
         float $maxY,
         array $transformMatrix,
     ): string {
-        $k  = 0.5522847498;
-        $kx = $k * $rx;
-        $ky = $k * $ry;
+        $kappa  = 0.5522847498;
+        $kappaX = $kappa * $radiusX;
+        $kappaY = $kappa * $radiusY;
 
-        $topX = $cx;
-        $topY = $cy - $ry;
-        $rightX = $cx + $rx;
-        $rightY = $cy;
-        $bottomX = $cx;
-        $bottomY = $cy + $ry;
-        $leftX = $cx - $rx;
-        $leftY = $cy;
+        $topX = $centerX;
+        $topY = $centerY - $radiusY;
+        $rightX = $centerX + $radiusX;
+        $rightY = $centerY;
+        $bottomX = $centerX;
+        $bottomY = $centerY + $radiusY;
+        $leftX = $centerX - $radiusX;
+        $leftY = $centerY;
 
         [$topX, $topY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $topX, $topY);
         [$rightX, $rightY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $rightX, $rightY);
@@ -270,43 +270,43 @@ final class SvgElementPathBuilder
 
         [$cpTopRight1X, $cpTopRight1Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx + $kx,
-            $cy - $ry,
+            $centerX + $kappaX,
+            $centerY - $radiusY,
         );
         [$cpTopRight2X, $cpTopRight2Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx + $rx,
-            $cy - $ky,
+            $centerX + $radiusX,
+            $centerY - $kappaY,
         );
         [$cpRightBottom1X, $cpRightBottom1Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx + $rx,
-            $cy + $ky,
+            $centerX + $radiusX,
+            $centerY + $kappaY,
         );
         [$cpRightBottom2X, $cpRightBottom2Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx + $kx,
-            $cy + $ry,
+            $centerX + $kappaX,
+            $centerY + $radiusY,
         );
         [$cpBottomLeft1X, $cpBottomLeft1Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx - $kx,
-            $cy + $ry,
+            $centerX - $kappaX,
+            $centerY + $radiusY,
         );
         [$cpBottomLeft2X, $cpBottomLeft2Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx - $rx,
-            $cy + $ky,
+            $centerX - $radiusX,
+            $centerY + $kappaY,
         );
         [$cpLeftTop1X, $cpLeftTop1Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx - $rx,
-            $cy - $ky,
+            $centerX - $radiusX,
+            $centerY - $kappaY,
         );
         [$cpLeftTop2X, $cpLeftTop2Y] = $this->transformResolver->applyTransformToPoint(
             $transformMatrix,
-            $cx - $kx,
-            $cy - $ry,
+            $centerX - $kappaX,
+            $centerY - $radiusY,
         );
 
         $commands = [];
@@ -357,17 +357,17 @@ final class SvgElementPathBuilder
      */
     private function buildLineElementPath(DOMElement $element, float $minX, float $maxY, array $transformMatrix): string
     {
-        $x1 = $this->extractNumericSvgLength($element->getAttribute('x1'));
-        $y1 = $this->extractNumericSvgLength($element->getAttribute('y1'));
-        $x2 = $this->extractNumericSvgLength($element->getAttribute('x2'));
-        $y2 = $this->extractNumericSvgLength($element->getAttribute('y2'));
+        $startX1 = $this->extractNumericSvgLength($element->getAttribute('x1'));
+        $startY1 = $this->extractNumericSvgLength($element->getAttribute('y1'));
+        $endX2 = $this->extractNumericSvgLength($element->getAttribute('x2'));
+        $endY2 = $this->extractNumericSvgLength($element->getAttribute('y2'));
 
-        [$x1, $y1] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x1, $y1);
-        [$x2, $y2] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x2, $y2);
+        [$startX1, $startY1] = $this->transformResolver->applyTransformToPoint($transformMatrix, $startX1, $startY1);
+        [$endX2, $endY2] = $this->transformResolver->applyTransformToPoint($transformMatrix, $endX2, $endY2);
 
         return implode("\n", [
-            sprintf('%F %F m', $x1 - $minX, $maxY - $y1),
-            sprintf('%F %F l', $x2 - $minX, $maxY - $y2),
+            sprintf('%F %F m', $startX1 - $minX, $maxY - $startY1),
+            sprintf('%F %F l', $endX2 - $minX, $maxY - $endY2),
         ]);
     }
 
