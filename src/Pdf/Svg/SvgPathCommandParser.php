@@ -440,7 +440,7 @@ final class SvgPathCommandParser
         return $values;
     }
 
-        private function buildCubicCurveCommand(
+    private function buildCubicCurveCommand(
         array $transformMatrix,
         float $minX,
         float $maxY,
