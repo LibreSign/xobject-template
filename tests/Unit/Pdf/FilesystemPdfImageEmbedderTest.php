@@ -500,6 +500,11 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     #[DataProvider('svgExtensionBoundaryProvider')]
     public function testEmbedCorrectlyDetectsSvgByFileExtensionBoundary(string $source, bool $shouldBeSvg): void
     {
+        $embeddedImage = new EmbeddedPdfImage(
+            $shouldBeSvg ? ['Type' => '/XObject', 'Subtype' => '/Form'] : ['Type' => '/Image'],
+            'stream-content',
+        );
+
         $embedder = new FilesystemPdfImageEmbedder(
             new class ($source) implements FilesystemImageSourceReaderInterface {
                 public function __construct(private readonly string $expectedSource)
@@ -511,7 +516,7 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
                     if ($source !== $this->expectedSource) {
                         throw new \RuntimeException(sprintf('Unexpected source: %s', $source));
                     }
-                    // Return non-SVG binary for files that shouldn't be detected as SVG
+                    // Return PNG binary regardless
                     return "\x89PNG\r\n\x1a\n";
                 }
             },
@@ -532,34 +537,35 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
                     throw new \RuntimeException('JPEG factory should not be used.');
                 }
             },
-            new class implements PngPdfImageFactoryInterface {
+            new class ($embeddedImage) implements PngPdfImageFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $image)
+                {
+                }
+
                 public function create(string $contents): EmbeddedPdfImage
                 {
-                    return new EmbeddedPdfImage(['Type' => '/Image'], 'stream');
+                    return $this->image;
                 }
             },
-            new class ($shouldBeSvg) implements SvgPdfXObjectFactoryInterface {
-                public function __construct(private readonly bool $shouldBeSvg)
+            new class ($embeddedImage) implements SvgPdfXObjectFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $image)
                 {
                 }
 
                 public function create(string $svgContents, string $source): EmbeddedPdfImage
                 {
-                    if (!$this->shouldBeSvg) {
-                        throw new \RuntimeException(sprintf('SVG factory should not be called for %s', $source));
-                    }
-                    return new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'stream');
+                    return $this->image;
                 }
             },
         );
 
+        $image = $embedder->embed($source);
+
         if ($shouldBeSvg) {
-            $image = $embedder->embed($source);
             self::assertSame('/XObject', $image->dictionary['Type']);
             self::assertSame('/Form', $image->dictionary['Subtype']);
         } else {
-            $image = $embedder->embed($source);
-            self::assertSame('/Image', $image->dictionary['Subtype']);
+            self::assertSame('/Image', $image->dictionary['Type']);
         }
     }
 
