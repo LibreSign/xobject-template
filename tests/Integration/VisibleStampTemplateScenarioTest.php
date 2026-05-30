@@ -275,6 +275,7 @@ final class VisibleStampTemplateScenarioTest extends TestCase
     private function compilePreviewWithSize(string $slug, string $html, float $width, float $height): array
     {
         ['previewRoot' => $previewRoot] = $this->ensurePreviewDirectories();
+        $this->removeLegacyPreviewPngs($previewRoot, $slug);
 
         $compiler = new XObjectTemplateCompiler();
         $result = $compiler->compile(new CompileRequest(
@@ -292,6 +293,20 @@ final class VisibleStampTemplateScenarioTest extends TestCase
             'pdf' => $pdf,
             'previewPath' => $previewPath,
         ];
+    }
+
+    private function removeLegacyPreviewPngs(string $previewRoot, string $slug): void
+    {
+        $legacyCandidates = [
+            $previewRoot . '/' . $slug . '.png',
+            $previewRoot . '/' . $slug . '-1.png',
+        ];
+
+        foreach ($legacyCandidates as $legacyCandidate) {
+            if (is_file($legacyCandidate)) {
+                unlink($legacyCandidate);
+            }
+        }
     }
 
     private function assertBasePreviewExport(
