@@ -36,6 +36,16 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
             'expectedDirection' => 'column',
         ];
 
+        yield 'mixed-case column stays column' => [
+            'direction' => 'CoLuMn',
+            'expectedDirection' => 'column',
+        ];
+
+        yield 'trimmed row stays row' => [
+            'direction' => ' row ',
+            'expectedDirection' => 'row',
+        ];
+
         yield 'unexpected value falls back to row' => [
             'direction' => '  unexpected  ',
             'expectedDirection' => 'row',
@@ -44,6 +54,7 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
 
     /**
      * @return iterable<string, array{
+     *     inlineStyle: string,
      *     direction: string,
      *     contentBox: array{x: float, y: float, width: float, height: float},
      *     expectedGap: float
@@ -52,15 +63,38 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
     public static function resolveGapProvider(): iterable
     {
         yield 'row gap uses container width' => [
+            'inlineStyle' => 'gap:10%',
             'direction' => 'row',
             'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0],
             'expectedGap' => 20.0,
         ];
 
         yield 'column gap uses container height' => [
+            'inlineStyle' => 'gap:10%',
             'direction' => 'column',
             'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0],
             'expectedGap' => 5.0,
+        ];
+
+        yield 'pixel gap converts through point normalization' => [
+            'inlineStyle' => 'gap:16PX',
+            'direction' => 'row',
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0],
+            'expectedGap' => 12.0,
+        ];
+
+        yield 'missing gap defaults to zero' => [
+            'inlineStyle' => '',
+            'direction' => 'row',
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 200.0, 'height' => 50.0],
+            'expectedGap' => 0.0,
+        ];
+
+        yield 'percentage gap on zero-width row resolves to zero' => [
+            'inlineStyle' => 'gap:10%',
+            'direction' => 'row',
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 50.0],
+            'expectedGap' => 0.0,
         ];
     }
 
@@ -114,6 +148,34 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
             'inlineStyle' => 'font-size:10',
             'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 0.0],
             'expectedSize' => ['width' => 24.46, 'height' => 12.0],
+        ];
+
+        yield 'explicit percentage size uses container references' => [
+            'node' => new Node(tag: 'span', text: 'Label', attributes: []),
+            'inlineStyle' => 'font-size:10;width:50%;height:25%',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 120.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 60.0, 'height' => 10.0],
+        ];
+
+        yield 'configured line height can grow measured text height' => [
+            'node' => new Node(tag: 'span', text: 'Label', attributes: []),
+            'inlineStyle' => 'font-size:10;line-height:18',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 24.46, 'height' => 18.0],
+        ];
+
+        yield 'configured line height does not shrink below font default' => [
+            'node' => new Node(tag: 'span', text: 'Label', attributes: []),
+            'inlineStyle' => 'font-size:10;line-height:8',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 24.46, 'height' => 12.0],
+        ];
+
+        yield 'image respects explicit pixel dimensions after point conversion' => [
+            'node' => new Node(tag: 'img', text: '', attributes: ['src' => '/icon.png']),
+            'inlineStyle' => 'width:40px;height:16PX',
+            'container' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 40.0],
+            'expectedSize' => ['width' => 30.0, 'height' => 12.0],
         ];
     }
 
@@ -216,6 +278,55 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
                 'mainAxisOffset' => 0.0,
             ],
         ];
+
+        yield 'center alignment uses half of remaining row space as offset' => [
+            'itemSizes' => [
+                ['width' => 20.0, 'height' => 10.0],
+                ['width' => 30.0, 'height' => 12.0],
+            ],
+            'direction' => 'row',
+            'justifyContent' => 'center',
+            'gap' => 0.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 50.0],
+            'expectedMetrics' => [
+                'mainAxisOffset' => 25.0,
+                'totalMainAxisSize' => 50.0,
+                'crossAxisSize' => 12.0,
+                'crossContainerSize' => 50.0,
+            ],
+        ];
+
+        yield 'flex-end alignment uses all remaining row space as offset' => [
+            'itemSizes' => [
+                ['width' => 20.0, 'height' => 10.0],
+                ['width' => 30.0, 'height' => 12.0],
+            ],
+            'direction' => 'row',
+            'justifyContent' => 'flex-end',
+            'gap' => 0.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 100.0, 'height' => 50.0],
+            'expectedMetrics' => [
+                'mainAxisOffset' => 50.0,
+                'totalMainAxisSize' => 50.0,
+            ],
+        ];
+
+        yield 'column space-between expands vertical gap across remaining space' => [
+            'itemSizes' => [
+                ['width' => 20.0, 'height' => 10.0],
+                ['width' => 15.0, 'height' => 20.0],
+            ],
+            'direction' => 'column',
+            'justifyContent' => 'space-between',
+            'gap' => 5.0,
+            'contentBox' => ['x' => 0.0, 'y' => 0.0, 'width' => 80.0, 'height' => 100.0],
+            'expectedMetrics' => [
+                'gap' => 70.0,
+                'totalMainAxisSize' => 100.0,
+                'crossAxisSize' => 20.0,
+                'crossContainerSize' => 80.0,
+            ],
+        ];
     }
 
     /**
@@ -290,6 +401,16 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
             'cursor' => 15.0,
             'expectedChildBox' => ['x' => 10.0],
         ];
+
+        yield 'column layout positions centered child within cross axis' => [
+            'itemSize' => ['width' => 50.0, 'height' => 20.0],
+            'direction' => 'column',
+            'alignItems' => 'center',
+            'contentBox' => ['x' => 10.0, 'y' => 20.0, 'width' => 200.0, 'height' => 100.0],
+            'crossContainerSize' => 200.0,
+            'cursor' => 15.0,
+            'expectedChildBox' => ['x' => 85.0, 'y' => 35.0, 'width' => 50.0, 'height' => 20.0],
+        ];
     }
 
     /**
@@ -329,12 +450,13 @@ final class StructuredFlexLayoutPlannerTest extends TestCase
 
     #[DataProvider('resolveGapProvider')]
     public function testResolveGapUsesExpectedAxis(
+        string $inlineStyle,
         string $direction,
         array $contentBox,
         float $expectedGap,
     ): void {
         $planner = new StructuredFlexLayoutPlanner(new LayoutStyleResolver());
-        $style = (new InlineStyleParser())->parse('gap:10%');
+        $style = (new InlineStyleParser())->parse($inlineStyle);
 
         self::assertSame($expectedGap, $planner->resolveGap($style, $direction, $contentBox));
     }
