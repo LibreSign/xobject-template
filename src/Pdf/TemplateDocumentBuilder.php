@@ -50,10 +50,12 @@ final readonly class TemplateDocumentBuilder
         ],
     ];
 
+    /** @var Closure():int */
     private Closure $clock;
 
     /**
      * @param array<string, array<string, mixed>> $fontResources
+     * @param ?Closure():int $clock
      */
     public function __construct(
         private PdfEscaper $pdfEscaper = new PdfEscaper(),
@@ -133,6 +135,9 @@ final readonly class TemplateDocumentBuilder
         ];
     }
 
+    /**
+     * @param array<string, array<string, mixed>> $fontResources
+     */
     public function withFontResources(array $fontResources): self
     {
         return new self($this->pdfEscaper, $this->colorParser, $fontResources, $this->clock);
