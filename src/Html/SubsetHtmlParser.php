@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Html;
 
+use DOMAttr;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
@@ -58,7 +59,7 @@ final class SubsetHtmlParser
         }
 
         $nodes = [];
-        foreach ($body->childNodes as $child) {
+        foreach ($this->iterateChildNodes($body) as $child) {
             $parsed = $this->parseDomNode($child, '');
             if ($parsed !== null) {
                 $nodes[] = $parsed;
@@ -92,7 +93,7 @@ final class SubsetHtmlParser
         }
 
         $children = [];
-        foreach ($node->childNodes as $childNode) {
+        foreach ($this->iterateChildNodes($node) as $childNode) {
             $child = $this->parseDomNode($childNode, $effectiveStyle);
             if ($child !== null) {
                 $children[] = $child;
@@ -128,14 +129,38 @@ final class SubsetHtmlParser
     private function collectAttributes(DOMElement $node): array
     {
         $attributes = [];
-        $nodeAttrs = $node->attributes;
-        if ($nodeAttrs !== null) {
-            foreach ($nodeAttrs as $attribute) {
-                $attributes[$attribute->name] = trim($attribute->value);
-            }
+        foreach ($this->iterateAttributes($node) as $attribute) {
+            $attributes[$attribute->name] = trim($attribute->value);
         }
 
         return $attributes;
+    }
+
+    /**
+     * @return \Generator<int, DOMNode>
+     */
+    private function iterateChildNodes(DOMNode $node): \Generator
+    {
+        /** @var DOMNode $child */
+        foreach ($node->childNodes as $child) {
+            yield $child;
+        }
+    }
+
+    /**
+     * @return \Generator<int, DOMAttr>
+     */
+    private function iterateAttributes(DOMElement $node): \Generator
+    {
+        $attributes = $node->attributes;
+        if ($attributes === null) {
+            return;
+        }
+
+        /** @var DOMAttr $attribute */
+        foreach ($attributes as $attribute) {
+            yield $attribute;
+        }
     }
 
     private function mergeStyle(string $inheritedStyle, string $ownStyle): string
