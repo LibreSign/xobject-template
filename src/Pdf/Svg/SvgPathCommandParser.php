@@ -95,7 +95,9 @@ final readonly class SvgPathCommandParser
             }
 
             if ($currentCommand === null) {
-                throw new InvalidArgumentException(sprintf('Invalid SVG path command sequence in "%s".', $context->source));
+                throw new InvalidArgumentException(
+                    sprintf('Invalid SVG path command sequence in "%s".', $context->source)
+                );
             }
 
             $isRelative = ctype_lower($currentCommand);
@@ -358,7 +360,16 @@ final readonly class SvgPathCommandParser
                 $y,
             );
 
-            $this->appendQuadraticAsCubicToState($state, $context, $controlX1, $controlY1, $controlX2, $controlY2, $x, $y);
+            $this->appendQuadraticAsCubicToState(
+                $state,
+                $context,
+                $controlX1,
+                $controlY1,
+                $controlX2,
+                $controlY2,
+                $x,
+                $y
+            );
             $state->prevQuadCpX = $qcpX;
             $state->prevQuadCpY = $qcpY;
         }
@@ -390,7 +401,16 @@ final readonly class SvgPathCommandParser
                 $y,
             );
 
-            $this->appendQuadraticAsCubicToState($state, $context, $controlX1, $controlY1, $controlX2, $controlY2, $x, $y);
+            $this->appendQuadraticAsCubicToState(
+                $state,
+                $context,
+                $controlX1,
+                $controlY1,
+                $controlX2,
+                $controlY2,
+                $x,
+                $y
+            );
             $state->prevQuadCpX = $qcpX;
             $state->prevQuadCpY = $qcpY;
         }
@@ -495,8 +515,16 @@ final readonly class SvgPathCommandParser
     ): void {
         $state->currentX = $toX;
         $state->currentY = $toY;
-        [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint($context->transformMatrix, $toX, $toY);
-        $state->commands[] = sprintf('%F %F l', $transformedX - $context->minX, $context->maxY - $transformedY);
+        [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint(
+            $context->transformMatrix,
+            $toX,
+            $toY
+        );
+        $state->commands[] = sprintf(
+            '%F %F l',
+            $transformedX - $context->minX,
+            $context->maxY - $transformedY
+        );
         $state->lastCubicControlX = null;
         $state->lastCubicControlY = null;
     }
@@ -561,9 +589,21 @@ final readonly class SvgPathCommandParser
         float $x,
         float $y,
     ): string {
-        [$transformX1, $transformY1] = $this->transformResolver->applyTransformToPoint($transformMatrix, $startX1, $startY1);
-        [$transformX2, $transformY2] = $this->transformResolver->applyTransformToPoint($transformMatrix, $endX2, $endY2);
-        [$transformX, $transformY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x, $y);
+        [$transformX1, $transformY1] = $this->transformResolver->applyTransformToPoint(
+            $transformMatrix,
+            $startX1,
+            $startY1
+        );
+        [$transformX2, $transformY2] = $this->transformResolver->applyTransformToPoint(
+            $transformMatrix,
+            $endX2,
+            $endY2
+        );
+        [$transformX, $transformY] = $this->transformResolver->applyTransformToPoint(
+            $transformMatrix,
+            $x,
+            $y
+        );
 
         return sprintf(
             '%F %F %F %F %F %F c',
