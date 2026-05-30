@@ -500,63 +500,69 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     #[DataProvider('svgExtensionBoundaryProvider')]
     public function testEmbedCorrectlyDetectsSvgByFileExtensionBoundary(string $source, bool $shouldBeSvg): void
     {
-        $embeddedImage = new EmbeddedPdfImage(
-            $shouldBeSvg ? ['Type' => '/XObject', 'Subtype' => '/Form'] : ['Type' => '/Image'],
-            'stream-content',
-        );
+        // Pre-build expected images based on file extension detection
+        $svgImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-stream');
+        $pngImage = new EmbeddedPdfImage(['Type' => '/Image'], 'png-stream');
+
+        // Source reader always returns consistent binary
+        $sourceReader = new class implements FilesystemImageSourceReaderInterface {
+            public function read(string $source): string
+            {
+                return "\x89PNG\r\n\x1a\n";
+            }
+        };
+
+        // Metadata inspector
+        $metadataInspector = new class implements ImageMetadataInspectorInterface {
+            public function detect(string $contents, string $source): array
+            {
+                return [];
+            }
+
+            public function resolveMimeType(array $imageInfo, string $source): string
+            {
+                return 'image/png';
+            }
+        };
+
+        // JPEG factory should never be invoked
+        $jpegFactory = new class implements JpegPdfImageFactoryInterface {
+            public function create(string $contents, array $imageInfo): EmbeddedPdfImage
+            {
+                throw new \RuntimeException('JPEG factory should not be used.');
+            }
+        };
+
+        // PNG factory returns pre-built PNG image
+        $pngFactory = new class ($pngImage) implements PngPdfImageFactoryInterface {
+            public function __construct(private readonly EmbeddedPdfImage $image)
+            {
+            }
+
+            public function create(string $contents): EmbeddedPdfImage
+            {
+                return $this->image;
+            }
+        };
+
+        // SVG factory returns pre-built SVG image
+        $svgFactory = new class ($svgImage) implements SvgPdfXObjectFactoryInterface {
+            public function __construct(private readonly EmbeddedPdfImage $image)
+            {
+            }
+
+            public function create(string $svgContents, string $source): EmbeddedPdfImage
+            {
+                return $this->image;
+            }
+        };
 
         $embedder = new FilesystemPdfImageEmbedder(
-            new class ($source) implements FilesystemImageSourceReaderInterface {
-                public function __construct(private readonly string $expectedSource)
-                {
-                }
-
-                public function read(string $source): string
-                {
-                    if ($source !== $this->expectedSource) {
-                        throw new \RuntimeException(sprintf('Unexpected source: %s', $source));
-                    }
-                    // Return PNG binary regardless
-                    return "\x89PNG\r\n\x1a\n";
-                }
-            },
-            new class implements ImageMetadataInspectorInterface {
-                public function detect(string $contents, string $source): array
-                {
-                    return [];
-                }
-
-                public function resolveMimeType(array $imageInfo, string $source): string
-                {
-                    return 'image/png';
-                }
-            },
-            new class implements JpegPdfImageFactoryInterface {
-                public function create(string $contents, array $imageInfo): EmbeddedPdfImage
-                {
-                    throw new \RuntimeException('JPEG factory should not be used.');
-                }
-            },
-            new class ($embeddedImage) implements PngPdfImageFactoryInterface {
-                public function __construct(private readonly EmbeddedPdfImage $image)
-                {
-                }
-
-                public function create(string $contents): EmbeddedPdfImage
-                {
-                    return $this->image;
-                }
-            },
-            new class ($embeddedImage) implements SvgPdfXObjectFactoryInterface {
-                public function __construct(private readonly EmbeddedPdfImage $image)
-                {
-                }
-
-                public function create(string $svgContents, string $source): EmbeddedPdfImage
-                {
-                    return $this->image;
-                }
-            },
+            $sourceReader,
+            $metadataInspector,
+            $jpegFactory,
+            $pngFactory,
+            $svgFactory,
         );
 
         $image = $embedder->embed($source);

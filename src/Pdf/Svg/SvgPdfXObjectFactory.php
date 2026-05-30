@@ -733,9 +733,6 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
     /**
      * @param array{0:float,1:float,2:float,3:float,4:float,5:float} $transformMatrix
      */
-    /**
-     * @SuppressWarnings(PHPMD.CyclomaticComplexity,PHPMD.NPathComplexity,PHPMD.ExcessiveMethodLength)
-     */
     private function convertPathData(
         string $pathData,
         float $minX,
@@ -759,16 +756,11 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             $tokens[] = $match[1] !== '' ? $match[1] : $match[2];
         }
 
+        $state = new PathParsingState();
+        $context = new PathCommandContext($transformMatrix, $minX, $maxY, $source);
         $tokenCount = count($tokens);
-        $commands = [];
         $index = 0;
         $currentCommand = null;
-        $currentX = 0.0;
-        $currentY = 0.0;
-        $lastCubicControlX = null;
-        $lastCubicControlY = null;
-        $lastQuadraticControlX = null;
-        $lastQuadraticControlY = null;
 
         while ($index < $tokenCount) {
             $token = $tokens[$index];
@@ -784,279 +776,333 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             $isRelative = ctype_lower($currentCommand);
             $command = strtoupper($currentCommand);
 
-            switch ($command) {
-                case 'M':
-                    $coordinates = $this->readPathNumbers($tokens, $index, 2, $source);
-                    $currentX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                    $currentY = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
-                    [$mX, $mY] = $this->applyTransformToPoint($transformMatrix, $currentX, $currentY);
-                    $commands[] = sprintf('%F %F m', $mX - $minX, $maxY - $mY);
-                    $lastCubicControlX = null;
-                    $lastCubicControlY = null;
-
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 2, $source);
-                        $nextX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                        $nextY = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
-                        $this->appendLineCommand(
-                            $commands,
-                            $transformMatrix,
-                            $minX,
-                            $maxY,
-                            $currentX,
-                            $currentY,
-                            $nextX,
-                            $nextY,
-                        );
-                    }
-                        $lastCubicControlX     = null;
-                        $lastCubicControlY     = null;
-                        $lastQuadraticControlX = null;
-                        $lastQuadraticControlY = null;
-                    break;
-
-                case 'L':
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 2, $source);
-                        $nextX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                        $nextY = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
-                        $this->appendLineCommand(
-                            $commands,
-                            $transformMatrix,
-                            $minX,
-                            $maxY,
-                            $currentX,
-                            $currentY,
-                            $nextX,
-                            $nextY,
-                        );
-                        $lastCubicControlX = null;
-                        $lastCubicControlY = null;
-                    }
-                    break;
-
-                case 'H':
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 1, $source);
-                        $currentX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                        [$lX, $lY] = $this->applyTransformToPoint($transformMatrix, $currentX, $currentY);
-                        $commands[] = sprintf('%F %F l', $lX - $minX, $maxY - $lY);
-                        $lastCubicControlX = null;
-                        $lastCubicControlY = null;
-                    }
-                    break;
-
-                case 'V':
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 1, $source);
-                        $currentY = $isRelative ? $currentY + $coordinates[0] : $coordinates[0];
-                        [$lX, $lY] = $this->applyTransformToPoint($transformMatrix, $currentX, $currentY);
-                        $commands[] = sprintf('%F %F l', $lX - $minX, $maxY - $lY);
-                        $lastCubicControlX = null;
-                        $lastCubicControlY = null;
-                    }
-                    break;
-
-                case 'C':
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 6, $source);
-
-                        $x1 = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                        $y1 = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
-                        $x2 = $isRelative ? $currentX + $coordinates[2] : $coordinates[2];
-                        $y2 = $isRelative ? $currentY + $coordinates[3] : $coordinates[3];
-                        $x = $isRelative ? $currentX + $coordinates[4] : $coordinates[4];
-                        $y = $isRelative ? $currentY + $coordinates[5] : $coordinates[5];
-
-                        $commands[] = $this->buildCubicCurveCommand(
-                            $transformMatrix,
-                            $minX,
-                            $maxY,
-                            $x1,
-                            $y1,
-                            $x2,
-                            $y2,
-                            $x,
-                            $y,
-                        );
-
-                        $currentX = $x;
-                        $currentY = $y;
-                        $lastCubicControlX = $x2;
-                        $lastCubicControlY = $y2;
-                    }
-                    break;
-
-                case 'S':
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 4, $source);
-
-                        $x1 = $lastCubicControlX === null ? $currentX : (2 * $currentX) - $lastCubicControlX;
-                        $y1 = $lastCubicControlY === null ? $currentY : (2 * $currentY) - $lastCubicControlY;
-                        $x2 = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                        $y2 = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
-                        $x = $isRelative ? $currentX + $coordinates[2] : $coordinates[2];
-                        $y = $isRelative ? $currentY + $coordinates[3] : $coordinates[3];
-
-                        $commands[] = $this->buildCubicCurveCommand(
-                            $transformMatrix,
-                            $minX,
-                            $maxY,
-                            $x1,
-                            $y1,
-                            $x2,
-                            $y2,
-                            $x,
-                            $y,
-                        );
-
-                        $currentX = $x;
-                        $currentY = $y;
-                        $lastCubicControlX = $x2;
-                        $lastCubicControlY = $y2;
-                    }
-                    break;
-
-                case 'Q':
-                    // Quadratic Bézier → elevated to cubic:
-                    // cp1 = current + 2/3*(cp − current), cp2 = end + 2/3*(cp − end)
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 4, $source);
-
-                        $qcpX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                        $qcpY = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
-                        $x    = $isRelative ? $currentX + $coordinates[2] : $coordinates[2];
-                        $y    = $isRelative ? $currentY + $coordinates[3] : $coordinates[3];
-
-                        $x1 = $currentX + (2.0 / 3.0) * ($qcpX - $currentX);
-                        $y1 = $currentY + (2.0 / 3.0) * ($qcpY - $currentY);
-                        $x2 = $x + (2.0 / 3.0) * ($qcpX - $x);
-                        $y2 = $y + (2.0 / 3.0) * ($qcpY - $y);
-
-                        $commands[] = $this->buildCubicCurveCommand(
-                            $transformMatrix,
-                            $minX,
-                            $maxY,
-                            $x1,
-                            $y1,
-                            $x2,
-                            $y2,
-                            $x,
-                            $y,
-                        );
-
-                        $currentX = $x;
-                        $currentY = $y;
-                        $lastCubicControlX = null;
-                        $lastCubicControlY = null;
-                        $lastQuadraticControlX = $qcpX;
-                        $lastQuadraticControlY = $qcpY;
-                    }
-                    break;
-
-                case 'T':
-                    // Smooth quadratic: reflect previous quadratic control point
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 2, $source);
-
-                        $qcpX = $lastQuadraticControlX === null
-                            ? $currentX
-                            : (2.0 * $currentX) - $lastQuadraticControlX;
-                        $qcpY = $lastQuadraticControlY === null
-                            ? $currentY
-                            : (2.0 * $currentY) - $lastQuadraticControlY;
-                        $x    = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
-                        $y    = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
-
-                        $x1 = $currentX + (2.0 / 3.0) * ($qcpX - $currentX);
-                        $y1 = $currentY + (2.0 / 3.0) * ($qcpY - $currentY);
-                        $x2 = $x + (2.0 / 3.0) * ($qcpX - $x);
-                        $y2 = $y + (2.0 / 3.0) * ($qcpY - $y);
-
-                        $commands[] = $this->buildCubicCurveCommand(
-                            $transformMatrix,
-                            $minX,
-                            $maxY,
-                            $x1,
-                            $y1,
-                            $x2,
-                            $y2,
-                            $x,
-                            $y,
-                        );
-
-                        $lastQuadraticControlX = $qcpX;
-                        $lastQuadraticControlY = $qcpY;
-                        $currentX = $x;
-                        $currentY = $y;
-                        $lastCubicControlX = null;
-                        $lastCubicControlY = null;
-                    }
-                    break;
-
-                case 'A':
-                    // Elliptical arc: 7 params (rx ry x-rotation large-arc-flag sweep-flag x y)
-                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
-                        $coordinates = $this->readPathNumbers($tokens, $index, 7, $source);
-
-                        $rx       = abs($coordinates[0]);
-                        $ry       = abs($coordinates[1]);
-                        $rotation = $coordinates[2];
-                        $largeArc = (int) $coordinates[3];
-                        $sweep    = (int) $coordinates[4];
-                        $x        = $isRelative ? $currentX + $coordinates[5] : $coordinates[5];
-                        $y        = $isRelative ? $currentY + $coordinates[6] : $coordinates[6];
-
-                        $curves = $this->arcToBezierCurves(
-                            $currentX,
-                            $currentY,
-                            $rx,
-                            $ry,
-                            $rotation,
-                            $largeArc,
-                            $sweep,
-                            $x,
-                            $y,
-                        );
-
-                        foreach ($curves as $curve) {
-                            [$cp1x, $cp1y] = $this->applyTransformToPoint($transformMatrix, $curve[0], $curve[1]);
-                            [$cp2x, $cp2y] = $this->applyTransformToPoint($transformMatrix, $curve[2], $curve[3]);
-                            [$ex, $ey] = $this->applyTransformToPoint($transformMatrix, $curve[4], $curve[5]);
-                            $commands[] = sprintf(
-                                '%F %F %F %F %F %F c',
-                                $cp1x - $minX,
-                                $maxY - $cp1y,
-                                $cp2x - $minX,
-                                $maxY - $cp2y,
-                                $ex - $minX,
-                                $maxY - $ey,
-                            );
-                        }
-
-                        $currentX = $x;
-                        $currentY = $y;
-                        $lastCubicControlX = null;
-                        $lastCubicControlY = null;
-                    }
-                    break;
-
-                case 'Z':
-                    $commands[] = 'h';
-                    $lastCubicControlX = null;
-                    $lastCubicControlY = null;
-                    break;
-
-                default:
-                    throw new InvalidArgumentException(sprintf(
-                        'SVG path command "%s" is not supported for source "%s".',
-                        $currentCommand,
-                        $source,
-                    ));
-            }
+            $this->handlePathCommand(
+                $command,
+                $isRelative,
+                $tokens,
+                $index,
+                $tokenCount,
+                $state,
+                $context,
+            );
         }
 
-        return implode("\n", $commands);
+        return implode("\n", $state->commands);
+    }
+
+    /**
+     * Route path command to appropriate handler.
+     *
+     * @param list<string> $tokens
+     */
+    private function handlePathCommand(
+        string $command,
+        bool $isRelative,
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        match ($command) {
+            'M' => $this->handleMoveCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'L' => $this->handleLineCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'H' => $this->handleHorizontalCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'V' => $this->handleVerticalCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'C' => $this->handleCubicCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'S' => $this->handleSmoothCubicCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'Q' => $this->handleQuadraticCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'T' => $this->handleSmoothQuadraticCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'A' => $this->handleArcCommand($tokens, $index, $tokenCount, $isRelative, $state, $context),
+            'Z' => $this->handleClosePathCommand($state),
+            default => throw new InvalidArgumentException(sprintf(
+                'SVG path command "%s" is not supported for source "%s".',
+                $command,
+                $context->source,
+            )),
+        };
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleMoveCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
+        $state->currentX = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+        $state->currentY = $isRelative ? $state->currentY + $coordinates[1] : $coordinates[1];
+        [$mX, $mY] = $this->applyTransformToPoint($context->transformMatrix, $state->currentX, $state->currentY);
+        $state->commands[] = sprintf('%F %F m', $mX - $context->minX, $context->maxY - $mY);
+        $state->lastCubicControlX = null;
+        $state->lastCubicControlY = null;
+
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
+            $nextX = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+            $nextY = $isRelative ? $state->currentY + $coordinates[1] : $coordinates[1];
+            $this->appendLineToState($state, $context, $nextX, $nextY);
+        }
+        $state->lastQuadraticControlX = null;
+        $state->lastQuadraticControlY = null;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleLineCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
+            $nextX = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+            $nextY = $isRelative ? $state->currentY + $coordinates[1] : $coordinates[1];
+            $this->appendLineToState($state, $context, $nextX, $nextY);
+        }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleHorizontalCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 1, $context->source);
+            $state->currentX = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+            [$lX, $lY] = $this->applyTransformToPoint($context->transformMatrix, $state->currentX, $state->currentY);
+            $state->commands[] = sprintf('%F %F l', $lX - $context->minX, $context->maxY - $lY);
+            $state->lastCubicControlX = null;
+            $state->lastCubicControlY = null;
+        }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleVerticalCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 1, $context->source);
+            $state->currentY = $isRelative ? $state->currentY + $coordinates[0] : $coordinates[0];
+            [$lX, $lY] = $this->applyTransformToPoint($context->transformMatrix, $state->currentX, $state->currentY);
+            $state->commands[] = sprintf('%F %F l', $lX - $context->minX, $context->maxY - $lY);
+            $state->lastCubicControlX = null;
+            $state->lastCubicControlY = null;
+        }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleCubicCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 6, $context->source);
+            $x1 = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+            $y1 = $isRelative ? $state->currentY + $coordinates[1] : $coordinates[1];
+            $x2 = $isRelative ? $state->currentX + $coordinates[2] : $coordinates[2];
+            $y2 = $isRelative ? $state->currentY + $coordinates[3] : $coordinates[3];
+            $x = $isRelative ? $state->currentX + $coordinates[4] : $coordinates[4];
+            $y = $isRelative ? $state->currentY + $coordinates[5] : $coordinates[5];
+
+            $state->commands[] = $this->buildCubicCurveCommand($context->transformMatrix, $context->minX, $context->maxY, $x1, $y1, $x2, $y2, $x, $y);
+            $state->currentX = $x;
+            $state->currentY = $y;
+            $state->lastCubicControlX = $x2;
+            $state->lastCubicControlY = $y2;
+        }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleSmoothCubicCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 4, $context->source);
+            $x1 = $state->lastCubicControlX === null ? $state->currentX : (2 * $state->currentX) - $state->lastCubicControlX;
+            $y1 = $state->lastCubicControlY === null ? $state->currentY : (2 * $state->currentY) - $state->lastCubicControlY;
+            $x2 = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+            $y2 = $isRelative ? $state->currentY + $coordinates[1] : $coordinates[1];
+            $x = $isRelative ? $state->currentX + $coordinates[2] : $coordinates[2];
+            $y = $isRelative ? $state->currentY + $coordinates[3] : $coordinates[3];
+
+            $state->commands[] = $this->buildCubicCurveCommand($context->transformMatrix, $context->minX, $context->maxY, $x1, $y1, $x2, $y2, $x, $y);
+            $state->currentX = $x;
+            $state->currentY = $y;
+            $state->lastCubicControlX = $x2;
+            $state->lastCubicControlY = $y2;
+        }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleQuadraticCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 4, $context->source);
+            $qcpX = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+            $qcpY = $isRelative ? $state->currentY + $coordinates[1] : $coordinates[1];
+            $x    = $isRelative ? $state->currentX + $coordinates[2] : $coordinates[2];
+            $y    = $isRelative ? $state->currentY + $coordinates[3] : $coordinates[3];
+
+            $x1 = $state->currentX + (2.0 / 3.0) * ($qcpX - $state->currentX);
+            $y1 = $state->currentY + (2.0 / 3.0) * ($qcpY - $state->currentY);
+            $x2 = $x + (2.0 / 3.0) * ($qcpX - $x);
+            $y2 = $y + (2.0 / 3.0) * ($qcpY - $y);
+
+            $state->commands[] = $this->buildCubicCurveCommand($context->transformMatrix, $context->minX, $context->maxY, $x1, $y1, $x2, $y2, $x, $y);
+            $state->currentX = $x;
+            $state->currentY = $y;
+            $state->lastCubicControlX = null;
+            $state->lastCubicControlY = null;
+            $state->lastQuadraticControlX = $qcpX;
+            $state->lastQuadraticControlY = $qcpY;
+        }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleSmoothQuadraticCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
+            $qcpX = $state->lastQuadraticControlX === null
+                ? $state->currentX
+                : (2.0 * $state->currentX) - $state->lastQuadraticControlX;
+            $qcpY = $state->lastQuadraticControlY === null
+                ? $state->currentY
+                : (2.0 * $state->currentY) - $state->lastQuadraticControlY;
+            $x = $isRelative ? $state->currentX + $coordinates[0] : $coordinates[0];
+            $y = $isRelative ? $state->currentY + $coordinates[1] : $coordinates[1];
+
+            $x1 = $state->currentX + (2.0 / 3.0) * ($qcpX - $state->currentX);
+            $y1 = $state->currentY + (2.0 / 3.0) * ($qcpY - $state->currentY);
+            $x2 = $x + (2.0 / 3.0) * ($qcpX - $x);
+            $y2 = $y + (2.0 / 3.0) * ($qcpY - $y);
+
+            $state->commands[] = $this->buildCubicCurveCommand($context->transformMatrix, $context->minX, $context->maxY, $x1, $y1, $x2, $y2, $x, $y);
+            $state->lastQuadraticControlX = $qcpX;
+            $state->lastQuadraticControlY = $qcpY;
+            $state->currentX = $x;
+            $state->currentY = $y;
+            $state->lastCubicControlX = null;
+            $state->lastCubicControlY = null;
+        }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function handleArcCommand(
+        array $tokens,
+        int &$index,
+        int $tokenCount,
+        bool $isRelative,
+        PathParsingState $state,
+        PathCommandContext $context,
+    ): void {
+        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+            $coordinates = $this->readPathNumbers($tokens, $index, 7, $context->source);
+            $rx       = abs($coordinates[0]);
+            $ry       = abs($coordinates[1]);
+            $rotation = $coordinates[2];
+            $largeArc = (int) $coordinates[3];
+            $sweep    = (int) $coordinates[4];
+            $x        = $isRelative ? $state->currentX + $coordinates[5] : $coordinates[5];
+            $y        = $isRelative ? $state->currentY + $coordinates[6] : $coordinates[6];
+
+            $curves = $this->arcToBezierCurves($state->currentX, $state->currentY, $rx, $ry, $rotation, $largeArc, $sweep, $x, $y);
+
+            foreach ($curves as $curve) {
+                [$cp1x, $cp1y] = $this->applyTransformToPoint($context->transformMatrix, $curve[0], $curve[1]);
+                [$cp2x, $cp2y] = $this->applyTransformToPoint($context->transformMatrix, $curve[2], $curve[3]);
+                [$ex, $ey] = $this->applyTransformToPoint($context->transformMatrix, $curve[4], $curve[5]);
+                $state->commands[] = sprintf(
+                    '%F %F %F %F %F %F c',
+                    $cp1x - $context->minX,
+                    $context->maxY - $cp1y,
+                    $cp2x - $context->minX,
+                    $context->maxY - $cp2y,
+                    $ex - $context->minX,
+                    $context->maxY - $ey,
+                );
+            }
+
+            $state->currentX = $x;
+            $state->currentY = $y;
+            $state->lastCubicControlX = null;
+            $state->lastCubicControlY = null;
+        }
+    }
+
+    private function handleClosePathCommand(PathParsingState $state): void
+    {
+        $state->commands[] = 'h';
+        $state->lastCubicControlX = null;
+        $state->lastCubicControlY = null;
+    }
+
+    private function appendLineToState(
+        PathParsingState $state,
+        PathCommandContext $context,
+        float $toX,
+        float $toY,
+    ): void {
+        $state->currentX = $toX;
+        $state->currentY = $toY;
+        [$lX, $lY] = $this->applyTransformToPoint($context->transformMatrix, $toX, $toY);
+        $state->commands[] = sprintf('%F %F l', $lX - $context->minX, $context->maxY - $lY);
+        $state->lastCubicControlX = null;
+        $state->lastCubicControlY = null;
     }
 
     /**
@@ -1238,26 +1284,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         );
     }
 
-    /**
-     * @param list<string> $commands
-     * @param array{0:float,1:float,2:float,3:float,4:float,5:float} $transformMatrix
-     */
-    private function appendLineCommand(
-        array &$commands,
-        array $transformMatrix,
-        float $minX,
-        float $maxY,
-        float &$currentX,
-        float &$currentY,
-        float $nextX,
-        float $nextY,
-    ): void {
-        $currentX = $nextX;
-        $currentY = $nextY;
 
-        [$lX, $lY] = $this->applyTransformToPoint($transformMatrix, $currentX, $currentY);
-        $commands[] = sprintf('%F %F l', $lX - $minX, $maxY - $lY);
-    }
 
     /**
      * @return array{0:float,1:float,2:float,3:float,4:float,5:float}
