@@ -152,6 +152,9 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
     /**
      * @return array{0: array<string, string>, 1: array<string, string>}
      */
+    /**
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     */
     private function extractClassColorMaps(DOMElement $svg): array
     {
         $fills   = [];
@@ -267,7 +270,8 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         }
 
         $raw = $matches[0];
-        if (count($raw) < 4 || count($raw) % 2 !== 0) {
+        $rawCount = count($raw);
+        if ($rawCount < 4 || $rawCount % 2 !== 0) {
             return null;
         }
 
@@ -277,7 +281,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         [$x, $y] = $this->applyTransformToPoint($transformMatrix, $x, $y);
         $commands[] = sprintf('%F %F m', $x - $minX, $maxY - $y);
 
-        for ($index = 2; $index < count($raw); $index += 2) {
+        for ($index = 2; $index < $rawCount; $index += 2) {
             $px = (float) $raw[$index];
             $py = (float) $raw[$index + 1];
             [$px, $py] = $this->applyTransformToPoint($transformMatrix, $px, $py);
@@ -344,7 +348,8 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         }
 
         $raw = $matches[0];
-        if (count($raw) < 4 || count($raw) % 2 !== 0) {
+        $rawCount = count($raw);
+        if ($rawCount < 4 || $rawCount % 2 !== 0) {
             return null;
         }
 
@@ -356,7 +361,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         );
         $commands[] = sprintf('%F %F m', $firstX - $minX, $maxY - $firstY);
 
-        for ($index = 2; $index < count($raw); $index += 2) {
+        for ($index = 2; $index < $rawCount; $index += 2) {
             [$tx, $ty] = $this->applyTransformToPoint(
                 $transformMatrix,
                 (float) $raw[$index],
@@ -415,6 +420,9 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
      */
     /**
      * @param array{0:float,1:float,2:float,3:float,4:float,5:float} $transformMatrix
+     */
+    /**
+     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
      */
     private function buildEllipsePath(
         float $cx,
@@ -547,6 +555,9 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
     }
 
     /** @param array<string, string> $classFills */
+    /**
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity,PHPMD.NPathComplexity)
+     */
     private function resolveFillColor(DOMElement $element, array $classFills): ?string
     {
         $inlineFill = $this->normalizeColor($element->getAttribute('fill'));
@@ -598,6 +609,9 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
     /**
      * @param array<string, string> $classStrokes
+     */
+    /**
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity,PHPMD.NPathComplexity)
      */
     private function resolveStrokeColor(DOMElement $element, array $classStrokes): ?string
     {
@@ -719,6 +733,9 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
     /**
      * @param array{0:float,1:float,2:float,3:float,4:float,5:float} $transformMatrix
      */
+    /**
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity,PHPMD.NPathComplexity,PHPMD.ExcessiveMethodLength)
+     */
     private function convertPathData(
         string $pathData,
         float $minX,
@@ -742,6 +759,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             $tokens[] = $match[1] !== '' ? $match[1] : $match[2];
         }
 
+        $tokenCount = count($tokens);
         $commands = [];
         $index = 0;
         $currentCommand = null;
@@ -752,7 +770,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $lastQuadraticControlX = null;
         $lastQuadraticControlY = null;
 
-        while ($index < count($tokens)) {
+        while ($index < $tokenCount) {
             $token = $tokens[$index];
             if (preg_match('/^[A-Za-z]$/', $token) === 1) {
                 $currentCommand = $token;
@@ -776,7 +794,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                     $lastCubicControlX = null;
                     $lastCubicControlY = null;
 
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 2, $source);
                         $nextX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
                         $nextY = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
@@ -798,7 +816,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                     break;
 
                 case 'L':
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 2, $source);
                         $nextX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
                         $nextY = $isRelative ? $currentY + $coordinates[1] : $coordinates[1];
@@ -818,7 +836,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                     break;
 
                 case 'H':
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 1, $source);
                         $currentX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
                         [$lX, $lY] = $this->applyTransformToPoint($transformMatrix, $currentX, $currentY);
@@ -829,7 +847,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                     break;
 
                 case 'V':
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 1, $source);
                         $currentY = $isRelative ? $currentY + $coordinates[0] : $coordinates[0];
                         [$lX, $lY] = $this->applyTransformToPoint($transformMatrix, $currentX, $currentY);
@@ -840,7 +858,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                     break;
 
                 case 'C':
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 6, $source);
 
                         $x1 = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
@@ -870,7 +888,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                     break;
 
                 case 'S':
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 4, $source);
 
                         $x1 = $lastCubicControlX === null ? $currentX : (2 * $currentX) - $lastCubicControlX;
@@ -902,7 +920,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                 case 'Q':
                     // Quadratic Bézier → elevated to cubic:
                     // cp1 = current + 2/3*(cp − current), cp2 = end + 2/3*(cp − end)
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 4, $source);
 
                         $qcpX = $isRelative ? $currentX + $coordinates[0] : $coordinates[0];
@@ -938,7 +956,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
                 case 'T':
                     // Smooth quadratic: reflect previous quadratic control point
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 2, $source);
 
                         $qcpX = $lastQuadraticControlX === null
@@ -978,7 +996,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
                 case 'A':
                     // Elliptical arc: 7 params (rx ry x-rotation large-arc-flag sweep-flag x y)
-                    while ($index < count($tokens) && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+                    while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
                         $coordinates = $this->readPathNumbers($tokens, $index, 7, $source);
 
                         $rx       = abs($coordinates[0]);
@@ -1047,6 +1065,9 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
      * Follows W3C SVG Specification Appendix F.6 (endpoint → center parameterization).
      *
      * @return list<array{0:float,1:float,2:float,3:float,4:float,5:float}>
+     */
+    /**
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity,PHPMD.NPathComplexity,PHPMD.ExcessiveMethodLength)
      */
     private function arcToBezierCurves(
         float $fromX,

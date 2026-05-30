@@ -497,6 +497,85 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         self::assertSame("\x00\x40\x80\x00\xc0\xff", gzuncompress($image->softMask->stream));
     }
 
+    #[DataProvider('svgExtensionBoundaryProvider')]
+    public function testEmbedCorrectlyDetectsSvgByFileExtensionBoundary(string $source, bool $shouldBeSvg): void
+    {
+        $embedder = new FilesystemPdfImageEmbedder(
+            new class ($source) implements FilesystemImageSourceReaderInterface {
+                public function __construct(private readonly string $expectedSource)
+                {
+                }
+
+                public function read(string $source): string
+                {
+                    if ($source !== $this->expectedSource) {
+                        throw new \RuntimeException(sprintf('Unexpected source: %s', $source));
+                    }
+                    // Return non-SVG binary for files that shouldn't be detected as SVG
+                    return "\x89PNG\r\n\x1a\n";
+                }
+            },
+            new class implements ImageMetadataInspectorInterface {
+                public function detect(string $contents, string $source): array
+                {
+                    return [];
+                }
+
+                public function resolveMimeType(array $imageInfo, string $source): string
+                {
+                    return 'image/png';
+                }
+            },
+            new class implements JpegPdfImageFactoryInterface {
+                public function create(string $contents, array $imageInfo): EmbeddedPdfImage
+                {
+                    throw new \RuntimeException('JPEG factory should not be used.');
+                }
+            },
+            new class implements PngPdfImageFactoryInterface {
+                public function create(string $contents): EmbeddedPdfImage
+                {
+                    return new EmbeddedPdfImage(['Type' => '/Image'], 'stream');
+                }
+            },
+            new class ($shouldBeSvg) implements SvgPdfXObjectFactoryInterface {
+                public function __construct(private readonly bool $shouldBeSvg)
+                {
+                }
+
+                public function create(string $svgContents, string $source): EmbeddedPdfImage
+                {
+                    if (!$this->shouldBeSvg) {
+                        throw new \RuntimeException(sprintf('SVG factory should not be called for %s', $source));
+                    }
+                    return new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'stream');
+                }
+            },
+        );
+
+        if ($shouldBeSvg) {
+            $image = $embedder->embed($source);
+            self::assertSame('/XObject', $image->dictionary['Type']);
+            self::assertSame('/Form', $image->dictionary['Subtype']);
+        } else {
+            $image = $embedder->embed($source);
+            self::assertSame('/Image', $image->dictionary['Subtype']);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{source: string, shouldBeSvg: bool}>
+     */
+    public static function svgExtensionBoundaryProvider(): iterable
+    {
+        yield 'SVG extension detected' => ['source' => '/path/to/file.svg', 'shouldBeSvg' => true];
+        yield 'SVGZ extension detected' => ['source' => '/path/to/file.svgz', 'shouldBeSvg' => true];
+        yield 'SVG extension case-insensitive uppercase' => ['source' => '/path/to/file.SVG', 'shouldBeSvg' => true];
+        yield 'SVG extension case-insensitive mixed' => ['source' => '/path/to/file.Svg', 'shouldBeSvg' => true];
+        yield 'SVG in middle of filename not detected as SVG' => ['source' => '/path/svg.backup', 'shouldBeSvg' => false];
+        yield 'SVG in filename but different extension' => ['source' => '/path/my.svg.txt', 'shouldBeSvg' => false];
+    }
+
     /**
      * @return iterable<string, array{filterType: int}>
      */
