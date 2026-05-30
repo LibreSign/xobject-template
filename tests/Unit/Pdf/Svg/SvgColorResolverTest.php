@@ -77,14 +77,48 @@ final class SvgColorResolverTest extends TestCase
         self::assertNull($resolver->resolveStrokeColor($fallback, []));
     }
 
-    public function testExtractValueFromStyleAttributeReturnsRequestedProperty(): void
-    {
+    #[DataProvider('provideExtractValueFromStyleAttributeScenarios')]
+    public function testExtractValueFromStyleAttributeReturnsRequestedProperty(
+        string $style,
+        string $property,
+        ?string $expected,
+        bool $useColorExtractor = false,
+    ): void {
         $resolver = new SvgColorResolver();
 
-        self::assertSame('2.5', $resolver->extractValueFromStyleAttribute('fill:#fff; stroke-width: 2.5 ;', 'stroke-width'));
-        self::assertSame('#fff', $resolver->extractColorFromStyleAttribute(' FiLl : #fff ; ', 'fill'));
-        self::assertNull($resolver->extractValueFromStyleAttribute('', 'fill'));
-        self::assertNull($resolver->extractValueFromStyleAttribute('stroke:#000', 'fill'));
+        $result = $useColorExtractor
+            ? $resolver->extractColorFromStyleAttribute($style, $property)
+            : $resolver->extractValueFromStyleAttribute($style, $property);
+
+        self::assertSame($expected, $result);
+    }
+
+    /**
+     * @return iterable<string, array{style: string, property: string, expected: ?string, useColorExtractor?: bool}>
+     */
+    public static function provideExtractValueFromStyleAttributeScenarios(): iterable
+    {
+        yield 'extract stroke-width from style' => [
+            'style' => 'fill:#fff; stroke-width: 2.5 ;',
+            'property' => 'stroke-width',
+            'expected' => '2.5',
+        ];
+        yield 'extract fill color case-insensitive' => [
+            'style' => ' FiLl : #fff ; ',
+            'property' => 'fill',
+            'expected' => '#fff',
+            'useColorExtractor' => true,
+        ];
+        yield 'empty style returns null' => [
+            'style' => '',
+            'property' => 'fill',
+            'expected' => null,
+        ];
+        yield 'missing property returns null' => [
+            'style' => 'stroke:#000',
+            'property' => 'fill',
+            'expected' => null,
+        ];
     }
 
     #[DataProvider('provideNormalizeColorScenarios')]
