@@ -150,7 +150,12 @@ final class PngParserTest extends TestCase
 
     public function testParseHeaderRejectsUnexpectedHeaderLength(): void
     {
-        $parser = new PngParser();
+        $parser = new PngParser(new class implements PngHeaderUnpackerInterface {
+            public function unpack(string $data): array|false
+            {
+                throw new \LogicException('The header unpacker must not be called for invalid IHDR lengths.');
+            }
+        });
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unable to parse the PNG IHDR chunk.');
