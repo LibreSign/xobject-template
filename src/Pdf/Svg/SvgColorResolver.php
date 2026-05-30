@@ -9,6 +9,7 @@ namespace LibreSign\XObjectTemplate\Pdf\Svg;
 
 use function array_filter;
 use function array_map;
+
 use DOMElement;
 
 /**
