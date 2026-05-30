@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Png;
 
+use LibreSign\XObjectTemplate\Pdf\Png\PngHeaderUnpackerInterface;
 use LibreSign\XObjectTemplate\Pdf\Png\PngParser;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use PHPUnit\Framework\TestCase;
@@ -155,6 +156,21 @@ final class PngParserTest extends TestCase
         $this->expectExceptionMessage('Unable to parse the PNG IHDR chunk.');
 
         $parser->parseHeader('short-header');
+    }
+
+    public function testParseHeaderRejectsUnpackFailures(): void
+    {
+        $parser = new PngParser(new class implements PngHeaderUnpackerInterface {
+            public function unpack(string $data): array|false
+            {
+                return false;
+            }
+        });
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse the PNG IHDR chunk.');
+
+        $parser->parseHeader(pack('NNCCCCC', 1, 1, 8, 2, 0, 0, 0));
     }
 
     public function testParseRejectsMissingTrailerChunkWhenTrailingBytesAreTooShort(): void
