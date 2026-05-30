@@ -1138,6 +1138,62 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $cosTh = cos($th);
         $sinTh = sin($th);
 
+        // Step 1: Normalize radii and compute half-distances
+        [$rx, $ry] = $this->normalizeArcRadii(
+            $fromX,
+            $fromY,
+            $toX,
+            $toY,
+            $rx,
+            $ry,
+            $cosTh,
+            $sinTh,
+        );
+
+        // Step 2: Calculate center point
+        [$cx, $cy] = $this->calculateArcCenter(
+            $fromX,
+            $fromY,
+            $toX,
+            $toY,
+            $rx,
+            $ry,
+            $cosTh,
+            $sinTh,
+            $largeArc,
+            $sweep,
+        );
+
+        // Step 3: Calculate angles and deltas
+        [$startAngle, $dAngle] = $this->calculateArcAngles(
+            $fromX,
+            $fromY,
+            $toX,
+            $toY,
+            $cx,
+            $cy,
+            $rx,
+            $ry,
+            $cosTh,
+            $sinTh,
+            $largeArc,
+            $sweep,
+        );
+
+        // Step 4: Generate cubic Bézier curves
+        return $this->generateArcCurves($cx, $cy, $rx, $ry, $cosTh, $sinTh, $startAngle, $dAngle);
+    }
+
+    private function normalizeArcRadii(
+        float $fromX,
+        float $fromY,
+        float $toX,
+        float $toY,
+        float $rx,
+        float $ry,
+        float $cosTh,
+        float $sinTh,
+    ): array {
         $dx2 = ($fromX - $toX) / 2.0;
         $dy2 = ($fromY - $toY) / 2.0;
         $px  =  $cosTh * $dx2 + $sinTh * $dy2;
@@ -1152,16 +1208,39 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             $s   = sqrt($scale);
             $rx *= $s;
             $ry *= $s;
-            $rx2 = $rx * $rx;
-            $ry2 = $ry * $ry;
         }
 
-        $num = max(0.0, $rx2 * $ry2 - $rx2 * $py2 - $ry2 * $px2);
-        $den = $rx2 * $py2 + $ry2 * $px2;
-        $sq  = $den > 1e-10 ? sqrt($num / $den) : 0.0;
+        return [$rx, $ry];
+    }
+
+    private function calculateArcCenter(
+        float $fromX,
+        float $fromY,
+        float $toX,
+        float $toY,
+        float $rx,
+        float $ry,
+        float $cosTh,
+        float $sinTh,
+        int $largeArc,
+        int $sweep,
+    ): array {
+        $dx2 = ($fromX - $toX) / 2.0;
+        $dy2 = ($fromY - $toY) / 2.0;
+        $px  =  $cosTh * $dx2 + $sinTh * $dy2;
+        $py  = -$sinTh * $dx2 + $cosTh * $dy2;
+
+        $rx2   = $rx * $rx;
+        $ry2   = $ry * $ry;
+        $px2   = $px * $px;
+        $py2   = $py * $py;
+        $num   = max(0.0, $rx2 * $ry2 - $rx2 * $py2 - $ry2 * $px2);
+        $den   = $rx2 * $py2 + $ry2 * $px2;
+        $sq    = $den > 1e-10 ? sqrt($num / $den) : 0.0;
         if ($largeArc === $sweep) {
             $sq = -$sq;
         }
+
         $cx1 =  $sq * $rx * $py / $ry;
         $cy1 = -$sq * $ry * $px / $rx;
 
@@ -1170,10 +1249,32 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $cx   = $cosTh * $cx1 - $sinTh * $cy1 + $midX;
         $cy   = $sinTh * $cx1 + $cosTh * $cy1 + $midY;
 
-        $ux = ($px - $cx1) / $rx;
-        $uy = ($py - $cy1) / $ry;
-        $vx = (-$px - $cx1) / $rx;
-        $vy = (-$py - $cy1) / $ry;
+        return [$cx, $cy];
+    }
+
+    private function calculateArcAngles(
+        float $fromX,
+        float $fromY,
+        float $toX,
+        float $toY,
+        float $cx,
+        float $cy,
+        float $rx,
+        float $ry,
+        float $cosTh,
+        float $sinTh,
+        int $largeArc,
+        int $sweep,
+    ): array {
+        $dx2 = ($fromX - $toX) / 2.0;
+        $dy2 = ($fromY - $toY) / 2.0;
+        $px  =  $cosTh * $dx2 + $sinTh * $dy2;
+        $py  = -$sinTh * $dx2 + $cosTh * $dy2;
+
+        $ux = ($px - 0.0) / $rx;
+        $uy = ($py - 0.0) / $ry;
+        $vx = (-$px - 0.0) / $rx;
+        $vy = (-$py - 0.0) / $ry;
 
         $startAngle = atan2($uy, $ux);
         $n          = sqrt(($ux * $ux + $uy * $uy) * ($vx * $vx + $vy * $vy));
@@ -1188,6 +1289,19 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             $dAngle += 2.0 * M_PI;
         }
 
+        return [$startAngle, $dAngle];
+    }
+
+    private function generateArcCurves(
+        float $cx,
+        float $cy,
+        float $rx,
+        float $ry,
+        float $cosTh,
+        float $sinTh,
+        float $startAngle,
+        float $dAngle,
+    ): array {
         $segments = max(1, (int) ceil(abs($dAngle) / (M_PI / 2.0)));
         $da       = $dAngle / $segments;
         $tanDA2   = tan($da / 2.0);
