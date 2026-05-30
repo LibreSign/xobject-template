@@ -582,10 +582,22 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     {
         yield 'SVG extension detected' => ['source' => '/path/to/file.svg', 'shouldBeSvg' => true];
         yield 'SVGZ extension detected' => ['source' => '/path/to/file.svgz', 'shouldBeSvg' => true];
-        yield 'SVG extension case-insensitive uppercase' => ['source' => '/path/to/file.SVG', 'shouldBeSvg' => true];
-        yield 'SVG extension case-insensitive mixed' => ['source' => '/path/to/file.Svg', 'shouldBeSvg' => true];
-        yield 'SVG in middle of filename not detected as SVG' => ['source' => '/path/svg.backup', 'shouldBeSvg' => false];
-        yield 'SVG in filename but different extension' => ['source' => '/path/my.svg.txt', 'shouldBeSvg' => false];
+        yield 'SVG extension case-insensitive uppercase' => [
+            'source' => '/path/to/file.SVG',
+            'shouldBeSvg' => true,
+        ];
+        yield 'SVG extension case-insensitive mixed' => [
+            'source' => '/path/to/file.Svg',
+            'shouldBeSvg' => true,
+        ];
+        yield 'SVG in middle of filename not detected as SVG' => [
+            'source' => '/path/svg.backup',
+            'shouldBeSvg' => false,
+        ];
+        yield 'SVG in filename but different extension' => [
+            'source' => '/path/my.svg.txt',
+            'shouldBeSvg' => false,
+        ];
     }
 
     /**

@@ -33,6 +33,17 @@ final readonly class ArcParams
 
     public function withRadii(float $rx, float $ry): self
     {
-        return new self($this->fromX, $this->fromY, $this->toX, $this->toY, $rx, $ry, $this->cosTh, $this->sinTh, $this->largeArc, $this->sweep);
+        return new self(
+            $this->fromX,
+            $this->fromY,
+            $this->toX,
+            $this->toY,
+            $rx,
+            $ry,
+            $this->cosTh,
+            $this->sinTh,
+            $this->largeArc,
+            $this->sweep,
+        );
     }
 }

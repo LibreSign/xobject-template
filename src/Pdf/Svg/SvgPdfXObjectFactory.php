@@ -29,7 +29,10 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         [$minX, $minY, $width, $height] = $this->resolveViewBox($svg, $source);
         $maxY = $minY + $height;
 
-        [$classFills, $classStrokes] = $this->extractClassColorMaps($svg);
+        /** @var array{0: array<string, string>, 1: array<string, string>} $classColorMaps */
+        $classColorMaps = $this->extractClassColorMaps($svg);
+        $classFills = $classColorMaps[0];
+        $classStrokes = $classColorMaps[1];
         $commands = [];
 
         foreach ($this->iterateDrawableElements($svg) as $element) {
@@ -153,13 +156,16 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
     /**
      * @return array{0: array<string, string>, 1: array<string, string>}
+        * @psalm-return array{0: array<string, string>, 1: array<string, string>}
      */
     /**
      * @SuppressWarnings(PHPMD.CyclomaticComplexity)
      */
     private function extractClassColorMaps(DOMElement $svg): array
     {
+        /** @var array<string, string> $fills */
         $fills   = [];
+        /** @var array<string, string> $strokes */
         $strokes = [];
 
         foreach ($svg->getElementsByTagName('style') as $styleNode) {
@@ -218,12 +224,14 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             return max(0.0, $this->extractNumericSvgLength($attr));
         }
 
-        $styleWidth = $this->colorResolver->extractValueFromStyleAttribute($element->getAttribute('style'), 'stroke-width');
+        $styleWidth = $this->colorResolver->extractValueFromStyleAttribute(
+            $element->getAttribute('style'),
+            'stroke-width',
+        );
         if ($styleWidth !== null) {
             return max(0.0, $this->extractNumericSvgLength($styleWidth));
         }
 
         return 1.0;
     }
-
 }
