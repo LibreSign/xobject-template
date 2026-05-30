@@ -14,6 +14,8 @@ use InvalidArgumentException;
  *
  * Handles all SVG path commands (M, L, H, V, C, S, Q, T, A, Z) and converts
  * them to equivalent PDF drawing commands in the PDF coordinate system.
+ *
+ * @SuppressWarnings(PHPMD.ExcessiveClassComplexity)
  */
 final class SvgPathCommandParser
 {
@@ -40,6 +42,22 @@ final class SvgPathCommandParser
         string $source,
         array $transformMatrix,
     ): string {
+        $tokens = $this->tokenizePathData($pathData, $source);
+        $state = new PathParsingState();
+        $context = new PathCommandContext($transformMatrix, $minX, $maxY, $source);
+        $this->processPathTokens($tokens, $state, $context);
+        return implode("\n", $state->commands);
+    }
+
+    /**
+     * Tokenize SVG path data string into command and number tokens.
+     *
+     * @param string $pathData The SVG path data string
+     * @param string $source   Source identifier for error messages
+     * @return list<string> Array of tokens
+     */
+    private function tokenizePathData(string $pathData, string $source): array
+    {
         preg_match_all(
             '/([A-Za-z])|([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/',
             $pathData,
@@ -56,8 +74,16 @@ final class SvgPathCommandParser
             $tokens[] = $match[1] !== '' ? $match[1] : $match[2];
         }
 
-        $state = new PathParsingState();
-        $context = new PathCommandContext($transformMatrix, $minX, $maxY, $source);
+        return $tokens;
+    }
+
+    /**
+     * Process tokenized SVG path data and generate PDF commands.
+     *
+     * @param list<string> $tokens
+     */
+    private function processPathTokens(array $tokens, PathParsingState $state, PathCommandContext $context): void
+    {
         $tokenCount = count($tokens);
         $index = 0;
         $currentCommand = null;
@@ -70,7 +96,7 @@ final class SvgPathCommandParser
             }
 
             if ($currentCommand === null) {
-                throw new InvalidArgumentException(sprintf('Invalid SVG path command sequence in "%s".', $source));
+                throw new InvalidArgumentException(sprintf('Invalid SVG path command sequence in "%s".', $context->source));
             }
 
             $isRelative = ctype_lower($currentCommand);
@@ -86,8 +112,6 @@ final class SvgPathCommandParser
                 $context,
             );
         }
-
-        return implode("\n", $state->commands);
     }
 
     /**
@@ -144,12 +168,12 @@ final class SvgPathCommandParser
         $coordinates = $this->readPathNumbers($tokens, $index, 2, $context->source);
         $state->currentX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
         $state->currentY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
-        [$mX, $mY] = $this->transformResolver->applyTransformToPoint(
+        [$moveX, $moveY] = $this->transformResolver->applyTransformToPoint(
             $context->transformMatrix,
             $state->currentX,
             $state->currentY,
         );
-        $state->commands[] = sprintf('%F %F m', $mX - $context->minX, $context->maxY - $mY);
+        $state->commands[] = sprintf('%F %F m', $moveX - $context->minX, $context->maxY - $moveY);
         $state->lastCubicControlX = null;
         $state->lastCubicControlY = null;
 
@@ -196,12 +220,12 @@ final class SvgPathCommandParser
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
             $coordinates = $this->readPathNumbers($tokens, $index, 1, $context->source);
             $state->currentX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
-            [$lX, $lY] = $this->transformResolver->applyTransformToPoint(
+            [$lineX, $lineY] = $this->transformResolver->applyTransformToPoint(
                 $context->transformMatrix,
                 $state->currentX,
                 $state->currentY,
             );
-            $state->commands[] = sprintf('%F %F l', $lX - $context->minX, $context->maxY - $lY);
+            $state->commands[] = sprintf('%F %F l', $lineX - $context->minX, $context->maxY - $lineY);
             $state->lastCubicControlX = null;
             $state->lastCubicControlY = null;
         }
@@ -221,12 +245,12 @@ final class SvgPathCommandParser
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
             $coordinates = $this->readPathNumbers($tokens, $index, 1, $context->source);
             $state->currentY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[0]);
-            [$lX, $lY] = $this->transformResolver->applyTransformToPoint(
+            [$lineX, $lineY] = $this->transformResolver->applyTransformToPoint(
                 $context->transformMatrix,
                 $state->currentX,
                 $state->currentY,
             );
-            $state->commands[] = sprintf('%F %F l', $lX - $context->minX, $context->maxY - $lY);
+            $state->commands[] = sprintf('%F %F l', $lineX - $context->minX, $context->maxY - $lineY);
             $state->lastCubicControlX = null;
             $state->lastCubicControlY = null;
         }
@@ -245,10 +269,10 @@ final class SvgPathCommandParser
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
             $coordinates = $this->readPathNumbers($tokens, $index, 6, $context->source);
-                $x1 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
-                $y1 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
-                $x2 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
-                $y2 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[3]);
+                $startX1 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
+                $startY1 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
+                $endX2 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
+                $endY2 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[3]);
                 $x = $this->resolveCoord($isRelative, $state->currentX, $coordinates[4]);
                 $y = $this->resolveCoord($isRelative, $state->currentY, $coordinates[5]);
 
@@ -256,17 +280,17 @@ final class SvgPathCommandParser
                 $context->transformMatrix,
                 $context->minX,
                 $context->maxY,
-                $x1,
-                $y1,
-                $x2,
-                $y2,
+                $startX1,
+                $startY1,
+                $endX2,
+                $endY2,
                 $x,
                 $y,
             );
             $state->currentX = $x;
             $state->currentY = $y;
-            $state->lastCubicControlX = $x2;
-            $state->lastCubicControlY = $y2;
+            $state->lastCubicControlX = $endX2;
+            $state->lastCubicControlY = $endY2;
         }
     }
 
@@ -283,10 +307,10 @@ final class SvgPathCommandParser
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
             $coordinates = $this->readPathNumbers($tokens, $index, 4, $context->source);
-            $x1 = $this->reflectControlPoint($state->lastCubicControlX, $state->currentX);
-            $y1 = $this->reflectControlPoint($state->lastCubicControlY, $state->currentY);
-            $x2 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
-            $y2 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
+            $startX1 = $this->reflectControlPoint($state->lastCubicControlX, $state->currentX);
+            $startY1 = $this->reflectControlPoint($state->lastCubicControlY, $state->currentY);
+            $endX2 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
+            $endY2 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
             $x = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
             $y = $this->resolveCoord($isRelative, $state->currentY, $coordinates[3]);
 
@@ -294,17 +318,17 @@ final class SvgPathCommandParser
                 $context->transformMatrix,
                 $context->minX,
                 $context->maxY,
-                $x1,
-                $y1,
-                $x2,
-                $y2,
+                $startX1,
+                $startY1,
+                $endX2,
+                $endY2,
                 $x,
                 $y,
             );
             $state->currentX = $x;
             $state->currentY = $y;
-            $state->lastCubicControlX = $x2;
-            $state->lastCubicControlY = $y2;
+            $state->lastCubicControlX = $endX2;
+            $state->lastCubicControlY = $endY2;
         }
     }
 
@@ -326,7 +350,7 @@ final class SvgPathCommandParser
                 $x    = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
                 $y    = $this->resolveCoord($isRelative, $state->currentY, $coordinates[3]);
 
-            [$x1, $y1, $x2, $y2] = $this->quadraticToCubicControlPoints(
+            [$controlX1, $controlY1, $controlX2, $controlY2] = $this->quadraticToCubicControlPoints(
                 $state->currentX,
                 $state->currentY,
                 $qcpX,
@@ -335,7 +359,7 @@ final class SvgPathCommandParser
                 $y,
             );
 
-            $this->appendQuadraticAsCubicToState($state, $context, $x1, $y1, $x2, $y2, $x, $y);
+            $this->appendQuadraticAsCubicToState($state, $context, $controlX1, $controlY1, $controlX2, $controlY2, $x, $y);
             $state->prevQuadCpX = $qcpX;
             $state->prevQuadCpY = $qcpY;
         }
@@ -358,7 +382,7 @@ final class SvgPathCommandParser
             $qcpY = $this->reflectControlPoint($state->prevQuadCpY, $state->currentY);
             $x = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
             $y = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
-            [$x1, $y1, $x2, $y2] = $this->quadraticToCubicControlPoints(
+            [$controlX1, $controlY1, $controlX2, $controlY2] = $this->quadraticToCubicControlPoints(
                 $state->currentX,
                 $state->currentY,
                 $qcpX,
@@ -367,7 +391,7 @@ final class SvgPathCommandParser
                 $y,
             );
 
-            $this->appendQuadraticAsCubicToState($state, $context, $x1, $y1, $x2, $y2, $x, $y);
+            $this->appendQuadraticAsCubicToState($state, $context, $controlX1, $controlY1, $controlX2, $controlY2, $x, $y);
             $state->prevQuadCpX = $qcpX;
             $state->prevQuadCpY = $qcpY;
         }
@@ -386,8 +410,8 @@ final class SvgPathCommandParser
     ): void {
         while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
             $coordinates = $this->readPathNumbers($tokens, $index, 7, $context->source);
-            $rx       = abs($coordinates[0]);
-            $ry       = abs($coordinates[1]);
+            $radiusX       = abs($coordinates[0]);
+            $radiusY       = abs($coordinates[1]);
             $rotation = $coordinates[2];
             $largeArc = (int) $coordinates[3];
             $sweep    = (int) $coordinates[4];
@@ -397,8 +421,8 @@ final class SvgPathCommandParser
             $curves = $this->arcConverter->arcToBezierCurves(
                 $state->currentX,
                 $state->currentY,
-                $rx,
-                $ry,
+                $radiusX,
+                $radiusY,
                 $rotation,
                 $largeArc,
                 $sweep,
@@ -407,29 +431,29 @@ final class SvgPathCommandParser
             );
 
             foreach ($curves as $curve) {
-                [$cp1x, $cp1y] = $this->transformResolver->applyTransformToPoint(
+                [$controlPoint1X, $controlPoint1Y] = $this->transformResolver->applyTransformToPoint(
                     $context->transformMatrix,
                     $curve[0],
                     $curve[1],
                 );
-                [$cp2x, $cp2y] = $this->transformResolver->applyTransformToPoint(
+                [$controlPoint2X, $controlPoint2Y] = $this->transformResolver->applyTransformToPoint(
                     $context->transformMatrix,
                     $curve[2],
                     $curve[3],
                 );
-                [$ex, $ey] = $this->transformResolver->applyTransformToPoint(
+                [$endX, $endY] = $this->transformResolver->applyTransformToPoint(
                     $context->transformMatrix,
                     $curve[4],
                     $curve[5],
                 );
                 $state->commands[] = sprintf(
                     '%F %F %F %F %F %F c',
-                    $cp1x - $context->minX,
-                    $context->maxY - $cp1y,
-                    $cp2x - $context->minX,
-                    $context->maxY - $cp2y,
-                    $ex - $context->minX,
-                    $context->maxY - $ey,
+                    $controlPoint1X - $context->minX,
+                    $context->maxY - $controlPoint1Y,
+                    $controlPoint2X - $context->minX,
+                    $context->maxY - $controlPoint2Y,
+                    $endX - $context->minX,
+                    $context->maxY - $endY,
                 );
             }
 
@@ -472,8 +496,8 @@ final class SvgPathCommandParser
     ): void {
         $state->currentX = $toX;
         $state->currentY = $toY;
-        [$lX, $lY] = $this->transformResolver->applyTransformToPoint($context->transformMatrix, $toX, $toY);
-        $state->commands[] = sprintf('%F %F l', $lX - $context->minX, $context->maxY - $lY);
+        [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint($context->transformMatrix, $toX, $toY);
+        $state->commands[] = sprintf('%F %F l', $transformedX - $context->minX, $context->maxY - $transformedY);
         $state->lastCubicControlX = null;
         $state->lastCubicControlY = null;
     }
@@ -481,10 +505,10 @@ final class SvgPathCommandParser
     private function appendQuadraticAsCubicToState(
         PathParsingState $state,
         PathCommandContext $context,
-        float $x1,
-        float $y1,
-        float $x2,
-        float $y2,
+        float $controlX1,
+        float $controlY1,
+        float $controlX2,
+        float $controlY2,
         float $x,
         float $y,
     ): void {
@@ -492,10 +516,10 @@ final class SvgPathCommandParser
             $context->transformMatrix,
             $context->minX,
             $context->maxY,
-            $x1,
-            $y1,
-            $x2,
-            $y2,
+            $controlX1,
+            $controlY1,
+            $controlX2,
+            $controlY2,
             $x,
             $y,
         );
@@ -506,7 +530,7 @@ final class SvgPathCommandParser
     }
 
     /**
-     * @return array{0:float,1:float,2:float,3:float} [$x1, $y1, $x2, $y2]
+     * @return array{0:float,1:float,2:float,3:float} [$controlX1, $controlY1, $controlX2, $controlY2]
      */
     private function quadraticToCubicControlPoints(
         float $fromX,
@@ -516,12 +540,12 @@ final class SvgPathCommandParser
         float $toX,
         float $toY,
     ): array {
-        $x1 = $fromX + (2.0 / 3.0) * ($qcpX - $fromX);
-        $y1 = $fromY + (2.0 / 3.0) * ($qcpY - $fromY);
-        $x2 = $toX + (2.0 / 3.0) * ($qcpX - $toX);
-        $y2 = $toY + (2.0 / 3.0) * ($qcpY - $toY);
+        $controlX1 = $fromX + (2.0 / 3.0) * ($qcpX - $fromX);
+        $controlY1 = $fromY + (2.0 / 3.0) * ($qcpY - $fromY);
+        $controlX2 = $toX + (2.0 / 3.0) * ($qcpX - $toX);
+        $controlY2 = $toY + (2.0 / 3.0) * ($qcpY - $toY);
 
-        return [$x1, $y1, $x2, $y2];
+        return [$controlX1, $controlY1, $controlX2, $controlY2];
     }
 
     /**
@@ -554,25 +578,25 @@ final class SvgPathCommandParser
         array $transformMatrix,
         float $minX,
         float $maxY,
-        float $x1,
-        float $y1,
-        float $x2,
-        float $y2,
+        float $startX1,
+        float $startY1,
+        float $endX2,
+        float $endY2,
         float $x,
         float $y,
     ): string {
-        [$tx1, $ty1] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x1, $y1);
-        [$tx2, $ty2] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x2, $y2);
-        [$tx, $ty] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x, $y);
+        [$transformX1, $transformY1] = $this->transformResolver->applyTransformToPoint($transformMatrix, $startX1, $startY1);
+        [$transformX2, $transformY2] = $this->transformResolver->applyTransformToPoint($transformMatrix, $endX2, $endY2);
+        [$transformX, $transformY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $x, $y);
 
         return sprintf(
             '%F %F %F %F %F %F c',
-            $tx1 - $minX,
-            $maxY - $ty1,
-            $tx2 - $minX,
-            $maxY - $ty2,
-            $tx - $minX,
-            $maxY - $ty,
+            $transformX1 - $minX,
+            $maxY - $transformY1,
+            $transformX2 - $minX,
+            $maxY - $transformY2,
+            $transformX - $minX,
+            $maxY - $transformY,
         );
     }
 }
