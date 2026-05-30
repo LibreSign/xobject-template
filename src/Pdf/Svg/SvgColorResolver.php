@@ -92,21 +92,32 @@ final class SvgColorResolver
         }
 
         // Check CSS classes
-        $classes = preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $classes = preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        if ($classes === false) {
+            $classes = [];
+        }
+
         foreach ($classes as $class) {
             if (isset($classColors[$class])) {
                 return $classColors[$class] === 'none' ? null : $classColors[$class];
             }
         }
 
-        return $this->checkAncestorForColor($element, $attributeName, $defaultFallback);
+        return $this->checkAncestorForColor(
+            $element,
+            $attributeName,
+            $defaultFallback,
+        );
     }
 
     /**
      * Walk ancestor elements looking for an inherited color value.
      */
-    private function checkAncestorForColor(DOMElement $element, string $attributeName, ?string $defaultFallback): ?string
-    {
+    private function checkAncestorForColor(
+        DOMElement $element,
+        string $attributeName,
+        ?string $defaultFallback,
+    ): ?string {
         $ancestor = $element->parentNode;
         while ($ancestor instanceof DOMElement) {
             $ancestorColor = $this->normalizeColor($ancestor->getAttribute($attributeName));
@@ -114,7 +125,10 @@ final class SvgColorResolver
                 return $ancestorColor === 'none' ? null : $ancestorColor;
             }
 
-            $ancestorStyle = $this->extractColorFromStyleAttribute($ancestor->getAttribute('style'), $attributeName);
+            $ancestorStyle = $this->extractColorFromStyleAttribute(
+                $ancestor->getAttribute('style'),
+                $attributeName,
+            );
             if ($ancestorStyle !== null) {
                 return $ancestorStyle === 'none' ? null : $ancestorStyle;
             }
@@ -165,7 +179,9 @@ final class SvgColorResolver
                 continue;
             }
 
-            if (preg_match('/^' . preg_quote($property) . '\s*:\s*(.+)$/i', $declaration, $matches) === 1) {
+            if (
+                preg_match('/^' . preg_quote($property) . '\s*:\s*(.+)$/i', $declaration, $matches) === 1
+            ) {
                 return trim($matches[1]);
             }
         }

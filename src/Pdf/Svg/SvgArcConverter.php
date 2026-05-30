@@ -57,7 +57,18 @@ final class SvgArcConverter
         }
 
         $th    = deg2rad($rotation);
-        $params = new ArcParams($fromX, $fromY, $toX, $toY, $rx, $ry, cos($th), sin($th), $largeArc, $sweep);
+        $params = new ArcParams(
+            $fromX,
+            $fromY,
+            $toX,
+            $toY,
+            $rx,
+            $ry,
+            cos($th),
+            sin($th),
+            $largeArc,
+            $sweep,
+        );
 
         // Step 1: Normalize radii
         $params = $this->normalizeArcRadii($params);
@@ -69,7 +80,16 @@ final class SvgArcConverter
         [$startAngle, $dAngle] = $this->calculateArcAngles($params, $cx, $cy);
 
         // Step 4: Generate cubic Bézier curves
-        return $this->generateArcCurves($cx, $cy, $params->rx, $params->ry, $params->cosTh, $params->sinTh, $startAngle, $dAngle);
+        return $this->generateArcCurves(
+            $cx,
+            $cy,
+            $params->rx,
+            $params->ry,
+            $params->cosTh,
+            $params->sinTh,
+            $startAngle,
+            $dAngle,
+        );
     }
 
     /**
@@ -106,10 +126,7 @@ final class SvgArcConverter
      */
     private function calculateArcCenter(ArcParams $params): array
     {
-        $dx2 = ($params->fromX - $params->toX) / 2.0;
-        $dy2 = ($params->fromY - $params->toY) / 2.0;
-        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
-        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
+        [$px, $py] = $this->calculatePrimeCoordinates($params);
 
         $rx2   = $params->rx * $params->rx;
         $ry2   = $params->ry * $params->ry;
@@ -140,10 +157,7 @@ final class SvgArcConverter
      */
     private function calculateArcAngles(ArcParams $params, float $cx, float $cy): array
     {
-        $dx2 = ($params->fromX - $params->toX) / 2.0;
-        $dy2 = ($params->fromY - $params->toY) / 2.0;
-        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
-        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
+        [$px, $py] = $this->calculatePrimeCoordinates($params);
 
         $ux = $px / $params->rx;
         $uy = $py / $params->ry;
@@ -164,6 +178,21 @@ final class SvgArcConverter
         }
 
         return [$startAngle, $dAngle];
+    }
+
+    /**
+     * Calculate transformed midpoint delta coordinates in the rotated arc space.
+     *
+     * @return array{0:float,1:float} [$px, $py]
+     */
+    private function calculatePrimeCoordinates(ArcParams $params): array
+    {
+        $dx2 = ($params->fromX - $params->toX) / 2.0;
+        $dy2 = ($params->fromY - $params->toY) / 2.0;
+        $px  =  $params->cosTh * $dx2 + $params->sinTh * $dy2;
+        $py  = -$params->sinTh * $dx2 + $params->cosTh * $dy2;
+
+        return [$px, $py];
     }
 
     /**
