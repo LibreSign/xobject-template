@@ -130,8 +130,7 @@ final class SubsetHtmlParserTest extends TestCase
         string $expectedChildStyle,
         string $expectedTextStyle,
         array $excludedFragments,
-    ): void
-    {
+    ): void {
         $parser = new SubsetHtmlParser();
 
         $nodes = $parser->parse($html);

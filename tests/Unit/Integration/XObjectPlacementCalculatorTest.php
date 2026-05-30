@@ -20,11 +20,10 @@ final class XObjectPlacementCalculatorTest extends TestCase
      *     0: string,
      *     1: array{0: float, 1: float, 2: float, 3: float},
      *     2: float,
-     *     3: float,
-     *     4: float,
-     *     5: array{scaleX: float, scaleY: float, width: float, height: float, translateX: float, translateY: float},
-     *     6?: string,
-     *     7?: string
+     *     3: ?array{x: float, y: float},
+     *     4: array{scaleX: float, scaleY: float, width: float, height: float, translateX: float, translateY: float},
+     *     5?: string,
+     *     6?: string
      * }>
      */
     public static function placementProvider(): iterable
@@ -33,8 +32,7 @@ final class XObjectPlacementCalculatorTest extends TestCase
             'fromWidth',
             [12.5, 4.0, 252.5, 88.0],
             120.0,
-            20.0,
-            30.0,
+            ['x' => 20.0, 'y' => 30.0],
             [
                 'scaleX' => 0.5,
                 'scaleY' => 0.5,
@@ -51,8 +49,7 @@ final class XObjectPlacementCalculatorTest extends TestCase
             'fromHeight',
             [0.0, 0.0, 240.0, 84.0],
             168.0,
-            15.0,
-            25.0,
+            ['x' => 15.0, 'y' => 25.0],
             [
                 'scaleX' => 2.0,
                 'scaleY' => 2.0,
@@ -67,8 +64,7 @@ final class XObjectPlacementCalculatorTest extends TestCase
             'fromWidth',
             [10.0, 20.0, 110.0, 70.0],
             50.0,
-            0.0,
-            0.0,
+            null,
             [
                 'scaleX' => 0.5,
                 'scaleY' => 0.5,
@@ -83,8 +79,7 @@ final class XObjectPlacementCalculatorTest extends TestCase
             'fromHeight',
             [10.0, 20.0, 110.0, 70.0],
             25.0,
-            0.0,
-            0.0,
+            null,
             [
                 'scaleX' => 0.5,
                 'scaleY' => 0.5,
@@ -99,8 +94,7 @@ final class XObjectPlacementCalculatorTest extends TestCase
             'fromScale',
             [10.0, 20.0, 110.0, 70.0],
             2.0,
-            0.0,
-            0.0,
+            null,
             [
                 'scaleX' => 2.0,
                 'scaleY' => 2.0,
@@ -115,8 +109,7 @@ final class XObjectPlacementCalculatorTest extends TestCase
             'fromScale',
             [-10.0, -5.0, 90.0, 45.0],
             1.5,
-            2.0,
-            3.0,
+            ['x' => 2.0, 'y' => 3.0],
             [
                 'scaleX' => 1.5,
                 'scaleY' => 1.5,
@@ -188,8 +181,7 @@ final class XObjectPlacementCalculatorTest extends TestCase
         string $strategy,
         array $bbox,
         float $targetValue,
-        float $x,
-        float $y,
+        ?array $coordinates,
         array $expectedPlacement,
         ?string $pdfAlias = null,
         ?string $expectedPdfCommand = null,
@@ -197,10 +189,28 @@ final class XObjectPlacementCalculatorTest extends TestCase
         $calculator = new XObjectPlacementCalculator();
         $result = new CompileResult(contentStream: 'BT ET', resources: [], bbox: $bbox);
 
-        $placement = match ($strategy) {
-            'fromWidth' => $calculator->fromWidth($result, $targetValue, $x, $y),
-            'fromHeight' => $calculator->fromHeight($result, $targetValue, $x, $y),
-            'fromScale' => $calculator->fromScale($result, $targetValue, $x, $y),
+        $placement = match ([$strategy, $coordinates === null]) {
+            ['fromWidth', true] => $calculator->fromWidth($result, $targetValue),
+            ['fromHeight', true] => $calculator->fromHeight($result, $targetValue),
+            ['fromScale', true] => $calculator->fromScale($result, $targetValue),
+            ['fromWidth', false] => $calculator->fromWidth(
+                $result,
+                $targetValue,
+                $coordinates['x'],
+                $coordinates['y'],
+            ),
+            ['fromHeight', false] => $calculator->fromHeight(
+                $result,
+                $targetValue,
+                $coordinates['x'],
+                $coordinates['y'],
+            ),
+            ['fromScale', false] => $calculator->fromScale(
+                $result,
+                $targetValue,
+                $coordinates['x'],
+                $coordinates['y'],
+            ),
             default => throw new InvalidArgumentException('Unknown placement strategy.'),
         };
 
