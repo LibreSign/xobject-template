@@ -13,6 +13,7 @@ use LibreSign\XObjectTemplate\Pdf\FilesystemImageSourceReaderInterface;
 use LibreSign\XObjectTemplate\Pdf\ImageMetadataInspectorInterface;
 use LibreSign\XObjectTemplate\Pdf\Jpeg\JpegPdfImageFactoryInterface;
 use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactoryInterface;
+use LibreSign\XObjectTemplate\Pdf\Svg\SvgPdfXObjectFactoryInterface;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use LibreSign\XObjectTemplate\Tests\Support\UsesTemporaryFiles;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -109,6 +110,62 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         );
 
         self::assertSame($expectedImage, $embedder->embed('/tmp/virtual-image.png'));
+    }
+
+    public function testEmbedSupportsSvgSourcesViaInjectedFactory(): void
+    {
+        $expectedImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-form-stream');
+        $embedder = new FilesystemPdfImageEmbedder(
+            new class implements FilesystemImageSourceReaderInterface {
+                public function read(string $source): string
+                {
+                    return '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
+                }
+            },
+            new class implements ImageMetadataInspectorInterface {
+                public function detect(string $contents, string $source): array
+                {
+                    throw new \RuntimeException('Metadata inspector should not run for native SVG embeds.');
+                }
+
+                public function resolveMimeType(array $imageInfo, string $source): string
+                {
+                    throw new \RuntimeException('MIME resolution should not run for native SVG embeds.');
+                }
+            },
+            new class implements JpegPdfImageFactoryInterface {
+                public function create(string $contents, array $imageInfo): EmbeddedPdfImage
+                {
+                    throw new \RuntimeException('JPEG factory should not be used for SVG images.');
+                }
+            },
+            new class ($expectedImage) implements PngPdfImageFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $expectedImage)
+                {
+                }
+
+                public function create(string $contents): EmbeddedPdfImage
+                {
+                    throw new \RuntimeException('PNG factory should not be used for SVG images.');
+                }
+            },
+            new class ($expectedImage) implements SvgPdfXObjectFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $expectedImage)
+                {
+                }
+
+                public function create(string $svgContents, string $source): EmbeddedPdfImage
+                {
+                    if (str_contains($svgContents, '<svg') === false || $source !== '/tmp/virtual-image.svg') {
+                        throw new \RuntimeException('Unexpected SVG payload for native SVG embedding.');
+                    }
+
+                    return $this->expectedImage;
+                }
+            },
+        );
+
+        self::assertSame($expectedImage, $embedder->embed('/tmp/virtual-image.svg'));
     }
 
     public function testEmbedReturnsPredictorBackedImageForOpaqueRgbPng(): void
