@@ -139,6 +139,26 @@ final class SvgArcConverterTest extends TestCase
         self::assertNotSame([[20.0, 30.0, 20.0, 30.0, 20.0, 30.0]], $curves);
     }
 
+    public function testArcToBezierCurvesDoesNotDegenerateAtExactRadiusYTolerance(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = $converter->arcToBezierCurves(
+            0.0,
+            0.0,
+            2.0e-10,
+            1.0e-10,
+            0.0,
+            0,
+            1,
+            20.0,
+            30.0,
+        );
+
+        self::assertNotSame([], $curves);
+        self::assertNotSame([[20.0, 30.0, 20.0, 30.0, 20.0, 30.0]], $curves);
+    }
+
     public function testArcToBezierCurvesUsesSweepAndLargeArcFlagsToChooseDifferentSolutions(): void
     {
         $converter = new SvgArcConverter();
@@ -283,6 +303,94 @@ final class SvgArcConverterTest extends TestCase
         $primeCoordinates = self::invokePrivateMethod($converter, 'calculatePrimeCoordinates', [$params]);
 
         self::assertSame([-21.213203435596427, 21.213203435596423], $primeCoordinates);
+    }
+
+    public function testNormalizeArcRadiiReturnsSameInstanceWhenScaleEqualsOne(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            20.0,
+            0.0,
+            10.0,
+            99.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        $normalized = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$params]);
+
+        self::assertSame($params, $normalized);
+    }
+
+    public function testNormalizeArcRadiiScalesRotatedArcUsingExpectedFactors(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            10.0,
+            60.0,
+            30.0,
+            15.0,
+            8.0,
+            cos(deg2rad(45.0)),
+            sin(deg2rad(45.0)),
+            1,
+            1,
+        );
+
+        $normalized = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$params]);
+
+        self::assertNotSame($params, $normalized);
+        self::assertEqualsWithDelta(38.77015604817706, $normalized->radiusX, 0.0001);
+        self::assertEqualsWithDelta(20.677416559027762, $normalized->radiusY, 0.0001);
+    }
+
+    public function testCalculateArcCenterRespectsSweepDirection(): void
+    {
+        $converter = new SvgArcConverter();
+        $counterClockwise = new ArcParams(10.0, 0.0, 0.0, 10.0, 10.0, 10.0, 1.0, 0.0, 0, 0);
+        $clockwise = new ArcParams(10.0, 0.0, 0.0, 10.0, 10.0, 10.0, 1.0, 0.0, 0, 1);
+        $degenerate = new ArcParams(0.0, 0.0, 0.0, 0.0, 10.0, 20.0, cos(deg2rad(30.0)), sin(deg2rad(30.0)), 0, 1);
+
+        self::assertSame(
+            [10.0, 10.0],
+            self::invokePrivateMethod($converter, 'calculateArcCenter', [$counterClockwise]),
+        );
+        self::assertSame(
+            [0.0, 0.0],
+            self::invokePrivateMethod($converter, 'calculateArcCenter', [$clockwise]),
+        );
+        self::assertSame(
+            [0.0, 0.0],
+            self::invokePrivateMethod($converter, 'calculateArcCenter', [$degenerate]),
+        );
+    }
+
+    public function testCalculateArcAnglesReturnsExpectedSweepAdjustedDelta(): void
+    {
+        $converter = new SvgArcConverter();
+        $counterClockwise = new ArcParams(10.0, 0.0, 0.0, 10.0, 10.0, 10.0, 1.0, 0.0, 0, 0);
+        $clockwise = new ArcParams(10.0, 0.0, 0.0, 10.0, 10.0, 10.0, 1.0, 0.0, 0, 1);
+
+        $counterClockwiseAngles = self::invokePrivateMethod(
+            $converter,
+            'calculateArcAngles',
+            [$counterClockwise, 10.0, 10.0],
+        );
+        $clockwiseAngles = self::invokePrivateMethod(
+            $converter,
+            'calculateArcAngles',
+            [$clockwise, 0.0, 0.0],
+        );
+
+        self::assertEqualsWithDelta(-0.7853981633974483, $counterClockwiseAngles[0], 0.0001);
+        self::assertEqualsWithDelta(-M_PI, $counterClockwiseAngles[1], 0.0001);
+        self::assertEqualsWithDelta(-0.7853981633974483, $clockwiseAngles[0], 0.0001);
+        self::assertEqualsWithDelta(M_PI, $clockwiseAngles[1], 0.0001);
     }
 
     public function testGenerateArcCurvesUsesSingleSegmentBelowNinetyDegrees(): void
