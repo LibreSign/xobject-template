@@ -104,6 +104,50 @@ final class SvgPathCommandParserTest extends TestCase
         self::assertGreaterThanOrEqual(2, substr_count($result, ' c'));
     }
 
+    public function testConvertPathDataNormalizesNegativeArcRadii(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        $withPositiveRadii = $parser->convertPathData(
+            'M 0 10 A 4 2 0 0 1 8 10',
+            0.0,
+            20.0,
+            '/tmp/positive-radius.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+        $withNegativeRadii = $parser->convertPathData(
+            'M 0 10 A -4 -2 0 0 1 8 10',
+            0.0,
+            20.0,
+            '/tmp/negative-radius.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        self::assertSame($withPositiveRadii, $withNegativeRadii);
+    }
+
+    public function testConvertPathDataCastsArcFlagsToIntegersBeforeConversion(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        $withIntegerFlags = $parser->convertPathData(
+            'M 0 10 A 4 2 0 1 0 8 10',
+            0.0,
+            20.0,
+            '/tmp/integer-flags.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+        $withDecimalFlags = $parser->convertPathData(
+            'M 0 10 A 4 2 0 1.9 0.2 8 10',
+            0.0,
+            20.0,
+            '/tmp/decimal-flags.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        self::assertSame($withIntegerFlags, $withDecimalFlags);
+    }
+
     public function testConvertPathDataSupportsSmoothCubicReflectionAfterPreviousCubic(): void
     {
         $parser = new SvgPathCommandParser();
