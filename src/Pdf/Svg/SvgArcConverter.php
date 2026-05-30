@@ -165,8 +165,13 @@ final class SvgArcConverter
         $vectorVY = -$primeY / $params->radiusY;
 
         $startAngle = atan2($vectorUY, $vectorUX);
-        $magnitude          = sqrt(($vectorUX * $vectorUX + $vectorUY * $vectorUY) * ($vectorVX * $vectorVX + $vectorVY * $vectorVY));
-        $cosDA      = $magnitude > 1e-10 ? max(-1.0, min(1.0, ($vectorUX * $vectorVX + $vectorUY * $vectorVY) / $magnitude)) : 0.0;
+        $magnitude = sqrt(
+            ($vectorUX * $vectorUX + $vectorUY * $vectorUY)
+            * ($vectorVX * $vectorVX + $vectorVY * $vectorVY)
+        );
+        $cosDA = $magnitude > 1e-10
+            ? max(-1.0, min(1.0, ($vectorUX * $vectorVX + $vectorUY * $vectorVY) / $magnitude))
+            : 0.0;
         $deltaAngle     = acos($cosDA);
         if ($vectorUX * $vectorVY - $vectorUY * $vectorVX < 0.0) {
             $deltaAngle = -$deltaAngle;

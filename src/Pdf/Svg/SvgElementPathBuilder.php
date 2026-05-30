@@ -141,8 +141,17 @@ final readonly class SvgElementPathBuilder
 
         $commands = [];
         foreach ($points as $index => [$pointX, $pointY]) {
-            [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $pointX, $pointY);
-            $commands[] = sprintf('%F %F %s', $transformedX - $minX, $maxY - $transformedY, $index === 0 ? 'm' : 'l');
+            [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint(
+                $transformMatrix,
+                $pointX,
+                $pointY
+            );
+            $commands[] = sprintf(
+                '%F %F %s',
+                $transformedX - $minX,
+                $maxY - $transformedY,
+                $index === 0 ? 'm' : 'l'
+            );
         }
 
         $commands[] = 'h';
