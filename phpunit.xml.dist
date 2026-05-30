@@ -2,7 +2,13 @@
 <phpunit bootstrap="vendor/autoload.php"
          colors="true"
          cacheDirectory="build/.phpunit-cache"
-         beStrictAboutTestsThatDoNotTestAnything="true">
+         beStrictAboutTestsThatDoNotTestAnything="true"
+         failOnDeprecation="true"
+         failOnIncomplete="true"
+         failOnNotice="true"
+         failOnRisky="true"
+         failOnSkipped="true"
+         failOnWarning="true">
     <testsuites>
         <testsuite name="unit">
             <directory>tests/Unit</directory>
