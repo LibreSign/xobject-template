@@ -274,13 +274,15 @@ final readonly class StructuredLayoutRenderer
             );
         }
 
-        $renderedHeight = $localClipBox === null
-            ? $this->boxResolver->resolveAutoContainerHeight($box['height'], $padding, $contentHeight)
-            : $this->boxResolver->resolveFixedContainerHeight($box['height'], $padding, $contentHeight);
-
-        $this->appendDecoration($style, $box, $renderedHeight, $canvasHeight, $decorations);
-
-        return $renderedHeight;
+        return $this->finalizeContainerRendering(
+            $style,
+            $box,
+            $padding,
+            $contentHeight,
+            $localClipBox,
+            $canvasHeight,
+            $decorations,
+        );
     }
 
     /**
@@ -324,12 +326,15 @@ final readonly class StructuredLayoutRenderer
         );
 
         if ($items === []) {
-            $renderedHeight = $localClipBox === null
-                ? $this->boxResolver->resolveAutoContainerHeight($box['height'], $padding, 0.0)
-                : $this->boxResolver->resolveFixedContainerHeight($box['height'], $padding, 0.0);
-            $this->appendDecoration($style, $box, $renderedHeight, $canvasHeight, $decorations);
-
-            return $renderedHeight;
+            return $this->finalizeContainerRendering(
+                $style,
+                $box,
+                $padding,
+                0.0,
+                $localClipBox,
+                $canvasHeight,
+                $decorations,
+            );
         }
 
         $metrics = $this->flexPlanner->calculateMetrics($items, $direction, $justifyContent, $gap, $contentBox);
@@ -359,9 +364,37 @@ final readonly class StructuredLayoutRenderer
         }
 
         $contentHeight = $direction === 'row' ? $metrics['crossAxisSize'] : $metrics['totalMainAxisSize'];
+
+        return $this->finalizeContainerRendering(
+            $style,
+            $box,
+            $padding,
+            $contentHeight,
+            $localClipBox,
+            $canvasHeight,
+            $decorations,
+        );
+    }
+
+    /**
+     * @param array{x: float, y: float, width: float, height: float} $box
+        * @param array{top: float, right: float, bottom: float, left: float} $padding
+     * @param list<LayoutDecoration> $decorations
+     * @param array{x: float, y: float, width: float, height: float}|null $localClipBox
+     */
+    private function finalizeContainerRendering(
+        StyleMap $style,
+        array $box,
+        array $padding,
+        float $contentHeight,
+        ?array $localClipBox,
+        float $canvasHeight,
+        array &$decorations,
+    ): float {
         $renderedHeight = $localClipBox === null
             ? $this->boxResolver->resolveAutoContainerHeight($box['height'], $padding, $contentHeight)
             : $this->boxResolver->resolveFixedContainerHeight($box['height'], $padding, $contentHeight);
+
         $this->appendDecoration($style, $box, $renderedHeight, $canvasHeight, $decorations);
 
         return $renderedHeight;
