@@ -9,6 +9,7 @@ namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
 
 use InvalidArgumentException;
 use LibreSign\XObjectTemplate\Pdf\Svg\SvgPdfXObjectFactory;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class SvgPdfXObjectFactoryTest extends TestCase
@@ -73,9 +74,7 @@ SVG,
         $factory->create('<html></html>', '/tmp/invalid.svg');
     }
 
-    /**
-     * @dataProvider provideInvalidViewportScenarios
-     */
+    #[DataProvider('provideInvalidViewportScenarios')]
     public function testCreateRejectsInvalidViewportScenarios(string $svg, string $expectedMessage): void
     {
         $factory = new SvgPdfXObjectFactory();
@@ -161,9 +160,7 @@ SVG,
         );
     }
 
-    /**
-     * @dataProvider provideSupportedShapeScenarios
-     */
+    #[DataProvider('provideSupportedShapeScenarios')]
     public function testCreateSupportsShapeScenarios(
         string $svg,
         string $sourcePath,
@@ -185,9 +182,7 @@ SVG,
         }
     }
 
-    /**
-     * @dataProvider providePaintModeScenarios
-     */
+    #[DataProvider('providePaintModeScenarios')]
     public function testCreateRendersPaintModeScenarios(
         string $svg,
         string $sourcePath,
