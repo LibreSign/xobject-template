@@ -326,10 +326,14 @@ final class SvgPathCommandParser
                 $x    = $this->resolveCoord($isRelative, $state->currentX, $coordinates[2]);
                 $y    = $this->resolveCoord($isRelative, $state->currentY, $coordinates[3]);
 
-            $x1 = $state->currentX + (2.0 / 3.0) * ($qcpX - $state->currentX);
-            $y1 = $state->currentY + (2.0 / 3.0) * ($qcpY - $state->currentY);
-            $x2 = $x + (2.0 / 3.0) * ($qcpX - $x);
-            $y2 = $y + (2.0 / 3.0) * ($qcpY - $y);
+            [$x1, $y1, $x2, $y2] = $this->quadraticToCubicControlPoints(
+                $state->currentX,
+                $state->currentY,
+                $qcpX,
+                $qcpY,
+                $x,
+                $y,
+            );
 
             $this->appendQuadraticAsCubicToState($state, $context, $x1, $y1, $x2, $y2, $x, $y);
             $state->prevQuadCpX = $qcpX;
