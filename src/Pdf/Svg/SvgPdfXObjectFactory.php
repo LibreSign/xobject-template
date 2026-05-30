@@ -18,6 +18,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
     public function __construct(
         private ColorParser $colorParser = new ColorParser(),
         private SvgArcConverter $arcConverter = new SvgArcConverter(),
+        private SvgColorResolver $colorResolver = new SvgColorResolver(),
     ) {
     }
 
@@ -37,8 +38,8 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                 continue;
             }
 
-            $fillColor  = $this->resolveFillColor($element, $classFills);
-            $strokeColor = $this->resolveStrokeColor($element, $classStrokes);
+            $fillColor  = $this->colorResolver->resolveFillColor($element, $classFills);
+            $strokeColor = $this->colorResolver->resolveStrokeColor($element, $classStrokes);
 
             if ($fillColor === null && $strokeColor === null) {
                 continue;
@@ -171,14 +172,14 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             if (preg_match_all('/\.([a-zA-Z0-9_-]+)\s*\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER) !== false) {
                 foreach ($rules as $rule) {
                     if (preg_match('/(?:^|;)\s*fill\s*:\s*([^;]+)/i', $rule[2], $fillMatch) === 1) {
-                        $color = $this->normalizeColor($fillMatch[1]);
+                        $color = $this->colorResolver->normalizeColor($fillMatch[1]);
                         if ($color !== null) {
                             $fills[$rule[1]] = $color;
                         }
                     }
 
                     if (preg_match('/(?:^|;)\s*stroke\s*:\s*([^;]+)/i', $rule[2], $strokeMatch) === 1) {
-                        $color = $this->normalizeColor($strokeMatch[1]);
+                        $color = $this->colorResolver->normalizeColor($strokeMatch[1]);
                         if ($color !== null) {
                             $strokes[$rule[1]] = $color;
                         }
@@ -556,81 +557,6 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         ]);
     }
 
-    /**
-     * @param array<string, string> $classFills
-     */
-    private function resolveFillColor(DOMElement $element, array $classFills): ?string
-    {
-        return $this->resolveColorAttribute($element, 'fill', $classFills, '#000000');
-    }
-
-    /**
-     * @param array<string, string> $classStrokes
-     */
-    private function resolveStrokeColor(DOMElement $element, array $classStrokes): ?string
-    {
-        return $this->resolveColorAttribute($element, 'stroke', $classStrokes, null);
-    }
-
-    /**
-     * @param array<string, string> $classColors
-     */
-    private function resolveColorAttribute(
-        DOMElement $element,
-        string $attributeName,
-        array $classColors,
-        ?string $defaultFallback,
-    ): ?string {
-        // Check inline attribute
-        $inlineColor = $this->normalizeColor($element->getAttribute($attributeName));
-        if ($inlineColor === 'none') {
-            return null;
-        }
-
-        if ($inlineColor !== null) {
-            return $inlineColor;
-        }
-
-        // Check inline style attribute
-        $inlineStyle = $this->extractColorFromStyleAttribute($element->getAttribute('style'), $attributeName);
-        if ($inlineStyle === 'none') {
-            return null;
-        }
-
-        if ($inlineStyle !== null) {
-            return $inlineStyle;
-        }
-
-        // Check CSS classes
-        $classes = preg_split('/\s+/', trim($element->getAttribute('class')));
-        if (is_array($classes)) {
-            foreach ($classes as $class) {
-                if ($class !== '' && isset($classColors[$class])) {
-                    $classColor = $classColors[$class];
-                    return $classColor === 'none' ? null : $classColor;
-                }
-            }
-        }
-
-        // Check ancestors
-        $ancestor = $element->parentNode;
-        while ($ancestor instanceof DOMElement) {
-            $ancestorColor = $this->normalizeColor($ancestor->getAttribute($attributeName));
-            if ($ancestorColor !== null) {
-                return $ancestorColor === 'none' ? null : $ancestorColor;
-            }
-
-            $ancestorStyle = $this->extractColorFromStyleAttribute($ancestor->getAttribute('style'), $attributeName);
-            if ($ancestorStyle !== null) {
-                return $ancestorStyle === 'none' ? null : $ancestorStyle;
-            }
-
-            $ancestor = $ancestor->parentNode;
-        }
-
-        return $defaultFallback;
-    }
-
     private function resolveStrokeWidth(DOMElement $element): float
     {
         $attr = trim($element->getAttribute('stroke-width'));
@@ -638,71 +564,12 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
             return max(0.0, $this->extractNumericSvgLength($attr));
         }
 
-        $styleWidth = $this->extractValueFromStyleAttribute($element->getAttribute('style'), 'stroke-width');
+        $styleWidth = $this->colorResolver->extractValueFromStyleAttribute($element->getAttribute('style'), 'stroke-width');
         if ($styleWidth !== null) {
             return max(0.0, $this->extractNumericSvgLength($styleWidth));
         }
 
         return 1.0;
-    }
-
-    private function extractColorFromStyleAttribute(string $style, string $property): ?string
-    {
-        $value = $this->extractValueFromStyleAttribute($style, $property);
-        if ($value === null) {
-            return null;
-        }
-
-        return $this->normalizeColor($value);
-    }
-
-    private function extractValueFromStyleAttribute(string $style, string $property): ?string
-    {
-        if ($style === '') {
-            return null;
-        }
-
-        $escaped = preg_quote($property, '/');
-        if (preg_match('/(?:^|;)\s*' . $escaped . '\s*:\s*([^;]+)/i', $style, $matches) !== 1) {
-            return null;
-        }
-
-        return trim($matches[1]);
-    }
-
-    private function normalizeColor(string $color): ?string
-    {
-        $trimmed = strtolower(trim($color));
-        if ($trimmed === '') {
-            return null;
-        }
-
-        if ($trimmed === 'none') {
-            return 'none';
-        }
-
-        if (preg_match('/^#[0-9a-f]{3}([0-9a-f]{3})?$/i', $trimmed) === 1) {
-            return $trimmed;
-        }
-
-        if (preg_match('/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/', $trimmed, $matches) === 1) {
-            $red = max(0, min(255, (int) $matches[1]));
-            $green = max(0, min(255, (int) $matches[2]));
-            $blue = max(0, min(255, (int) $matches[3]));
-
-            return sprintf('#%02x%02x%02x', $red, $green, $blue);
-        }
-
-        return match ($trimmed) {
-            'black' => '#000000',
-            'white' => '#ffffff',
-            'red' => '#ff0000',
-            'green' => '#008000',
-            'blue' => '#0000ff',
-            'yellow' => '#ffff00',
-            'gray', 'grey' => '#808080',
-            default => null,
-        };
     }
 
     /**
