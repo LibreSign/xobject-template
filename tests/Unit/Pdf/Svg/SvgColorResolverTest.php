@@ -12,6 +12,7 @@ use DOMElement;
 use LibreSign\XObjectTemplate\Pdf\Svg\SvgColorResolver;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class SvgColorResolverTest extends TestCase
 {
@@ -41,7 +42,7 @@ final class SvgColorResolverTest extends TestCase
         self::assertSame('rgb(10,20,30)', $resolver->resolveFillColor($styleElement, []));
 
         $classElement = $this->createElement('path', [
-            'class' => 'primary secondary',
+            'class' => '  primary   secondary  ',
         ]);
         self::assertSame('#112233', $resolver->resolveFillColor($classElement, ['secondary' => '#112233']));
 
@@ -93,27 +94,49 @@ final class SvgColorResolverTest extends TestCase
         self::assertSame($expected, $result);
     }
 
+    public function testResolveColorAttributeRemainsPublicForFactoryCollaborators(): void
+    {
+        $method = new ReflectionMethod(SvgColorResolver::class, 'resolveColorAttribute');
+
+        self::assertTrue($method->isPublic());
+    }
+
     /**
      * @return iterable<string, array{style: string, property: string, expected: ?string, useColorExtractor?: bool}>
      */
     public static function provideExtractValueFromStyleAttributeScenarios(): iterable
     {
-        yield 'extract stroke-width from style' => [
+        yield 'extract generic property' => [
             'style' => 'fill:#fff; stroke-width: 2.5 ;',
             'property' => 'stroke-width',
             'expected' => '2.5',
         ];
+
         yield 'extract fill color case-insensitive' => [
             'style' => ' FiLl : #fff ; ',
             'property' => 'fill',
             'expected' => '#fff',
             'useColorExtractor' => true,
         ];
+
+        yield 'extract dotted property name' => [
+            'style' => 'fill.opacity: 0.5',
+            'property' => 'fill.opacity',
+            'expected' => '0.5',
+        ];
+
+        yield 'extract value containing colon characters' => [
+            'style' => 'fill:url(http://example.com/a:b.svg)',
+            'property' => 'fill',
+            'expected' => 'url(http://example.com/a:b.svg)',
+        ];
+
         yield 'empty style returns null' => [
             'style' => '',
             'property' => 'fill',
             'expected' => null,
         ];
+
         yield 'missing property returns null' => [
             'style' => 'stroke:#000',
             'property' => 'fill',
@@ -138,10 +161,29 @@ final class SvgColorResolverTest extends TestCase
         yield 'none sentinel' => ['input' => 'none', 'expected' => 'none'];
         yield 'short hex' => ['input' => '#abc', 'expected' => '#abc'];
         yield 'long hex uppercased and trimmed' => ['input' => ' #AABBCC ', 'expected' => '#aabbcc'];
-        yield 'rgb notation with clamping' => ['input' => 'rgb(300,-1,12)', 'expected' => null];
+        yield 'hex with invalid prefix' => ['input' => 'x#abc', 'expected' => null];
+        yield 'hex with invalid suffix' => ['input' => '#abcx', 'expected' => null];
+        yield 'hex with invalid medium length' => ['input' => '#1234', 'expected' => null];
+        yield 'rgb notation rejects negative channel' => ['input' => 'rgb(300,-1,12)', 'expected' => null];
         yield 'rgb notation valid' => ['input' => 'rgb(255, 0, 12)', 'expected' => '#ff000c'];
+        yield 'rgb notation clamps overflowing red' => ['input' => 'rgb(256,0,0)', 'expected' => '#ff0000'];
+        yield 'rgb notation preserves max green' => ['input' => 'rgb(0,255,0)', 'expected' => '#00ff00'];
+        yield 'rgb notation clamps overflowing green' => ['input' => 'rgb(0,256,0)', 'expected' => '#00ff00'];
+        yield 'rgb notation preserves zero blue' => ['input' => 'rgb(0,0,0)', 'expected' => '#000000'];
+        yield 'rgb notation clamps overflowing blue' => ['input' => 'rgb(0,0,256)', 'expected' => '#0000ff'];
+        yield 'rgb notation rejects prefixed content' => ['input' => 'prefix rgb(255,0,12)', 'expected' => null];
+        yield 'rgb notation rejects suffixed content' => ['input' => 'rgb(255,0,12) suffix', 'expected' => null];
+        yield 'rgb notation rejects missing closing parenthesis' => ['input' => 'rgb(255,0,12', 'expected' => null];
+        yield 'rgb notation rejects missing opening marker' => ['input' => '255,0,12)', 'expected' => null];
+        yield 'rgb notation rejects contaminated channel' => ['input' => 'rgb(12x,0,0)', 'expected' => null];
+        yield 'named black' => ['input' => 'black', 'expected' => '#000000'];
+        yield 'named white' => ['input' => 'white', 'expected' => '#ffffff'];
+        yield 'named red' => ['input' => 'red', 'expected' => '#ff0000'];
+        yield 'named green' => ['input' => 'green', 'expected' => '#008000'];
         yield 'named gray alias' => ['input' => 'grey', 'expected' => '#808080'];
+        yield 'named gray canonical' => ['input' => 'gray', 'expected' => '#808080'];
         yield 'named blue' => ['input' => 'blue', 'expected' => '#0000ff'];
+        yield 'named yellow' => ['input' => 'yellow', 'expected' => '#ffff00'];
         yield 'invalid color' => ['input' => 'chartreuse-ish', 'expected' => null];
     }
 

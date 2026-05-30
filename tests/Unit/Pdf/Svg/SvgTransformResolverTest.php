@@ -51,6 +51,38 @@ final class SvgTransformResolverTest extends TestCase
         self::assertEqualsWithDelta(5.0, $actualY, 0.0001);
     }
 
+    public function testResolveElementTransformMatrixIncludesSvgRootAndTargetTransforms(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createElementWithRootAndTargetTransforms(
+            rootTransform: ' translate(3,0) ',
+            targetTransform: 'translate(4,1)',
+        );
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+        [$actualX, $actualY] = $resolver->applyTransformToPoint($matrix, 1.0, 1.0);
+
+        self::assertEqualsWithDelta(8.0, $actualX, 0.0001);
+        self::assertEqualsWithDelta(2.0, $actualY, 0.0001);
+    }
+
+    #[DataProvider('provideDefaultingTransformScenarios')]
+    public function testResolveElementTransformMatrixSupportsOperatorDefaults(
+        string $transform,
+        float $x,
+        float $y,
+        array $expectedPoint,
+    ): void {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement([$transform]);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+        [$actualX, $actualY] = $resolver->applyTransformToPoint($matrix, $x, $y);
+
+        self::assertEqualsWithDelta($expectedPoint[0], $actualX, 0.0001);
+        self::assertEqualsWithDelta($expectedPoint[1], $actualY, 0.0001);
+    }
+
     public function testResolveElementTransformMatrixFallsBackToIdentityForUnsupportedTransformText(): void
     {
         $resolver = new SvgTransformResolver();
@@ -78,6 +110,13 @@ final class SvgTransformResolverTest extends TestCase
             'expectedPoint' => [6.0, 9.0],
         ];
 
+        yield 'translate operator with extra whitespace' => [
+            'transform' => ' translate( 5 , 7 ) ',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [6.0, 9.0],
+        ];
+
         yield 'scale operator with implicit y scale' => [
             'transform' => 'scale(3)',
             'x' => 2.0,
@@ -93,10 +132,10 @@ final class SvgTransformResolverTest extends TestCase
         ];
 
         yield 'rotate operator around center' => [
-            'transform' => 'rotate(90 1 1)',
+            'transform' => 'rotate(90 1 2)',
             'x' => 2.0,
-            'y' => 1.0,
-            'expectedPoint' => [1.0, 2.0],
+            'y' => 2.0,
+            'expectedPoint' => [1.0, 3.0],
         ];
 
         yield 'skewX operator' => [
@@ -111,6 +150,61 @@ final class SvgTransformResolverTest extends TestCase
             'x' => 1.0,
             'y' => 2.0,
             'expectedPoint' => [1.0, 3.0],
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{transform: string, x: float, y: float, expectedPoint: array{0: float, 1: float}}>
+     */
+    public static function provideDefaultingTransformScenarios(): iterable
+    {
+        yield 'translate defaults missing y to zero' => [
+            'transform' => 'translate(5)',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [6.0, 2.0],
+        ];
+
+        yield 'translate without arguments is identity' => [
+            'transform' => 'translate()',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [1.0, 2.0],
+        ];
+
+        yield 'matrix with insufficient arguments is identity' => [
+            'transform' => 'matrix(1,2,3)',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [1.0, 2.0],
+        ];
+
+        yield 'scale without arguments is identity' => [
+            'transform' => 'scale()',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [1.0, 2.0],
+        ];
+
+        yield 'skewX without arguments is identity' => [
+            'transform' => 'skewX()',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [1.0, 2.0],
+        ];
+
+        yield 'skewY without arguments is identity' => [
+            'transform' => 'skewY()',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [1.0, 2.0],
+        ];
+
+        yield 'rotate without arguments is identity' => [
+            'transform' => 'rotate()',
+            'x' => 1.0,
+            'y' => 2.0,
+            'expectedPoint' => [1.0, 2.0],
         ];
     }
 
@@ -134,6 +228,20 @@ final class SvgTransformResolverTest extends TestCase
 
         $target = $document->createElement('path');
         $current->appendChild($target);
+
+        return $target;
+    }
+
+    private function createElementWithRootAndTargetTransforms(string $rootTransform, string $targetTransform): DOMElement
+    {
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $svg = $document->createElement('svg');
+        $svg->setAttribute('transform', $rootTransform);
+        $document->appendChild($svg);
+
+        $target = $document->createElement('path');
+        $target->setAttribute('transform', $targetTransform);
+        $svg->appendChild($target);
 
         return $target;
     }

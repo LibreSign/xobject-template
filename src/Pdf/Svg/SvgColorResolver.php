@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Pdf\Svg;
 
+use function array_filter;
+use function array_map;
 use DOMElement;
 
 /**
@@ -92,10 +94,7 @@ final class SvgColorResolver
         }
 
         // Check CSS classes
-        $classes = preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
-        if ($classes === false) {
-            $classes = [];
-        }
+        $classes = $this->extractClasses($element->getAttribute('class'));
 
         foreach ($classes as $class) {
             if (isset($classColors[$class])) {
@@ -174,15 +173,18 @@ final class SvgColorResolver
         }
 
         foreach ($declarations as $declaration) {
-            $declaration = trim($declaration);
-            if ($declaration === '') {
+            if (trim($declaration) === '') {
                 continue;
             }
 
-            if (
-                preg_match('/^' . preg_quote($property) . '\s*:\s*(.+)$/i', $declaration, $matches) === 1
-            ) {
-                return trim($matches[1]);
+            $parts = explode(':', $declaration, 2);
+            if (count($parts) !== 2) {
+                continue;
+            }
+
+            [$candidateProperty, $candidateValue] = array_map(trim(...), $parts);
+            if (strcasecmp($candidateProperty, $property) === 0) {
+                return $candidateValue;
             }
         }
 
@@ -209,16 +211,13 @@ final class SvgColorResolver
             return 'none';
         }
 
-        if (preg_match('/^#[0-9a-f]{3}([0-9a-f]{3})?$/i', $trimmed) === 1) {
+        if ($this->isHexColor($trimmed)) {
             return $trimmed;
         }
 
-        if (preg_match('/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/', $trimmed, $matches) === 1) {
-            $red   = max(0, min(255, (int) $matches[1]));
-            $green = max(0, min(255, (int) $matches[2]));
-            $blue  = max(0, min(255, (int) $matches[3]));
-
-            return sprintf('#%02x%02x%02x', $red, $green, $blue);
+        $rgb = $this->parseRgbColor($trimmed);
+        if ($rgb !== null) {
+            return sprintf('#%02x%02x%02x', $rgb[0], $rgb[1], $rgb[2]);
         }
 
         return match ($trimmed) {
@@ -231,5 +230,66 @@ final class SvgColorResolver
             'gray', 'grey' => '#808080',
             default => null,
         };
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractClasses(string $classAttribute): array
+    {
+        $normalized = preg_replace('/\s+/', ' ', trim($classAttribute));
+        if (!is_string($normalized) || $normalized === '') {
+            return [];
+        }
+
+        return array_values(array_filter(explode(' ', $normalized), static fn (string $class): bool => $class !== ''));
+    }
+
+    private function isHexColor(string $color): bool
+    {
+        if (!str_starts_with($color, '#')) {
+            return false;
+        }
+
+        $hex = substr($color, 1);
+        $length = strlen($hex);
+
+        return ($length === 3 || $length === 6) && ctype_xdigit($hex);
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: int}|null
+     */
+    private function parseRgbColor(string $color): ?array
+    {
+        if (!str_starts_with($color, 'rgb(') || !str_ends_with($color, ')')) {
+            return null;
+        }
+
+        $parts = array_map(
+            static fn (string $part): string => trim($part),
+            explode(',', substr($color, 4, -1)),
+        );
+
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        $channels = [];
+
+        foreach ($parts as $part) {
+            if ($part === '' || preg_match('/^\d+$/', $part) !== 1) {
+                return null;
+            }
+
+            $channel = filter_var($part, FILTER_VALIDATE_INT);
+            if (!is_int($channel) || $channel < 0) {
+                return null;
+            }
+
+            $channels[] = min(255, $channel);
+        }
+
+        return [$channels[0], $channels[1], $channels[2]];
     }
 }
