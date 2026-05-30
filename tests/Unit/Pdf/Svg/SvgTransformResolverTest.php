@@ -15,6 +15,17 @@ use PHPUnit\Framework\TestCase;
 
 final class SvgTransformResolverTest extends TestCase
 {
+    /**
+     * @param array{0:float,1:float,2:float,3:float,4:float,5:float} $expected
+     * @param array{0:float,1:float,2:float,3:float,4:float,5:float} $actual
+     */
+    private static function assertMatrixEqualsWithDelta(array $expected, array $actual): void
+    {
+        foreach ($expected as $index => $expectedValue) {
+            self::assertEqualsWithDelta($expectedValue, $actual[$index], 0.0001);
+        }
+    }
+
     public function testApplyTransformToPointUsesAffineMatrixCoordinates(): void
     {
         $resolver = new SvgTransformResolver();
@@ -66,6 +77,18 @@ final class SvgTransformResolverTest extends TestCase
         self::assertEqualsWithDelta(2.0, $actualY, 0.0001);
     }
 
+    public function testResolveElementTransformMatrixIgnoresWhitespaceOnlyAncestorTransform(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement(['   ', 'translate(4,1)']);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+        [$actualX, $actualY] = $resolver->applyTransformToPoint($matrix, 1.0, 1.0);
+
+        self::assertEqualsWithDelta(5.0, $actualX, 0.0001);
+        self::assertEqualsWithDelta(2.0, $actualY, 0.0001);
+    }
+
     #[DataProvider('provideDefaultingTransformScenarios')]
     public function testResolveElementTransformMatrixSupportsOperatorDefaults(
         string $transform,
@@ -89,6 +112,74 @@ final class SvgTransformResolverTest extends TestCase
         $element = $this->createNestedElement(['banana(10)']);
 
         self::assertSame([1.0, 0.0, 0.0, 1.0, 0.0, 0.0], $resolver->resolveElementTransformMatrix($element));
+    }
+
+    public function testResolveElementTransformMatrixBuildsExpectedCompositeMatrix(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement(['translate(2,3) scale(4,5)']);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+
+        self::assertSame([4.0, 0.0, 0.0, 5.0, 2.0, 3.0], $matrix);
+    }
+
+    public function testResolveElementTransformMatrixSkipsEmptyArgumentsBetweenSeparators(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement(['translate(5,,7)']);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+
+        self::assertSame([1.0, 0.0, 0.0, 1.0, 5.0, 7.0], $matrix);
+    }
+
+    public function testResolveElementTransformMatrixSkipsLeadingEmptyArguments(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement(['translate(,5,7)']);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+
+        self::assertSame([1.0, 0.0, 0.0, 1.0, 5.0, 7.0], $matrix);
+    }
+
+    public function testResolveElementTransformMatrixReturnsRotationAroundOriginWhenCenterMissing(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement(['rotate(90)']);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+
+        self::assertMatrixEqualsWithDelta(
+            [0.0, 1.0, -1.0, 0.0, 0.0, 0.0],
+            $matrix,
+        );
+    }
+
+    public function testResolveElementTransformMatrixReturnsRotationAroundSpecifiedCenter(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement(['rotate(90 1 2)']);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+
+        self::assertMatrixEqualsWithDelta(
+            [0.0, 1.0, -1.0, 0.0, 3.0, 1.0],
+            $matrix,
+        );
+    }
+
+    public function testResolveElementTransformMatrixMultipliesSequentialMatrices(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement([
+            'matrix(1,2,3,4,5,6) matrix(7,8,9,10,11,12)',
+        ]);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+
+        self::assertSame([31.0, 46.0, 39.0, 58.0, 52.0, 76.0], $matrix);
     }
 
     /**
@@ -232,8 +323,10 @@ final class SvgTransformResolverTest extends TestCase
         return $target;
     }
 
-    private function createElementWithRootAndTargetTransforms(string $rootTransform, string $targetTransform): DOMElement
-    {
+    private function createElementWithRootAndTargetTransforms(
+        string $rootTransform,
+        string $targetTransform,
+    ): DOMElement {
         $document = new DOMDocument('1.0', 'UTF-8');
         $svg = $document->createElement('svg');
         $svg->setAttribute('transform', $rootTransform);

@@ -370,6 +370,50 @@ final class SvgArcConverterTest extends TestCase
         );
     }
 
+    public function testCalculateArcCenterMatchesExpectedRotatedNormalizedCenter(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            10.0,
+            60.0,
+            30.0,
+            38.77015604817706,
+            20.677416559027762,
+            cos(deg2rad(45.0)),
+            sin(deg2rad(45.0)),
+            1,
+            1,
+        );
+
+        $center = self::invokePrivateMethod($converter, 'calculateArcCenter', [$params]);
+
+        self::assertEqualsWithDelta(29.999999923071595, $center[0], 0.0001);
+        self::assertEqualsWithDelta(19.99999972004405, $center[1], 0.0001);
+    }
+
+    public function testCalculateArcCenterFallsBackToMidpointBelowDenominatorTolerance(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            -1.0e-6,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        $center = self::invokePrivateMethod($converter, 'calculateArcCenter', [$params]);
+
+        self::assertEqualsWithDelta(-5.0e-7, $center[0], 1.0e-12);
+        self::assertEqualsWithDelta(0.0, $center[1], 1.0e-12);
+    }
+
     public function testCalculateArcAnglesReturnsExpectedSweepAdjustedDelta(): void
     {
         $converter = new SvgArcConverter();
@@ -393,6 +437,61 @@ final class SvgArcConverterTest extends TestCase
         self::assertEqualsWithDelta(M_PI, $clockwiseAngles[1], 0.0001);
     }
 
+    public function testCalculateArcAnglesMatchesExpectedRotatedNormalizedValues(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            10.0,
+            60.0,
+            30.0,
+            38.77015604817706,
+            20.677416559027762,
+            cos(deg2rad(45.0)),
+            sin(deg2rad(45.0)),
+            1,
+            1,
+        );
+
+        $angles = self::invokePrivateMethod(
+            $converter,
+            'calculateArcAngles',
+            [$params, 29.999999923071595, 19.99999972004405],
+        );
+
+        self::assertEqualsWithDelta(2.388441372627599, $angles[0], 0.0001);
+        self::assertEqualsWithDelta(M_PI, $angles[1], 0.0001);
+    }
+
+    public function testCalculateArcCenterAndAnglesMatchExpectedAsymmetricValues(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            25.0,
+            8.0,
+            13.566066509534181,
+            10.174549882150636,
+            cos(deg2rad(35.0)),
+            sin(deg2rad(35.0)),
+            1,
+            0,
+        );
+
+        $center = self::invokePrivateMethod($converter, 'calculateArcCenter', [$params]);
+        $angles = self::invokePrivateMethod(
+            $converter,
+            'calculateArcAngles',
+            [$params, $center[0], $center[1]],
+        );
+
+        self::assertEqualsWithDelta(12.499999988863545, $center[0], 0.0001);
+        self::assertEqualsWithDelta(4.000000104332266, $center[1], 0.0001);
+        self::assertEqualsWithDelta(2.7489504213408784, $angles[0], 0.0001);
+        self::assertEqualsWithDelta(-M_PI, $angles[1], 0.0001);
+    }
+
     public function testGenerateArcCurvesUsesSingleSegmentBelowNinetyDegrees(): void
     {
         $converter = new SvgArcConverter();
@@ -412,6 +511,79 @@ final class SvgArcConverterTest extends TestCase
                 5.1964232705811195,
                 7.0710678118654755,
                 7.071067811865475,
+            ],
+            $curves[0],
+        );
+    }
+
+    public function testGenerateArcCurvesReturnsSinglePointCurveWhenDeltaAngleIsZero(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [0.0, 0.0, 10.0, 10.0, 1.0, 0.0, 0.0, 0.0],
+        );
+
+        self::assertCount(1, $curves);
+        self::assertCurveMatches([10.0, 0.0, 10.0, 0.0, 10.0, 0.0], $curves[0]);
+    }
+
+    public function testGenerateArcCurvesMatchesExpectedRotatedQuarterSegment(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [
+                3.0,
+                -2.0,
+                10.0,
+                6.0,
+                cos(deg2rad(45.0)),
+                sin(deg2rad(45.0)),
+                0.0,
+                M_PI / 4.0,
+            ],
+        );
+
+        self::assertCount(1, $curves);
+        self::assertCurveMatches(
+            [8.946281087094862, 6.195854536636088, 7.120918187930419, 6.530229546982604, 5.0, 6.0],
+            $curves[0],
+        );
+    }
+
+    public function testGenerateArcCurvesMatchesExpectedRotatedQuarterSegmentWithNonZeroStart(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [
+                3.0,
+                -2.0,
+                10.0,
+                6.0,
+                cos(deg2rad(45.0)),
+                sin(deg2rad(45.0)),
+                M_PI / 4.0,
+                M_PI / 4.0,
+            ],
+        );
+
+        self::assertCount(1, $curves);
+        self::assertCurveMatches(
+            [
+                2.8790818120695802,
+                5.469770453017396,
+                0.632003854165071,
+                4.117285228403642,
+                -1.2426406871192843,
+                2.242640687119286,
             ],
             $curves[0],
         );
@@ -452,6 +624,43 @@ final class SvgArcConverterTest extends TestCase
         );
     }
 
+    public function testGenerateArcCurvesMatchesExpectedRotatedThreeQuarterSegments(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [
+                3.0,
+                -2.0,
+                10.0,
+                6.0,
+                cos(deg2rad(45.0)),
+                sin(deg2rad(45.0)),
+                0.0,
+                3.0 * M_PI / 4.0,
+            ],
+        );
+
+        self::assertCount(2, $curves);
+        self::assertCurveMatches(
+            [
+                8.358540583851704,
+                6.783595039879246,
+                5.078595495120528,
+                6.607261689108819,
+                1.7862916061018566,
+                4.625669395360115,
+            ],
+            $curves[0],
+        );
+        self::assertCurveMatches(
+            [-1.506012282916814, 2.64407710161141, -4.192706922736574, -0.7708276909462963, -5.0, -3.9999999999999987],
+            $curves[1],
+        );
+    }
+
     #[DataProvider('provideArcScenarios')]
     public function testArcToBezierCurvesGeneratesExpectedCurveShape(
         float $fromX,
@@ -488,6 +697,114 @@ final class SvgArcConverterTest extends TestCase
         $lastCurve = $curves[array_key_last($curves)];
         self::assertEqualsWithDelta($toX, $lastCurve[4], 0.0001);
         self::assertEqualsWithDelta($toY, $lastCurve[5], 0.0001);
+    }
+
+    public function testGenerateArcCurvesWithLargeAngleSplitsIntoThreeSegments(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [0.0, 0.0, 10.0, 10.0, 1.0, 0.0, 0.0, 5.0 * M_PI / 4.0],
+        );
+
+        self::assertCount(3, $curves);
+        self::assertCount(6, $curves[0]);
+        self::assertCount(6, $curves[1]);
+        self::assertCount(6, $curves[2]);
+    }
+
+    public function testGenerateArcCurvesNegativeDeltaAngleWithSweepZero(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [0.0, 0.0, 10.0, 10.0, 1.0, 0.0, M_PI, -M_PI / 2.0],
+        );
+
+        self::assertCount(1, $curves);
+        self::assertCount(6, $curves[0]);
+    }
+
+    public function testCalculateArcAnglesWithZeroMagnitudeReturnsZeroCosDA(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0e-11,
+            1.0e-11,
+            1.0,
+            0.0,
+            0,
+            0,
+        );
+
+        $angles = self::invokePrivateMethod(
+            $converter,
+            'calculateArcAngles',
+            [$params, 0.0, 0.0],
+        );
+
+        self::assertIsFloat($angles[0]);
+        self::assertIsFloat($angles[1]);
+    }
+
+    public function testNormalizeArcRadiiWithExactlyOnePointZeroScale(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            20.0,
+            0.0,
+            10.0,
+            10.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        $normalized = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$params]);
+
+        self::assertSame($params, $normalized);
+    }
+
+    public function testArcToBezierCurvesPreservesEndpointAsLastControlPoint(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $endX = 100.0;
+        $endY = 150.0;
+        $curves = $converter->arcToBezierCurves(0.0, 0.0, 50.0, 60.0, 45.0, 1, 0, $endX, $endY);
+
+        self::assertNotEmpty($curves);
+        $lastCurve = end($curves);
+        self::assertEqualsWithDelta($endX, $lastCurve[4], 0.0001);
+        self::assertEqualsWithDelta($endY, $lastCurve[5], 0.0001);
+    }
+
+    public function testGenerateArcCurvesSmallAngleStepRequiresExactAlphaCalculation(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [0.0, 0.0, 10.0, 10.0, 1.0, 0.0, 0.0, 0.001],
+        );
+
+        self::assertCount(1, $curves);
+        $curve = $curves[0];
+        foreach ($curve as $value) {
+            self::assertTrue(is_finite($value));
+        }
     }
 
     /**

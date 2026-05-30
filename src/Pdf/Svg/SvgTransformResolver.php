@@ -39,8 +39,8 @@ final class SvgTransformResolver
         }
 
         for ($index = count($ancestors) - 1; $index >= 0; --$index) {
-            $transform = trim($ancestors[$index]->getAttribute('transform'));
-            if ($transform === '') {
+            $transform = $ancestors[$index]->getAttribute('transform');
+            if (!preg_match('/\S/', $transform)) {
                 continue;
             }
 
@@ -90,36 +90,50 @@ final class SvgTransformResolver
 
         foreach ($matches as $match) {
             $operatorName = strtolower($match[1]);
-            $args = preg_split('/[\s,]+/', trim($match[2]));
+            $args = preg_split('/[\s,]+/', $match[2], -1, PREG_SPLIT_NO_EMPTY);
             if (!is_array($args)) {
                 continue;
             }
 
-            $values = [];
-            foreach ($args as $arg) {
-                if ($arg === '') {
-                    continue;
-                }
+            $values = array_map(
+                static fn(string $arg): float => (float) $arg,
+                $args,
+            );
 
-                $values[] = (float) $arg;
-            }
-
-            $operationMatrix = match ($operatorName) {
-                'matrix' => count($values) >= 6
-                    ? [$values[0], $values[1], $values[2], $values[3], $values[4], $values[5]]
-                    : [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                'translate' => [1.0, 0.0, 0.0, 1.0, $values[0] ?? 0.0, $values[1] ?? 0.0],
-                'scale' => [$values[0] ?? 1.0, 0.0, 0.0, $values[1] ?? ($values[0] ?? 1.0), 0.0, 0.0],
-                'rotate' => $this->buildRotateMatrix($values),
-                'skewx' => [1.0, 0.0, tan(deg2rad($values[0] ?? 0.0)), 1.0, 0.0, 0.0],
-                'skewy' => [1.0, tan(deg2rad($values[0] ?? 0.0)), 0.0, 1.0, 0.0, 0.0],
-                default => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-            };
-
+            $operationMatrix = $this->buildTransformMatrix($operatorName, $values);
             $matrix = $this->multiplyMatrices($matrix, $operationMatrix);
         }
 
         return $matrix;
+    }
+
+    /**
+     * Build a transform matrix for a single operator.
+     *
+     * @param string $operatorName Transform operator name (matrix, translate, etc.)
+     * @param list<float> $values Transform values
+     * @return array{0:float,1:float,2:float,3:float,4:float,5:float}
+     */
+    private function buildTransformMatrix(string $operatorName, array $values): array
+    {
+        return match ($operatorName) {
+            'matrix' => count($values) >= 6
+                ? [$values[0], $values[1], $values[2], $values[3], $values[4], $values[5]]
+                : [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            'translate' => [1.0, 0.0, 0.0, 1.0, $values[0] ?? 0.0, $values[1] ?? 0.0],
+            'scale' => [
+                $values[0] ?? 1.0,
+                0.0,
+                0.0,
+                $values[1] ?? ($values[0] ?? 1.0),
+                0.0,
+                0.0,
+            ],
+            'rotate' => $this->buildRotateMatrix($values),
+            'skewx' => [1.0, 0.0, tan(deg2rad($values[0] ?? 0.0)), 1.0, 0.0, 0.0],
+            'skewy' => [1.0, tan(deg2rad($values[0] ?? 0.0)), 0.0, 1.0, 0.0, 0.0],
+            default => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        };
     }
 
     /**

@@ -58,22 +58,16 @@ final readonly class SvgPathCommandParser
     private function tokenizePathData(string $pathData, string $source): array
     {
         preg_match_all(
-            '/([A-Za-z])|([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/',
+            '/[A-Za-z]|[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/',
             $pathData,
             $matches,
-            PREG_SET_ORDER,
         );
 
-        if ($matches === []) {
+        if ($matches[0] === []) {
             throw new InvalidArgumentException(sprintf('Unsupported or empty SVG path data in "%s".', $source));
         }
 
-        $tokens = [];
-        foreach ($matches as $match) {
-            $tokens[] = $match[1] !== '' ? $match[1] : $match[2];
-        }
-
-        return $tokens;
+        return $matches[0];
     }
 
     /**
@@ -169,6 +163,8 @@ final readonly class SvgPathCommandParser
         $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
         $state->currentX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
         $state->currentY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
+        $state->subpathStartX = $state->currentX;
+        $state->subpathStartY = $state->currentY;
         [$moveX, $moveY] = $this->transformResolver->applyTransformToPoint(
             $context->transformMatrix,
             $state->currentX,
@@ -229,6 +225,8 @@ final readonly class SvgPathCommandParser
             $state->commands[] = sprintf('%F %F l', $lineX - $context->minX, $context->maxY - $lineY);
             $state->lastCubicControlX = null;
             $state->lastCubicControlY = null;
+            $state->prevQuadCpX = null;
+            $state->prevQuadCpY = null;
         }
     }
 
@@ -254,6 +252,8 @@ final readonly class SvgPathCommandParser
             $state->commands[] = sprintf('%F %F l', $lineX - $context->minX, $context->maxY - $lineY);
             $state->lastCubicControlX = null;
             $state->lastCubicControlY = null;
+            $state->prevQuadCpX = null;
+            $state->prevQuadCpY = null;
         }
     }
 
@@ -292,6 +292,8 @@ final readonly class SvgPathCommandParser
             $state->currentY = $y;
             $state->lastCubicControlX = $endX2;
             $state->lastCubicControlY = $endY2;
+            $state->prevQuadCpX = null;
+            $state->prevQuadCpY = null;
         }
     }
 
@@ -330,6 +332,8 @@ final readonly class SvgPathCommandParser
             $state->currentY = $y;
             $state->lastCubicControlX = $endX2;
             $state->lastCubicControlY = $endY2;
+            $state->prevQuadCpX = null;
+            $state->prevQuadCpY = null;
         }
     }
 
@@ -480,14 +484,20 @@ final readonly class SvgPathCommandParser
             $state->currentY = $y;
             $state->lastCubicControlX = null;
             $state->lastCubicControlY = null;
+            $state->prevQuadCpX = null;
+            $state->prevQuadCpY = null;
         }
     }
 
     private function handleClosePathCommand(PathParsingState $state): void
     {
         $state->commands[] = 'h';
+        $state->currentX = $state->subpathStartX;
+        $state->currentY = $state->subpathStartY;
         $state->lastCubicControlX = null;
         $state->lastCubicControlY = null;
+        $state->prevQuadCpX = null;
+        $state->prevQuadCpY = null;
     }
 
     /**
@@ -527,6 +537,8 @@ final readonly class SvgPathCommandParser
         );
         $state->lastCubicControlX = null;
         $state->lastCubicControlY = null;
+        $state->prevQuadCpX = null;
+        $state->prevQuadCpY = null;
     }
 
     private function appendQuadraticAsCubicToState(

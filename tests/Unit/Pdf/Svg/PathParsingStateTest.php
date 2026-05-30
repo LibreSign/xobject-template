@@ -18,6 +18,8 @@ final class PathParsingStateTest extends TestCase
 
         self::assertSame(0.0, $state->currentX);
         self::assertSame(0.0, $state->currentY);
+        self::assertSame(0.0, $state->subpathStartX);
+        self::assertSame(0.0, $state->subpathStartY);
         self::assertNull($state->lastCubicControlX);
         self::assertNull($state->lastCubicControlY);
         self::assertNull($state->prevQuadCpX);
@@ -30,6 +32,8 @@ final class PathParsingStateTest extends TestCase
         $state = new PathParsingState(
             currentX: 10.5,
             currentY: 20.5,
+            subpathStartX: 5.5,
+            subpathStartY: 15.5,
             lastCubicControlX: 30.5,
             lastCubicControlY: 40.5,
             prevQuadCpX: 50.5,
@@ -39,6 +43,8 @@ final class PathParsingStateTest extends TestCase
 
         self::assertSame(10.5, $state->currentX);
         self::assertSame(20.5, $state->currentY);
+        self::assertSame(5.5, $state->subpathStartX);
+        self::assertSame(15.5, $state->subpathStartY);
         self::assertSame(30.5, $state->lastCubicControlX);
         self::assertSame(40.5, $state->lastCubicControlY);
         self::assertSame(50.5, $state->prevQuadCpX);
