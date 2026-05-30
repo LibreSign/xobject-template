@@ -18,6 +18,8 @@ final class PathParsingState
     public function __construct(
         public float $currentX = 0.0,
         public float $currentY = 0.0,
+        public float $subpathStartX = 0.0,
+        public float $subpathStartY = 0.0,
         public ?float $lastCubicControlX = null,
         public ?float $lastCubicControlY = null,
         public ?float $prevQuadCpX = null,
