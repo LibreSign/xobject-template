@@ -68,6 +68,58 @@ final class SvgPathCommandParserTest extends TestCase
         self::assertStringContainsString('14.000000 10.000000 c', $result);
     }
 
+    public function testConvertPathDataSupportsSmoothCurveCommandsWithoutPreviousControlPoints(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        $result = $parser->convertPathData(
+            'M 2 2 S 4 4 6 2 T 10 2',
+            0.0,
+            12.0,
+            '/tmp/smooth.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        self::assertStringContainsString('2.000000 10.000000 m', $result);
+        self::assertStringContainsString('2.000000 10.000000 4.000000 8.000000 6.000000 10.000000 c', $result);
+        self::assertStringContainsString('6.000000 10.000000 7.333333 10.000000 10.000000 10.000000 c', $result);
+    }
+
+    public function testConvertPathDataSupportsRelativeCommandsScientificNotationAndRelativeArc(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        $result = $parser->convertPathData(
+            'M 1e1 1e1 l -5 0 h 2 v -3 a 4 2 0 0 1 6 0',
+            0.0,
+            20.0,
+            '/tmp/relative-arc.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        self::assertStringContainsString('10.000000 10.000000 m', $result);
+        self::assertStringContainsString('5.000000 10.000000 l', $result);
+        self::assertStringContainsString('7.000000 10.000000 l', $result);
+        self::assertStringContainsString('7.000000 13.000000 l', $result);
+        self::assertGreaterThanOrEqual(2, substr_count($result, ' c'));
+    }
+
+    public function testConvertPathDataSupportsSmoothCubicReflectionAfterPreviousCubic(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        $result = $parser->convertPathData(
+            'M 0 0 C 2 2 4 2 6 0 S 10 -2 12 0',
+            0.0,
+            10.0,
+            '/tmp/smooth-cubic.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        self::assertStringContainsString('6.000000 10.000000 c', $result);
+        self::assertStringContainsString('8.000000 12.000000 10.000000 12.000000 12.000000 10.000000 c', $result);
+    }
+
     #[DataProvider('provideInvalidPathScenarios')]
     public function testConvertPathDataRejectsInvalidSequences(string $pathData, string $expectedMessage): void
     {
