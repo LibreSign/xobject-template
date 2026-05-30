@@ -29,4 +29,11 @@ final class PhpPngHeaderUnpackerTest extends TestCase
             $unpacker->unpack(pack('NNCCCCC', 3, 2, 8, 6, 0, 0, 0)),
         );
     }
+
+    public function testUnpackReturnsFalseWhenHeaderBytesAreIncomplete(): void
+    {
+        $unpacker = new PhpPngHeaderUnpacker();
+
+        self::assertFalse($unpacker->unpack("\x00\x00\x00"));
+    }
 }
