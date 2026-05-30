@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Integration;
 
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
+use LibreSign\XObjectTemplate\Dto\CompileResult;
 use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
@@ -26,54 +27,60 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         int $expectedImageCount,
         array $expectedTexts,
     ): void {
-        $previewRoot = dirname(__DIR__, 2) . '/build/visible-stamp-previews';
-        $assetRoot = $previewRoot . '/assets';
-        $this->ensureDirectoryExists($previewRoot);
-        $this->ensureDirectoryExists($assetRoot);
+        ['assetRoot' => $assetRoot] = $this->ensurePreviewDirectories();
 
         $backgroundPath = $this->createBackgroundPreview($assetRoot . '/background-' . $slug . '.png');
         $signaturePath = $this->layoutUsesSignatureImage($layout)
             ? $this->createSignaturePreview($assetRoot . '/signature-' . $slug . '.png')
             : null;
 
-        $compiler = new XObjectTemplateCompiler();
-        $result = $compiler->compile(new CompileRequest(
-            html: $this->buildLayoutHtml($layout, $backgroundPath, $signaturePath),
-            width: (float) self::PREVIEW_WIDTH,
-            height: (float) self::PREVIEW_HEIGHT,
-        ));
-
-        $pdf = (new SinglePagePdfExporter())->export($result);
-        $previewPath = $previewRoot . '/' . $slug . '.pdf';
-        file_put_contents($previewPath, $pdf);
-
-        self::assertSame($expectedImageCount, count($result->resources['XObject'] ?? []));
-        self::assertSame((float) self::PREVIEW_WIDTH, $result->resources['XObject']['Im0']['Width']);
-        self::assertSame((float) self::PREVIEW_HEIGHT, $result->resources['XObject']['Im0']['Height']);
-        self::assertStringStartsWith("%PDF-1.4\n", $pdf);
-        self::assertStringContainsString('/Subtype /Form', $pdf);
-        self::assertStringContainsString(
-            sprintf(
-                'q %F 0 0 %F %F %F cm /Im0 Do Q',
-                (float) self::PREVIEW_WIDTH,
-                (float) self::PREVIEW_HEIGHT,
-                0.0,
-                0.0,
-            ),
-            $result->contentStream,
+        ['result' => $result, 'pdf' => $pdf, 'previewPath' => $previewPath] = $this->compilePreview(
+            $slug,
+            $this->buildLayoutHtml($layout, $backgroundPath, $signaturePath),
         );
-        self::assertStringContainsString('/Im0 Do', $result->contentStream);
-        self::assertFileExists($previewPath);
-        self::assertSame($pdf, file_get_contents($previewPath));
 
-        if ($expectedImageCount > 1) {
-            self::assertStringContainsString('/Im1 Do', $result->contentStream);
-        }
+        $this->assertBasePreviewExport($result, $pdf, $previewPath, $expectedImageCount);
 
         foreach ($expectedTexts as $expectedText) {
             self::assertStringContainsString($expectedText, $result->contentStream);
             self::assertStringContainsString($expectedText, $pdf);
         }
+    }
+
+    public function testGovBrLikeVisibleStampCanBeCompiledAndExportedUsingSupportedHtmlAndCssOnly(): void
+    {
+        $logoPath = dirname(__DIR__) . '/Fixtures/Pdf/Svg/govbr-logo.svg';
+        self::assertFileExists($logoPath);
+
+        ['result' => $result, 'pdf' => $pdf, 'previewPath' => $previewPath] = $this->compilePreviewWithSize(
+            'govbr-like-visible-stamp',
+            $this->buildGovBrLikeLayoutHtml($logoPath),
+            760.0,
+            190.0,
+        );
+
+        self::assertSame(1, count($result->resources['XObject'] ?? []));
+        self::assertStringStartsWith("%PDF-1.4\n", $pdf);
+        self::assertStringContainsString('/Subtype /Form', $pdf);
+        self::assertStringContainsString('/Im0 Do', $result->contentStream);
+        self::assertFileExists($previewPath);
+        self::assertSame($pdf, file_get_contents($previewPath));
+        self::assertSame($logoPath, $result->resources['XObject']['Im0']['Source']);
+
+        $expectedTexts = [
+            'Documento assinado digitalmente',
+            'ASSINANTE DE EXEMPLO',
+            'Data: 01/01/2026 12:00:00-0300',
+            'Verifique em https://verificador.iti.br',
+        ];
+
+        foreach ($expectedTexts as $expectedText) {
+            self::assertStringContainsString($expectedText, $result->contentStream);
+            self::assertStringContainsString($expectedText, $pdf);
+        }
+
+        self::assertStringContainsString('1 1 1 rg', $result->contentStream);
+        self::assertStringContainsString('RG', $result->contentStream);
     }
 
     /**
@@ -216,6 +223,107 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         };
     }
 
+    private function buildGovBrLikeLayoutHtml(string $logoPath): string
+    {
+        return sprintf(
+            '<div style="display:flex;flex-direction:row;align-items:center;width:100%%;height:100%%;'
+            . 'padding:16px 18px;background-color:#ffffff;border-color:#ef4d3f;border-width:1;border-radius:2">'
+            . '<div style="display:flex;justify-content:center;align-items:center;width:30%%;height:100%%">'
+            . '<img src="%s" style="width:190px;height:58px" />'
+            . '</div>'
+            . '<div style="width:70%%;height:100%%;padding:4px 0 0 6px">'
+            . '<div style="font-size:16px;line-height:18px;color:#333333">Documento assinado digitalmente</div>'
+            . '<div style="font-size:23px;line-height:27px;font-weight:700;color:#111111;'
+            . 'margin:6px 0 0 0">ASSINANTE DE EXEMPLO</div>'
+            . '<div style="font-size:17px;line-height:19px;color:#333333;'
+            . 'margin:8px 0 0 0">Data: 01/01/2026 12:00:00-0300</div>'
+            . '<div style="font-size:17px;line-height:19px;color:#333333;'
+            . 'margin:6px 0 0 0">Verifique em https://verificador.iti.br</div>'
+            . '</div>'
+            . '</div>',
+            $this->escapeAttribute($logoPath),
+        );
+    }
+
+    /**
+     * @return array{previewRoot: string, assetRoot: string}
+     */
+    private function ensurePreviewDirectories(): array
+    {
+        $previewRoot = dirname(__DIR__, 2) . '/build/visible-stamp-previews';
+        $assetRoot = $previewRoot . '/assets';
+        $this->ensureDirectoryExists($previewRoot);
+        $this->ensureDirectoryExists($assetRoot);
+
+        return [
+            'previewRoot' => $previewRoot,
+            'assetRoot' => $assetRoot,
+        ];
+    }
+
+    /**
+     * @return array{result: CompileResult, pdf: string, previewPath: string}
+     */
+    private function compilePreview(string $slug, string $html): array
+    {
+        return $this->compilePreviewWithSize($slug, $html, (float) self::PREVIEW_WIDTH, (float) self::PREVIEW_HEIGHT);
+    }
+
+    /**
+     * @return array{result: CompileResult, pdf: string, previewPath: string}
+     */
+    private function compilePreviewWithSize(string $slug, string $html, float $width, float $height): array
+    {
+        ['previewRoot' => $previewRoot] = $this->ensurePreviewDirectories();
+
+        $compiler = new XObjectTemplateCompiler();
+        $result = $compiler->compile(new CompileRequest(
+            html: $html,
+            width: $width,
+            height: $height,
+        ));
+
+        $pdf = (new SinglePagePdfExporter())->export($result);
+        $previewPath = $previewRoot . '/' . $slug . '.pdf';
+        file_put_contents($previewPath, $pdf);
+
+        return [
+            'result' => $result,
+            'pdf' => $pdf,
+            'previewPath' => $previewPath,
+        ];
+    }
+
+    private function assertBasePreviewExport(
+        CompileResult $result,
+        string $pdf,
+        string $previewPath,
+        int $expectedImageCount,
+    ): void {
+        self::assertSame($expectedImageCount, count($result->resources['XObject'] ?? []));
+        self::assertSame((float) self::PREVIEW_WIDTH, $result->resources['XObject']['Im0']['Width']);
+        self::assertSame((float) self::PREVIEW_HEIGHT, $result->resources['XObject']['Im0']['Height']);
+        self::assertStringStartsWith("%PDF-1.4\n", $pdf);
+        self::assertStringContainsString('/Subtype /Form', $pdf);
+        self::assertStringContainsString(
+            sprintf(
+                'q %F 0 0 %F %F %F cm /Im0 Do Q',
+                (float) self::PREVIEW_WIDTH,
+                (float) self::PREVIEW_HEIGHT,
+                0.0,
+                0.0,
+            ),
+            $result->contentStream,
+        );
+        self::assertStringContainsString('/Im0 Do', $result->contentStream);
+        self::assertFileExists($previewPath);
+        self::assertSame($pdf, file_get_contents($previewPath));
+
+        if ($expectedImageCount > 1) {
+            self::assertStringContainsString('/Im1 Do', $result->contentStream);
+        }
+    }
+
     private function createBackgroundPreview(string $path): string
     {
         if (is_file($path)) {
@@ -289,6 +397,7 @@ final class VisibleStampTemplateScenarioTest extends TestCase
 
         return $path;
     }
+
 
     private function requireSignaturePath(?string $signaturePath): string
     {
