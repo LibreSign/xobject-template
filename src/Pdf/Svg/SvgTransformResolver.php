@@ -35,11 +35,7 @@ final class SvgTransformResolver
         $ancestors = [];
         $cursor = $element;
 
-        for ($depth = 0; $depth < self::MAX_ANCESTOR_DEPTH; ++$depth) {
-            if (!$cursor instanceof DOMElement) {
-                break;
-            }
-
+        for ($depth = 0; $depth < self::MAX_ANCESTOR_DEPTH && $cursor instanceof DOMElement; ++$depth) {
             $ancestors[] = $cursor;
             $cursor = $cursor->parentNode;
         }
