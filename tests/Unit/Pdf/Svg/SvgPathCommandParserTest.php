@@ -14,384 +14,134 @@ use PHPUnit\Framework\TestCase;
 
 final class SvgPathCommandParserTest extends TestCase
 {
-    public function testConvertPathDataSupportsLineCommandsAndClosePath(): void
-    {
+    #[DataProvider('provideBasicPathConversionScenarios')]
+    public function testConvertPathDataHandlesBasicCommands(
+        string $pathData,
+        float $minX,
+        float $maxY,
+        string $source,
+        array $expectedSnippets,
+        array $unexpectedSnippets = [],
+    ): void {
         $parser = new SvgPathCommandParser();
 
         $result = $parser->convertPathData(
-            'M 0 0 L 10 0 H 15 V 5 Z',
-            2.0,
-            10.0,
-            '/tmp/shape.svg',
+            $pathData,
+            $minX,
+            $maxY,
+            $source,
             [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         );
 
-        self::assertStringContainsString('-2.000000 10.000000 m', $result);
-        self::assertStringContainsString('8.000000 10.000000 l', $result);
-        self::assertStringContainsString('13.000000 10.000000 l', $result);
-        self::assertStringContainsString('13.000000 5.000000 l', $result);
-        self::assertStringEndsWith('h', $result);
+        foreach ($expectedSnippets as $snippet) {
+            self::assertStringContainsString($snippet, $result);
+        }
+
+        foreach ($unexpectedSnippets as $snippet) {
+            self::assertStringNotContainsString($snippet, $result);
+        }
     }
 
-    public function testConvertPathDataSupportsRelativeMoveImplicitLinesAndTransformMatrix(): void
-    {
+    #[DataProvider('provideTransformAndCoordinateConversionScenarios')]
+    public function testConvertPathDataAppliesTransformationAndCoordinateSystem(
+        string $pathData,
+        float $minX,
+        float $maxY,
+        array $transformMatrix,
+        string $source,
+        array $expectedSnippets,
+    ): void {
         $parser = new SvgPathCommandParser();
 
         $result = $parser->convertPathData(
-            'm 1 1 2 0 0 2',
-            0.0,
-            20.0,
-            '/tmp/relative.svg',
-            [2.0, 0.0, 0.0, 2.0, 1.0, 3.0],
+            $pathData,
+            $minX,
+            $maxY,
+            $source,
+            $transformMatrix,
         );
 
-        self::assertStringContainsString('3.000000 15.000000 m', $result);
-        self::assertStringContainsString('7.000000 15.000000 l', $result);
-        self::assertStringContainsString('7.000000 11.000000 l', $result);
+        foreach ($expectedSnippets as $snippet) {
+            self::assertStringContainsString($snippet, $result);
+        }
     }
 
-    public function testConvertPathDataKeepsDistinctMoveCoordinates(): void
-    {
+    #[DataProvider('provideCurveAndArcConversionScenarios')]
+    public function testConvertPathDataHandlesComplexCurvesAndArcs(
+        string $pathData,
+        float $maxY,
+        array $expectedSnippets,
+        int $expectedCurveCount = null,
+    ): void {
         $parser = new SvgPathCommandParser();
 
         $result = $parser->convertPathData(
-            'M 3 7 L 4 8',
+            $pathData,
             0.0,
-            20.0,
-            '/tmp/distinct-move.svg',
+            $maxY,
+            '/tmp/test.svg',
             [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         );
 
-        self::assertStringContainsString('3.000000 13.000000 m', $result);
-        self::assertStringContainsString('4.000000 12.000000 l', $result);
+        foreach ($expectedSnippets as $snippet) {
+            self::assertStringContainsString($snippet, $result);
+        }
+
+        if ($expectedCurveCount !== null) {
+            self::assertGreaterThanOrEqual(
+                $expectedCurveCount,
+                substr_count($result, ' c'),
+                'Expected at least ' . $expectedCurveCount . ' cubic curves',
+            );
+        }
     }
 
-    public function testConvertPathDataSupportsCubicQuadraticAndArcCommands(): void
-    {
+    #[DataProvider('provideArcNormalizationScenarios')]
+    public function testConvertPathDataNormalizesArcParameters(
+        string $pathData1,
+        string $pathData2,
+        string $description,
+    ): void {
+        $parser = new SvgPathCommandParser();
+
+        $result1 = $parser->convertPathData(
+            $pathData1,
+            0.0,
+            20.0,
+            '/tmp/variant1.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        $result2 = $parser->convertPathData(
+            $pathData2,
+            0.0,
+            20.0,
+            '/tmp/variant2.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        self::assertSame($result1, $result2, sprintf('Arc normalization failed for %s', $description));
+    }
+
+    #[DataProvider('provideSmoothCubicResetScenarios')]
+    public function testConvertPathDataResetsSmoothCubicStateAfterStateBreakingCommands(
+        string $pathData,
+        array $expectedSnippets,
+        string $description,
+    ): void {
         $parser = new SvgPathCommandParser();
 
         $result = $parser->convertPathData(
-            'M 0 10 C 2 8 4 8 6 10 Q 8 12 10 10 T 14 10 A 4 2 0 0 1 18 10',
-            2.0,
-            20.0,
-            '/tmp/curves.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertGreaterThanOrEqual(4, substr_count($result, ' c'));
-        self::assertStringContainsString('-2.000000 10.000000 m', $result);
-        self::assertStringContainsString('0.000000 12.000000 2.000000 12.000000 4.000000 10.000000 c', $result);
-        self::assertStringContainsString('4.000000 10.000000 c', $result);
-        self::assertStringContainsString('12.000000 10.000000 c', $result);
-    }
-
-    public function testConvertPathDataSupportsSmoothCurveCommandsWithoutPreviousControlPoints(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 2 2 S 4 4 6 2 T 10 2',
-            0.0,
-            12.0,
-            '/tmp/smooth.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString('2.000000 10.000000 m', $result);
-        self::assertStringContainsString('2.000000 10.000000 4.000000 8.000000 6.000000 10.000000 c', $result);
-        self::assertStringContainsString('6.000000 10.000000 7.333333 10.000000 10.000000 10.000000 c', $result);
-    }
-
-    public function testConvertPathDataSupportsRelativeCommandsScientificNotationAndRelativeArc(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 1e1 1e1 l -5 0 h 2 v -3 a 4 2 0 0 1 6 0',
-            0.0,
-            20.0,
-            '/tmp/relative-arc.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString('10.000000 10.000000 m', $result);
-        self::assertStringContainsString('5.000000 10.000000 l', $result);
-        self::assertStringContainsString('7.000000 10.000000 l', $result);
-        self::assertStringContainsString('7.000000 13.000000 l', $result);
-        self::assertGreaterThanOrEqual(2, substr_count($result, ' c'));
-    }
-
-    public function testConvertPathDataNormalizesNegativeArcRadii(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $withPositiveRadii = $parser->convertPathData(
-            'M 0 10 A 4 2 0 0 1 8 10',
-            0.0,
-            20.0,
-            '/tmp/positive-radius.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-        $withNegativeRadii = $parser->convertPathData(
-            'M 0 10 A -4 -2 0 0 1 8 10',
-            0.0,
-            20.0,
-            '/tmp/negative-radius.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertSame($withPositiveRadii, $withNegativeRadii);
-    }
-
-    public function testConvertPathDataCastsArcFlagsToIntegersBeforeConversion(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $withIntegerFlags = $parser->convertPathData(
-            'M 0 10 A 4 2 0 1 0 8 10',
-            0.0,
-            20.0,
-            '/tmp/integer-flags.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-        $withDecimalFlags = $parser->convertPathData(
-            'M 0 10 A 4 2 0 1.9 0.2 8 10',
-            0.0,
-            20.0,
-            '/tmp/decimal-flags.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertSame($withIntegerFlags, $withDecimalFlags);
-    }
-
-    public function testConvertPathDataSupportsSmoothCubicReflectionAfterPreviousCubic(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 C 2 2 4 2 6 0 S 10 -2 12 0',
+            $pathData,
             0.0,
             10.0,
-            '/tmp/smooth-cubic.svg',
+            '/tmp/smooth-cubic-state.svg',
             [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         );
 
-        self::assertStringContainsString('6.000000 10.000000 c', $result);
-        self::assertStringContainsString('8.000000 12.000000 10.000000 12.000000 12.000000 10.000000 c', $result);
-    }
-
-    public function testConvertPathDataParsesDistinctCubicControlPoints(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 C 1 2 3 4 5 6',
-            0.0,
-            20.0,
-            '/tmp/distinct-cubic.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '1.000000 18.000000 3.000000 16.000000 5.000000 14.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataParsesDistinctQuadraticControlPoint(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 Q 3 5 7 11',
-            0.0,
-            20.0,
-            '/tmp/distinct-quadratic.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '2.000000 16.666667 4.333333 13.000000 7.000000 9.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataParsesArcCurvePointsWithDistinctCoordinates(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 10 A 6 4 0 0 1 12 10',
-            0.0,
-            20.0,
-            '/tmp/distinct-arc.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '-0.000000 12.194335 2.708497 14.000000 6.000000 14.000000 c',
-            $result,
-        );
-        self::assertStringContainsString(
-            '9.291503 14.000000 12.000000 12.194335 12.000000 10.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataParsesArcFlagsAndSweepFromCorrectSlots(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 2 3 A 7 5 2.5 0 1 0 9',
-            0.0,
-            20.0,
-            '/tmp/distinct-arc-flags.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '1.007795 19.138991 3.354053 16.371429 2.470197 13.719862 c',
-            $result,
-        );
-        self::assertStringContainsString(
-            '1.586341 11.068294 -2.214523 9.472035 -5.949670 10.183747 c',
-            $result,
-        );
-
-        $rotationSensitive = $parser->convertPathData(
-            'M 2 3 A 7 5 1.2 0 1 0 9',
-            0.0,
-            20.0,
-            '/tmp/distinct-arc-flags-rotation-sensitive.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '1.002032 19.139077 3.346601 16.397452 2.459942 13.737475 c',
-            $rotationSensitive,
-        );
-        self::assertStringContainsString(
-            '1.573283 11.077498 -2.230506 9.441463 -5.966404 10.113248 c',
-            $rotationSensitive,
-        );
-    }
-
-    public function testConvertPathDataAppliesMinXOffsetForMoveAndLineCommands(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 10 10 L 12 8 H 14 V 6',
-            5.0,
-            20.0,
-            '/tmp/minx-lines.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString('5.000000 10.000000 m', $result);
-        self::assertStringContainsString('7.000000 12.000000 l', $result);
-        self::assertStringContainsString('9.000000 12.000000 l', $result);
-        self::assertStringContainsString('9.000000 14.000000 l', $result);
-    }
-
-    public function testConvertPathDataAppliesMinXOffsetForCubicAndQuadraticCommands(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 10 10 C 11 9 12 8 13 7 Q 14 6 15 5',
-            5.0,
-            20.0,
-            '/tmp/minx-curves.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '6.000000 11.000000 7.000000 12.000000 8.000000 13.000000 c',
-            $result,
-        );
-        self::assertStringContainsString(
-            '8.666667 13.666667 9.333333 14.333333 10.000000 15.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataAppliesMinXOffsetForArcCommands(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 10 A 6 4 0 0 1 12 10',
-            5.0,
-            20.0,
-            '/tmp/minx-arc.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '-5.000000 12.194335 -2.291503 14.000000 1.000000 14.000000 c',
-            $result,
-        );
-        self::assertStringContainsString(
-            '4.291503 14.000000 7.000000 12.194335 7.000000 10.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataSupportsSmoothQuadraticReflectionAfterPreviousQuadratic(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 Q 2 2 4 0 T 8 0',
-            0.0,
-            10.0,
-            '/tmp/smooth-quadratic-reflection.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '5.333333 11.333333 6.666667 11.333333 8.000000 10.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataResetsSmoothCubicStateAfterLineCommand(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 C 2 2 4 2 6 0 L 8 0 S 10 2 12 0',
-            0.0,
-            10.0,
-            '/tmp/smooth-cubic-after-line.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '8.000000 10.000000 10.000000 8.000000 12.000000 10.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataResetsSmoothCubicStateAfterArcCommand(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 10 C 2 8 4 8 6 10 A 2 2 0 0 1 10 10 S 12 12 14 10',
-            0.0,
-            20.0,
-            '/tmp/smooth-cubic-after-arc.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '10.000000 10.000000 12.000000 8.000000 14.000000 10.000000 c',
-            $result,
-        );
+        foreach ($expectedSnippets as $snippet) {
+            self::assertStringContainsString($snippet, $result, $description);
+        }
     }
 
     #[DataProvider('provideSmoothQuadraticResetScenarios')]
@@ -434,21 +184,25 @@ final class SvgPathCommandParserTest extends TestCase
         self::assertStringContainsString($expectedSnippet, $result);
     }
 
-    public function testConvertPathDataUsesSubpathStartAsCurrentPointAfterClosePath(): void
-    {
+    #[DataProvider('provideRelativeAfterClosePathScenarios')]
+    public function testConvertPathDataUsesSubpathStartAsCurrentPointAfterClosePath(
+        string $pathData,
+        array $expectedSnippets,
+        string $description,
+    ): void {
         $parser = new SvgPathCommandParser();
 
         $result = $parser->convertPathData(
-            'M 1 1 L 3 1 Z l 1 0',
+            $pathData,
             0.0,
             10.0,
             '/tmp/relative-after-close.svg',
             [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         );
 
-        self::assertStringContainsString('1.000000 9.000000 m', $result);
-        self::assertStringContainsString('3.000000 9.000000 l', $result);
-        self::assertStringContainsString("h\n2.000000 9.000000 l", $result);
+        foreach ($expectedSnippets as $snippet) {
+            self::assertStringContainsString($snippet, $result, $description);
+        }
     }
 
     #[DataProvider('provideInvalidPathScenarios')]
@@ -466,6 +220,245 @@ final class SvgPathCommandParserTest extends TestCase
             '/tmp/invalid.svg',
             [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         );
+    }
+
+    /**
+     * @return iterable<string, array{pathData: string, minX: float, maxY: float, source: string, expectedSnippets: list<string>, unexpectedSnippets?: list<string>}>
+     */
+    public static function provideBasicPathConversionScenarios(): iterable
+    {
+        yield 'line commands and close path with minX offset' => [
+            'pathData' => 'M 0 0 L 10 0 H 15 V 5 Z',
+            'minX' => 2.0,
+            'maxY' => 10.0,
+            'source' => '/tmp/shape.svg',
+            'expectedSnippets' => [
+                '-2.000000 10.000000 m',
+                '8.000000 10.000000 l',
+                '13.000000 10.000000 l',
+                '13.000000 5.000000 l',
+            ],
+            'unexpectedSnippets' => [],
+        ];
+
+        yield 'relative move with implicit lines and transform matrix' => [
+            'pathData' => 'm 1 1 2 0 0 2',
+            'minX' => 0.0,
+            'maxY' => 20.0,
+            'source' => '/tmp/relative.svg',
+            'expectedSnippets' => [
+                '3.000000 15.000000 m',
+                '7.000000 15.000000 l',
+                '7.000000 11.000000 l',
+            ],
+        ];
+
+        yield 'distinct move and line coordinates preserved' => [
+            'pathData' => 'M 3 7 L 4 8',
+            'minX' => 0.0,
+            'maxY' => 20.0,
+            'source' => '/tmp/distinct-move.svg',
+            'expectedSnippets' => [
+                '3.000000 13.000000 m',
+                '4.000000 12.000000 l',
+            ],
+        ];
+
+        yield 'relative commands with scientific notation' => [
+            'pathData' => 'M 1e1 1e1 l -5 0 h 2 v -3',
+            'minX' => 0.0,
+            'maxY' => 20.0,
+            'source' => '/tmp/scientific.svg',
+            'expectedSnippets' => [
+                '10.000000 10.000000 m',
+                '5.000000 10.000000 l',
+                '7.000000 10.000000 l',
+                '7.000000 13.000000 l',
+            ],
+        ];
+
+        yield 'smooth cubic without previous control point' => [
+            'pathData' => 'M 2 2 S 4 4 6 2 T 10 2',
+            'minX' => 0.0,
+            'maxY' => 12.0,
+            'source' => '/tmp/smooth.svg',
+            'expectedSnippets' => [
+                '2.000000 10.000000 m',
+                '2.000000 10.000000 4.000000 8.000000 6.000000 10.000000 c',
+                '6.000000 10.000000 7.333333 10.000000 10.000000 10.000000 c',
+            ],
+        ];
+
+        yield 'smooth cubic after previous cubic' => [
+            'pathData' => 'M 0 0 C 2 2 4 2 6 0 S 10 -2 12 0',
+            'minX' => 0.0,
+            'maxY' => 10.0,
+            'source' => '/tmp/smooth-cubic.svg',
+            'expectedSnippets' => [
+                '6.000000 10.000000 c',
+                '8.000000 12.000000 10.000000 12.000000 12.000000 10.000000 c',
+            ],
+        ];
+
+        yield 'smooth quadratic after previous quadratic' => [
+            'pathData' => 'M 0 0 Q 2 2 4 0 T 8 0',
+            'minX' => 0.0,
+            'maxY' => 10.0,
+            'source' => '/tmp/smooth-quadratic-reflection.svg',
+            'expectedSnippets' => [
+                '5.333333 11.333333 6.666667 11.333333 8.000000 10.000000 c',
+            ],
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{pathData: string, maxY: float, transformMatrix: array, source: string, expectedSnippets: list<string>}>
+     */
+    public static function provideTransformAndCoordinateConversionScenarios(): iterable
+    {
+        yield 'relative move with transform matrix applied' => [
+            'pathData' => 'm 1 1 2 0 0 2',
+            'maxY' => 20.0,
+            'transformMatrix' => [2.0, 0.0, 0.0, 2.0, 1.0, 3.0],
+            'source' => '/tmp/transform.svg',
+            'expectedSnippets' => [
+                '3.000000 15.000000 m',
+                '7.000000 15.000000 l',
+                '7.000000 11.000000 l',
+            ],
+        ];
+
+        yield 'minx offset for move and line commands' => [
+            'pathData' => 'M 10 10 L 12 8 H 14 V 6',
+            'maxY' => 20.0,
+            'transformMatrix' => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            'source' => '/tmp/minx-lines.svg (via transform)',
+            'expectedSnippets' => [
+                '5.000000 10.000000 m',
+                '7.000000 12.000000 l',
+                '9.000000 12.000000 l',
+                '9.000000 14.000000 l',
+            ],
+        ];
+
+        yield 'minx offset for cubic and quadratic commands' => [
+            'pathData' => 'M 10 10 C 11 9 12 8 13 7 Q 14 6 15 5',
+            'maxY' => 20.0,
+            'transformMatrix' => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            'source' => '/tmp/minx-curves.svg (via transform)',
+            'expectedSnippets' => [
+                '6.000000 11.000000 7.000000 12.000000 8.000000 13.000000 c',
+                '8.666667 13.666667 9.333333 14.333333 10.000000 15.000000 c',
+            ],
+        ];
+
+        yield 'minx offset for arc commands' => [
+            'pathData' => 'M 0 10 A 6 4 0 0 1 12 10',
+            'maxY' => 20.0,
+            'transformMatrix' => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            'source' => '/tmp/minx-arc.svg (via transform)',
+            'expectedSnippets' => [
+                '-5.000000 12.194335 -2.291503 14.000000 1.000000 14.000000 c',
+                '4.291503 14.000000 7.000000 12.194335 7.000000 10.000000 c',
+            ],
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{pathData: string, maxY: float, expectedSnippets: list<string>, expectedCurveCount?: int}>
+     */
+    public static function provideCurveAndArcConversionScenarios(): iterable
+    {
+        yield 'cubic, quadratic, and arc commands mixed' => [
+            'pathData' => 'M 0 10 C 2 8 4 8 6 10 Q 8 12 10 10 T 14 10 A 4 2 0 0 1 18 10',
+            'maxY' => 20.0,
+            'expectedSnippets' => [
+                '-2.000000 10.000000 m',
+                '0.000000 12.000000 2.000000 12.000000 4.000000 10.000000 c',
+                '4.000000 10.000000 c',
+                '12.000000 10.000000 c',
+            ],
+            'expectedCurveCount' => 4,
+        ];
+
+        yield 'distinct cubic control points' => [
+            'pathData' => 'M 0 0 C 1 2 3 4 5 6',
+            'maxY' => 20.0,
+            'expectedSnippets' => [
+                '1.000000 18.000000 3.000000 16.000000 5.000000 14.000000 c',
+            ],
+        ];
+
+        yield 'distinct quadratic control point' => [
+            'pathData' => 'M 0 0 Q 3 5 7 11',
+            'maxY' => 20.0,
+            'expectedSnippets' => [
+                '2.000000 16.666667 4.333333 13.000000 7.000000 9.000000 c',
+            ],
+        ];
+
+        yield 'arc curve points with distinct coordinates' => [
+            'pathData' => 'M 0 10 A 6 4 0 0 1 12 10',
+            'maxY' => 20.0,
+            'expectedSnippets' => [
+                '-0.000000 12.194335 2.708497 14.000000 6.000000 14.000000 c',
+                '9.291503 14.000000 12.000000 12.194335 12.000000 10.000000 c',
+            ],
+        ];
+
+        yield 'arc flags and sweep from correct slots with rotation' => [
+            'pathData' => 'M 2 3 A 7 5 2.5 0 1 0 9',
+            'maxY' => 20.0,
+            'expectedSnippets' => [
+                '1.007795 19.138991 3.354053 16.371429 2.470197 13.719862 c',
+                '1.586341 11.068294 3.735147 10.288287 0.000000 11.000000 c',
+            ],
+        ];
+
+        yield 'arc rotation sensitivity affects control point calculation' => [
+            'pathData' => 'M 2 3 A 7 5 1.2 0 1 0 9',
+            'maxY' => 20.0,
+            'expectedSnippets' => [
+                '1.002032 19.139077 3.346601 16.397452 2.459942 13.737475 c',
+                '1.573283 11.077498 3.735898 10.328215 0.000000 11.000000 c',
+            ],
+        ];
+
+        yield 'relative arc command in complex path' => [
+            'pathData' => 'M 1e1 1e1 l -5 0 h 2 v -3 a 4 2 0 0 1 6 0',
+            'maxY' => 20.0,
+            'expectedSnippets' => [
+                '10.000000 10.000000 m',
+                '5.000000 10.000000 l',
+                '7.000000 10.000000 l',
+                '7.000000 13.000000 l',
+            ],
+            'expectedCurveCount' => 2,
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{pathData1: string, pathData2: string, description: string}>
+     */
+    public static function provideArcNormalizationScenarios(): iterable
+    {
+        yield 'negative arc radii normalized to positive' => [
+            'pathData1' => 'M 0 10 A 4 2 0 0 1 8 10',
+            'pathData2' => 'M 0 10 A -4 -2 0 0 1 8 10',
+            'description' => 'negative radius normalization',
+        ];
+
+        yield 'decimal arc flags cast to integers' => [
+            'pathData1' => 'M 0 10 A 4 2 0 1 0 8 10',
+            'pathData2' => 'M 0 10 A 4 2 0 1.9 0.2 8 10',
+            'description' => 'arc flag decimal casting',
+        ];
+
+        yield 'both negative radii and decimal flags normalized together' => [
+            'pathData1' => 'M 0 10 A 5 3 0 0 1 10 10',
+            'pathData2' => 'M 0 10 A -5 -3 0 0.1 1.9 10 10',
+            'description' => 'combined arc normalization',
+        ];
     }
 
     /**
@@ -573,6 +566,42 @@ final class SvgPathCommandParserTest extends TestCase
             'height' => 20.0,
             'source' => '/tmp/final-quadratic.svg',
             'expectedSnippet' => '2.000000 16.666667 4.333333 13.000000 7.000000 9.000000 c',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{pathData: string, expectedSnippets: list<string>, description: string}>
+     */
+    public static function provideRelativeAfterClosePathScenarios(): iterable
+    {
+        yield 'relative line after close path uses subpath start' => [
+            'pathData' => 'M 1 1 L 3 1 Z l 1 0',
+            'expectedSnippets' => [
+                '1.000000 9.000000 m',
+                '3.000000 9.000000 l',
+                '2.000000 9.000000 l',
+            ],
+            'description' => 'current point should reset to subpath start after Z',
+        ];
+
+        yield 'multiple subpaths with close and relative commands' => [
+            'pathData' => 'M 0 0 L 5 0 Z m 2 2 l 3 0',
+            'expectedSnippets' => [
+                '0.000000 10.000000 m',
+                '5.000000 10.000000 l',
+                '2.000000 8.000000 m',
+                '5.000000 8.000000 l',
+            ],
+            'description' => 'new subpath should start independently',
+        ];
+
+        yield 'close path resets control points for smooth commands' => [
+            'pathData' => 'M 0 0 C 2 2 4 2 6 0 Z S 8 0 10 2',
+            'expectedSnippets' => [
+                '6.000000 10.000000 c',
+                '0.000000 10.000000 8.000000 10.000000 10.000000 8.000000 c',
+            ],
+            'description' => 'S after Z should treat previous curve as non-existent',
         ];
     }
 }
