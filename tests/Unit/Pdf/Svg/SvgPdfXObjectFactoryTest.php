@@ -530,6 +530,157 @@ SVG,
         self::assertStringContainsString('0.000000 w', $xObject->stream);
     }
 
+    public function testCreateWithMultipleShapesIteratesAllElements(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" fill="#ff0000"/>
+  <rect x="10" y="10" width="10" height="10" fill="#00ff00"/>
+  <circle cx="25" cy="25" r="5" fill="#0000ff"/>
+</svg>
+SVG,
+            '/tmp/multi-shapes.svg',
+        );
+
+        // All three elements should be rendered
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);  // red
+        self::assertStringContainsString('0 1 0 rg', $xObject->stream);  // green
+        self::assertStringContainsString('0 0 1 rg', $xObject->stream);  // blue
+    }
+
+    public function testCreateWithMultipleClassStyles(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .red { fill: #ff0000; }
+    .green { fill: #00ff00; }
+    .blue { fill: #0000ff; }
+  </style>
+  <path class="red" d="M0,0 L10,10"/>
+  <rect class="green" x="10" y="10" width="10" height="10"/>
+  <circle class="blue" cx="25" cy="25" r="5"/>
+</svg>
+SVG,
+            '/tmp/multi-class-styles.svg',
+        );
+
+        // All class-based colors should be applied
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
+        self::assertStringContainsString('0 1 0 rg', $xObject->stream);
+        self::assertStringContainsString('0 0 1 rg', $xObject->stream);
+    }
+
+    public function testCreateWithStyleAndAttributeStroke(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L20,20" style="stroke:#ff0000;stroke-width:3.5" fill="none"/>
+</svg>
+SVG,
+            '/tmp/style-stroke-width.svg',
+        );
+
+        self::assertStringContainsString('3.500000 w', $xObject->stream);
+        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
+    }
+
+    public function testCreateWithFillAndStrokeFromStyle(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="15" height="15" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="15" height="15" style="fill:#123456;stroke:#ff0000;stroke-width:1.5"/>
+</svg>
+SVG,
+            '/tmp/both-from-style.svg',
+        );
+
+        self::assertStringContainsString('0.0706 0.2039 0.3373 rg', $xObject->stream);  // #123456
+        self::assertStringContainsString('1 0 0 RG', $xObject->stream);                   // #ff0000
+        self::assertStringContainsString('1.500000 w', $xObject->stream);
+    }
+
+    public function testCreateWithEllipseElement(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="30" height="20" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="15" cy="10" rx="15" ry="10" fill="#ff6600" stroke="#0099cc" stroke-width="2"/>
+</svg>
+SVG,
+            '/tmp/ellipse.svg',
+        );
+
+        self::assertStringContainsString('1 0.4 0 rg', $xObject->stream);     // #ff6600
+        self::assertStringContainsString('0 0.6 0.8 RG', $xObject->stream);  // #0099cc
+    }
+
+    public function testCreateWithLineElement(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <line x1="0" y1="0" x2="20" y2="20" stroke="#000000" stroke-width="2" fill="none"/>
+</svg>
+SVG,
+            '/tmp/line.svg',
+        );
+
+        self::assertStringContainsString('0 0 0 RG', $xObject->stream);
+        self::assertStringContainsString('2.000000 w', $xObject->stream);
+        self::assertStringContainsString('S', $xObject->stream);  // stroke only
+    }
+
+    public function testCreateWithPolylineElement(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <polyline points="0,0 10,10 20,0" stroke="#aa00aa" stroke-width="1.5" fill="none"/>
+</svg>
+SVG,
+            '/tmp/polyline.svg',
+        );
+
+        self::assertStringContainsString('0.6667 0 0.6667 RG', $xObject->stream);  // #aa00aa
+        self::assertStringContainsString('1.500000 w', $xObject->stream);
+    }
+
+    public function testCreateWithCircleElement(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="15" cy="15" r="10" fill="#00aa00" stroke="#0000ff"/>
+</svg>
+SVG,
+            '/tmp/circle.svg',
+        );
+
+        self::assertStringContainsString('0 0.6667 0 rg', $xObject->stream);   // #00aa00
+        self::assertStringContainsString('0 0 1 RG', $xObject->stream);       // #0000ff
+    }
+
     public static function providePaintModeScenarios(): iterable
     {
         yield 'stroke only path without fill' => [
