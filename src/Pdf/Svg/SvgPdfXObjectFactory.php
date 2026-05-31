@@ -15,6 +15,8 @@ use LibreSign\XObjectTemplate\Pdf\EmbeddedPdfImage;
 
 final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterface
 {
+    private const LIBXML_PARSE_FLAGS = 2144; // LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING
+
     public function __construct(
         private ColorParser $colorParser = new ColorParser(),
         private SvgColorResolver $colorResolver = new SvgColorResolver(),
@@ -84,22 +86,28 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
     private function parseSvgRoot(string $svgContents, string $source): DOMElement
     {
-        $document = new DOMDocument('1.0', 'UTF-8');
-        $previousErrors = libxml_use_internal_errors(true);
-
-        try {
-            $parsed = $svgContents !== ''
-                && $document->loadXML($svgContents, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
-        } finally {
-            libxml_clear_errors();
-            libxml_use_internal_errors($previousErrors);
-        }
-
-        $root = $document->documentElement;
-        if (!$parsed || $root === null || strtolower((string) $root->localName) !== 'svg') {
+        if ($svgContents === '') {
             throw new InvalidArgumentException(sprintf('Unable to parse SVG source "%s".', $source));
         }
 
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $previousErrors = libxml_use_internal_errors(true);
+
+        $document->loadXML($svgContents, self::LIBXML_PARSE_FLAGS);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previousErrors);
+
+        $root = $document->documentElement;
+        $rootName = '';
+        if ($root instanceof DOMElement) {
+            $rootName = strtolower($root->localName);
+        }
+
+        if ($rootName !== 'svg') {
+            throw new InvalidArgumentException(sprintf('Unable to parse SVG source "%s".', $source));
+        }
+
+        /** @var DOMElement $root */
         return $root;
     }
 
@@ -115,10 +123,18 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                 throw new InvalidArgumentException(sprintf('Invalid viewBox in SVG source "%s".', $source));
             }
 
-            $minX = (float) $parts[0];
-            $minY = (float) $parts[1];
-            $width = (float) $parts[2];
-            $height = (float) $parts[3];
+            $parsedViewBox = [];
+
+            foreach ($parts as $part) {
+                $parsedPart = filter_var($part, FILTER_VALIDATE_FLOAT);
+                if (!is_float($parsedPart)) {
+                    throw new InvalidArgumentException(sprintf('Invalid viewBox in SVG source "%s".', $source));
+                }
+
+                $parsedViewBox[] = $parsedPart;
+            }
+
+            [$minX, $minY, $width, $height] = $parsedViewBox;
 
             if ($width <= 0.0 || $height <= 0.0) {
                 throw new InvalidArgumentException(sprintf('SVG source "%s" must define a positive viewBox.', $source));
@@ -170,24 +186,27 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
         foreach ($svg->getElementsByTagName('style') as $styleNode) {
             $css = $styleNode->textContent;
-            if (!is_string($css) || $css === '') {
+            if ($css === '') {
                 continue;
             }
 
-            if (preg_match_all('/\.([a-zA-Z0-9_-]+)\s*\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER) !== false) {
-                foreach ($rules as $rule) {
-                    if (preg_match('/(?:^|;)\s*fill\s*:\s*([^;]+)/i', $rule[2], $fillMatch) === 1) {
-                        $color = $this->colorResolver->normalizeColor($fillMatch[1]);
-                        if ($color !== null) {
-                            $fills[$rule[1]] = $color;
-                        }
-                    }
+            $ruleCount = preg_match_all('/\.([a-zA-Z0-9_-]+)\s*\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER);
+            if ($ruleCount < 1) {
+                continue;
+            }
 
-                    if (preg_match('/(?:^|;)\s*stroke\s*:\s*([^;]+)/i', $rule[2], $strokeMatch) === 1) {
-                        $color = $this->colorResolver->normalizeColor($strokeMatch[1]);
-                        if ($color !== null) {
-                            $strokes[$rule[1]] = $color;
-                        }
+            foreach ($rules as $rule) {
+                if (preg_match('/(?:^|;)\s*fill\s*:\s*([^;]+)/i', $rule[2], $fillMatch) === 1) {
+                    $color = $this->colorResolver->normalizeColor($fillMatch[1]);
+                    if ($color !== null) {
+                        $fills[$rule[1]] = $color;
+                    }
+                }
+
+                if (preg_match('/(?:^|;)\s*stroke\s*:\s*([^;]+)/i', $rule[2], $strokeMatch) === 1) {
+                    $color = $this->colorResolver->normalizeColor($strokeMatch[1]);
+                    if ($color !== null) {
+                        $strokes[$rule[1]] = $color;
                     }
                 }
             }
@@ -204,11 +223,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $elements = [];
 
         foreach ($svg->getElementsByTagName('*') as $element) {
-            if (!$element instanceof DOMElement) {
-                continue;
-            }
-
-            $name = strtolower((string) $element->localName);
+            $name = strtolower($element->localName);
             if (in_array($name, ['path', 'polygon', 'polyline', 'rect', 'circle', 'ellipse', 'line'], true)) {
                 $elements[] = $element;
             }
@@ -219,7 +234,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
     private function resolveStrokeWidth(DOMElement $element): float
     {
-        $attr = trim($element->getAttribute('stroke-width'));
+        $attr = $element->getAttribute('stroke-width');
         if ($attr !== '') {
             return max(0.0, $this->extractNumericSvgLength($attr));
         }
