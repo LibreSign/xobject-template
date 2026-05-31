@@ -138,6 +138,27 @@ final class SvgColorResolverTest extends TestCase
             'useColorExtractor' => true,
         ];
 
+        yield 'skip tab and newline declaration before valid property' => [
+            'style' => "\t\n;fill:#00ff00",
+            'property' => 'fill',
+            'expected' => '#00ff00',
+            'useColorExtractor' => true,
+        ];
+
+        yield 'skip truly empty declarations before valid property' => [
+            'style' => ';;fill:#123456',
+            'property' => 'fill',
+            'expected' => '#123456',
+            'useColorExtractor' => true,
+        ];
+
+        yield 'skip malformed declaration before valid property' => [
+            'style' => 'fill red;fill:#abcdef',
+            'property' => 'fill',
+            'expected' => '#abcdef',
+            'useColorExtractor' => true,
+        ];
+
         yield 'empty style returns null' => [
             'style' => '',
             'property' => 'fill',
