@@ -81,16 +81,11 @@ final class SvgArcConverter
 
         // Step 4: Generate cubic Bézier curves
         return $this->generateArcCurves(
+            $params,
             $centerX,
             $centerY,
-            $params->radiusX,
-            $params->radiusY,
-            $params->cosTh,
-            $params->sinTh,
             $startAngle,
             $deltaAngle,
-            $toX,
-            $toY,
         );
     }
 
@@ -208,29 +203,19 @@ final class SvgArcConverter
      * Splits the arc into multiple segments and computes the Bézier control
      * points for each segment to approximate the circular/elliptical arc.
      *
-     * @param float $cx Center X coordinate
-     * @param float $cy Center Y coordinate
-     * @param float $rx X-axis radius
-     * @param float $ry Y-axis radius
-     * @param float $cosTh Cosine of rotation angle
-     * @param float $sinTh Sine of rotation angle
+     * @param ArcParams $params Arc geometry and endpoint parameters
+     * @param float $centerX Center X coordinate
+     * @param float $centerY Center Y coordinate
      * @param float $startAngle Starting angle in radians
-     * @param float $dAngle Total angle delta in radians
-     * @param float $targetX Target X endpoint coordinate
-     * @param float $targetY Target Y endpoint coordinate
+     * @param float $deltaAngle Total angle delta in radians
      * @return array<int, array<int, float>> Array of Bézier curve control points
      */
     private function generateArcCurves(
+        ArcParams $params,
         float $centerX,
         float $centerY,
-        float $radiusX,
-        float $radiusY,
-        float $cosTh,
-        float $sinTh,
         float $startAngle,
         float $deltaAngle,
-        float $targetX,
-        float $targetY,
     ): array {
         $segments = max(1, (int) ceil(abs($deltaAngle) / (M_PI / 2.0)));
         $angleStep       = $deltaAngle / $segments;
@@ -243,27 +228,27 @@ final class SvgArcConverter
         $angle1 = $startAngle;
         $cos1   = cos($angle1);
         $sin1   = sin($angle1);
-        $endX1    = $centerX + $cosTh * $radiusX * $cos1 - $sinTh * $radiusY * $sin1;
-        $endY1    = $centerY + $sinTh * $radiusX * $cos1 + $cosTh * $radiusY * $sin1;
+        $endX1    = $centerX + $params->cosTh * $params->radiusX * $cos1 - $params->sinTh * $params->radiusY * $sin1;
+        $endY1    = $centerY + $params->sinTh * $params->radiusX * $cos1 + $params->cosTh * $params->radiusY * $sin1;
 
         for ($i = 0; $i < $segments; $i++) {
             $angle2 = $angle1 + $angleStep;
             $cos2   = cos($angle2);
             $sin2   = sin($angle2);
 
-            $endX2  = $centerX + $cosTh * $radiusX * $cos2 - $sinTh * $radiusY * $sin2;
-            $endY2  = $centerY + $sinTh * $radiusX * $cos2 + $cosTh * $radiusY * $sin2;
-            
+            $endX2  = $centerX + $params->cosTh * $params->radiusX * $cos2 - $params->sinTh * $params->radiusY * $sin2;
+            $endY2  = $centerY + $params->sinTh * $params->radiusX * $cos2 + $params->cosTh * $params->radiusY * $sin2;
+
             // For the last segment, ensure the endpoint is exactly the target point
             if ($i === $segments - 1) {
-                $endX2 = $targetX;
-                $endY2 = $targetY;
+                $endX2 = $params->toX;
+                $endY2 = $params->toY;
             }
-            
-            $tangentXD1 = -$cosTh * $radiusX * $sin1 - $sinTh * $radiusY * $cos1;
-            $tangentYD1 = -$sinTh * $radiusX * $sin1 + $cosTh * $radiusY * $cos1;
-            $tangentXD2 = -$cosTh * $radiusX * $sin2 - $sinTh * $radiusY * $cos2;
-            $tangentYD2 = -$sinTh * $radiusX * $sin2 + $cosTh * $radiusY * $cos2;
+
+            $tangentXD1 = -$params->cosTh * $params->radiusX * $sin1 - $params->sinTh * $params->radiusY * $cos1;
+            $tangentYD1 = -$params->sinTh * $params->radiusX * $sin1 + $params->cosTh * $params->radiusY * $cos1;
+            $tangentXD2 = -$params->cosTh * $params->radiusX * $sin2 - $params->sinTh * $params->radiusY * $cos2;
+            $tangentYD2 = -$params->sinTh * $params->radiusX * $sin2 + $params->cosTh * $params->radiusY * $cos2;
 
             $curves[] = [
                 $endX1 + $alpha * $tangentXD1,
