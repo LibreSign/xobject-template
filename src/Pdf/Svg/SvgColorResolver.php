@@ -7,10 +7,10 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Pdf\Svg;
 
+use DOMElement;
+
 use function array_filter;
 use function array_map;
-
-use DOMElement;
 
 /**
  * Resolves and normalizes colors in SVG elements.

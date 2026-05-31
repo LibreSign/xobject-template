@@ -807,6 +807,65 @@ final class SvgArcConverterTest extends TestCase
         }
     }
 
+    public function testGenerateArcCurvesWithSmallRadiusNotationTransition(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $tinyRadiusParams = new ArcParams(
+            0.0,
+            0.0,
+            10.0,
+            0.0,
+            1.0e-10,
+            1.0e-10,
+            1.0,
+            0.0,
+            1,
+            0,
+        );
+
+        $normalizedParams = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$tinyRadiusParams]);
+        self::assertGreaterThan(1.0e-10, $normalizedParams->radiusX);
+    }
+
+    public function testArcToBezierCurvesAtExactToleranceBoundaryForPoints(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $result = $converter->arcToBezierCurves(
+            10.0,
+            10.0,
+            5.0,
+            5.0,
+            0.0,
+            0,
+            1,
+            10.0 + 1.0e-10,
+            10.0,
+        );
+
+        self::assertNotEmpty($result);
+        self::assertGreaterThan(0, count($result));
+    }
+
+    public function testGenerateArcCurvesMultiSegmentLoopVariableTransition(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $largeCurves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [0.0, 0.0, 10.0, 10.0, 1.0, 0.0, 0.0, 2.0 * M_PI - 0.1],
+        );
+
+        self::assertGreaterThan(2, count($largeCurves));
+        $lastCurve = $largeCurves[array_key_last($largeCurves)];
+        self::assertCount(6, $lastCurve);
+        foreach ($lastCurve as $value) {
+            self::assertTrue(is_finite($value));
+        }
+    }
+
     /**
     * @return iterable<string, array{
     *     fromX: float,
