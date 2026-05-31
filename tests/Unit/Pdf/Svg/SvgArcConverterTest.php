@@ -603,8 +603,10 @@ final class SvgArcConverterTest extends TestCase
     }
 
     #[DataProvider('provideGenerateArcCurvesSegmentCountScenarios')]
-    public function testGenerateArcCurvesUsesExpectedSegmentCountForAngleSpan(float $deltaAngle, int $expectedSegments): void
-    {
+    public function testGenerateArcCurvesUsesExpectedSegmentCountForAngleSpan(
+        float $deltaAngle,
+        int $expectedSegments,
+    ): void {
         $converter = new SvgArcConverter();
 
         $params = self::createCurveGenerationParams(0.0, 0.0, 10.0, 10.0, 1.0, 0.0, 0.0, $deltaAngle);
