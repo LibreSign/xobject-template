@@ -292,6 +292,132 @@ SVG,
         $factory->create('<?xml version="1.0"?><root></root>', '/tmp/wrong-root.svg');
     }
 
+    public function testCreateAcceptsUppercaseSvgRootElementName(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            '<SVG width="10" height="10" xmlns="http://www.w3.org/2000/svg">'
+            . '<rect x="0" y="0" width="10" height="10" fill="#ff0000"/>'
+            . '</SVG>',
+            '/tmp/uppercase-root.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 10.0, 10.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
+    }
+
+    public function testCreateRestoresLibxmlInternalErrorStateAfterParsing(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $previousSetting = libxml_use_internal_errors(false);
+
+        try {
+            $factory->create(
+                '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">'
+                . '<rect x="0" y="0" width="10" height="10" fill="#000"/>'
+                . '</svg>',
+                '/tmp/libxml-state.svg',
+            );
+
+            self::assertFalse(libxml_use_internal_errors());
+        } finally {
+            libxml_use_internal_errors($previousSetting);
+            libxml_clear_errors();
+        }
+    }
+
+    public function testCreateRespectsViewBoxMinXAndMinYOriginsWhenBuildingPaths(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+    <svg viewBox="3 4 10 6" xmlns="http://www.w3.org/2000/svg">
+      <path fill="#000" d="M 3 4 L 13 10"/>
+    </svg>
+    SVG,
+            '/tmp/viewbox-origin.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 10.0, 6.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('0.000000 6.000000 m', $xObject->stream);
+        self::assertStringContainsString('10.000000 0.000000 l', $xObject->stream);
+    }
+
+    public function testCreateRejectsDimensionWithNonNumericPrefix(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/non-numeric-dimension.svg" must define either a valid viewBox or positive width/height.',
+        );
+
+        $factory->create(
+            '<svg width="abc12" height="10" xmlns="http://www.w3.org/2000/svg">'
+            . '<path fill="#000" d="M0,0 L1,1"/>'
+            . '</svg>',
+            '/tmp/non-numeric-dimension.svg',
+        );
+    }
+
+    public function testCreateRejectsZeroWidthWhenNoViewBoxIsProvided(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/zero-width.svg" must define either a valid viewBox or positive width/height.',
+        );
+
+        $factory->create(
+            '<svg width="0" height="10" xmlns="http://www.w3.org/2000/svg">'
+            . '<path fill="#000" d="M0,0 L1,1"/>'
+            . '</svg>',
+            '/tmp/zero-width.svg',
+        );
+    }
+
+    public function testCreateRejectsZeroHeightWhenNoViewBoxIsProvided(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/zero-height.svg" must define either a valid viewBox or positive width/height.',
+        );
+
+        $factory->create(
+            '<svg width="10" height="0" xmlns="http://www.w3.org/2000/svg">'
+            . '<path fill="#000" d="M0,0 L1,1"/>'
+            . '</svg>',
+            '/tmp/zero-height.svg',
+        );
+    }
+
+    public function testCreateResolvesUppercaseCssFillAndStrokePropertiesFromStyleBlock(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+    <svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
+      <style>
+    .box { FILL: #112233; STROKE: #ff0000; }
+      </style>
+      <rect class="box" x="1" y="1" width="10" height="10" style="stroke-width:2"/>
+    </svg>
+    SVG,
+            '/tmp/uppercase-css-style.svg',
+        );
+
+        self::assertStringContainsString('0.0667 0.1333 0.2 rg', $xObject->stream);
+        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
+        self::assertStringContainsString('2.000000 w', $xObject->stream);
+    }
+
     public function testCreateWithMissingDimensionsOrViewBoxThrows(): void
     {
         $factory = new SvgPdfXObjectFactory();

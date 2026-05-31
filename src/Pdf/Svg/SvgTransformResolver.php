@@ -18,6 +18,8 @@ use DOMElement;
  */
 final class SvgTransformResolver
 {
+    private const MAX_ANCESTOR_DEPTH = 2048;
+
     /**
      * Compute the cumulative transform matrix for an element.
      *
@@ -33,7 +35,11 @@ final class SvgTransformResolver
         $ancestors = [];
         $cursor = $element;
 
-        while ($cursor instanceof DOMElement) {
+        for ($depth = 0; $depth < self::MAX_ANCESTOR_DEPTH; ++$depth) {
+            if (!$cursor instanceof DOMElement) {
+                break;
+            }
+
             $ancestors[] = $cursor;
             $cursor = $cursor->parentNode;
         }
@@ -79,7 +85,7 @@ final class SvgTransformResolver
 
         if (
             preg_match_all(
-                '/(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/i',
+                '/([a-zA-Z]+)\s*\(([^)]*)\)/',
                 $transform,
                 $matches,
                 PREG_SET_ORDER,
