@@ -36,8 +36,11 @@ final class SvgElementPathBuilderTest extends TestCase
     }
 
     #[DataProvider('provideInvalidPathScenarios')]
-    public function testBuildElementPathReturnsNullForInvalidScenarios(string $markup, float $minX, float $maxY): void
-    {
+    public function testBuildElementPathReturnsNullForInvalidScenarios(
+        string $markup,
+        float $minX,
+        float $maxY,
+    ): void {
         $builder = new SvgElementPathBuilder();
         $element = self::createElement($markup);
 
@@ -47,8 +50,12 @@ final class SvgElementPathBuilderTest extends TestCase
     }
 
     #[DataProvider('provideExpectedPathScenarios')]
-    public function testBuildElementPathBuildsExpectedPath(string $markup, float $minX, float $maxY, string $expected): void
-    {
+    public function testBuildElementPathBuildsExpectedPath(
+        string $markup,
+        float $minX,
+        float $maxY,
+        string $expected,
+    ): void {
         $builder = new SvgElementPathBuilder();
         $element = self::createElement($markup);
 
