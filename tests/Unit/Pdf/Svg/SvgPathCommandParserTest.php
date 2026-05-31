@@ -513,6 +513,11 @@ final class SvgPathCommandParserTest extends TestCase
             'pathData' => 'M 1 1 R 2 2',
             'expectedMessage' => 'SVG path command "R" is not supported for source "/tmp/invalid.svg".',
         ];
+
+        yield 'malformed arc command missing endpoint' => [
+            'pathData' => 'M 0 0 A 1 2 0 0 1',
+            'expectedMessage' => 'Malformed SVG path data in "/tmp/invalid.svg".',
+        ];
     }
 
     /**
@@ -625,6 +630,20 @@ final class SvgPathCommandParserTest extends TestCase
             'height' => 20.0,
             'source' => '/tmp/final-quadratic.svg',
             'expectedSnippet' => '2.000000 16.666667 4.333333 13.000000 7.000000 9.000000 c',
+        ];
+
+        yield 'final smooth quadratic command' => [
+            'pathData' => 'M 0 0 Q 2 2 4 0 T 8 0',
+            'height' => 10.0,
+            'source' => '/tmp/final-smooth-quadratic.svg',
+            'expectedSnippet' => '5.333333 11.333333 6.666667 11.333333 8.000000 10.000000 c',
+        ];
+
+        yield 'final arc command' => [
+            'pathData' => 'M 0 10 A 6 4 0 0 1 12 10',
+            'height' => 20.0,
+            'source' => '/tmp/final-arc.svg',
+            'expectedSnippet' => '9.291503 14.000000 12.000000 12.194335 12.000000 10.000000 c',
         ];
     }
 
