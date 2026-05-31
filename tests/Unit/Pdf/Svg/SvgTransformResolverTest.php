@@ -77,6 +77,18 @@ final class SvgTransformResolverTest extends TestCase
         self::assertEqualsWithDelta(2.0, $actualY, 0.0001);
     }
 
+    public function testResolveElementTransformMatrixCapsAncestorDepthToPreventUnlimitedTraversal(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createDeepElementWithUnitTranslateTransforms(2100);
+
+        $matrix = $resolver->resolveElementTransformMatrix($element);
+        [$actualX, $actualY] = $resolver->applyTransformToPoint($matrix, 0.0, 0.0);
+
+        self::assertEqualsWithDelta(2048.0, $actualX, 0.0001);
+        self::assertEqualsWithDelta(0.0, $actualY, 0.0001);
+    }
+
     public function testResolveElementTransformMatrixIgnoresWhitespaceOnlyAncestorTransform(): void
     {
         $resolver = new SvgTransformResolver();
@@ -335,6 +347,29 @@ final class SvgTransformResolverTest extends TestCase
         $target = $document->createElement('path');
         $target->setAttribute('transform', $targetTransform);
         $svg->appendChild($target);
+
+        return $target;
+    }
+
+    private function createDeepElementWithUnitTranslateTransforms(int $groupCount): DOMElement
+    {
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $svg = $document->createElement('svg');
+        $svg->setAttribute('transform', 'translate(1,0)');
+        $document->appendChild($svg);
+
+        $current = $svg;
+
+        for ($index = 0; $index < $groupCount; ++$index) {
+            $group = $document->createElement('g');
+            $group->setAttribute('transform', 'translate(1,0)');
+            $current->appendChild($group);
+            $current = $group;
+        }
+
+        $target = $document->createElement('path');
+        $target->setAttribute('transform', 'translate(1,0)');
+        $current->appendChild($target);
 
         return $target;
     }
