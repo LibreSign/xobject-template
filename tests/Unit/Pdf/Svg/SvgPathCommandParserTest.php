@@ -246,6 +246,38 @@ final class SvgPathCommandParserTest extends TestCase
         );
     }
 
+    public function testConvertPathDataRejectsTrailingNumbersAfterClosePath(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Malformed SVG path data in "/tmp/invalid.svg".');
+
+        $parser->convertPathData(
+            'M 0 0 Z 1',
+            0.0,
+            10.0,
+            '/tmp/invalid.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+    }
+
+    public function testConvertPathDataSubtractsMinXFromFirstCubicControlPoint(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        $result = $parser->convertPathData(
+            'M 10 10 C 11 9 12 8 13 7',
+            5.0,
+            20.0,
+            '/tmp/cubic-minx.svg',
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        );
+
+        self::assertStringContainsString('6.000000 11.000000 7.000000 12.000000 8.000000 13.000000 c', $result);
+        self::assertStringNotContainsString('16.000000 11.000000 7.000000 12.000000 8.000000 13.000000 c', $result);
+    }
+
     /**
      * @return iterable<string, BasicScenario>
      */
@@ -516,6 +548,11 @@ final class SvgPathCommandParserTest extends TestCase
 
         yield 'malformed arc command missing endpoint' => [
             'pathData' => 'M 0 0 A 1 2 0 0 1',
+            'expectedMessage' => 'Malformed SVG path data in "/tmp/invalid.svg".',
+        ];
+
+        yield 'trailing scalar after close command' => [
+            'pathData' => 'M 0 0 Z 1',
             'expectedMessage' => 'Malformed SVG path data in "/tmp/invalid.svg".',
         ];
     }
