@@ -247,9 +247,9 @@ final class SvgPathCommandParserTest extends TestCase
             'maxY' => 20.0,
             'source' => '/tmp/relative.svg',
             'expectedSnippets' => [
-                '3.000000 15.000000 m',
-                '7.000000 15.000000 l',
-                '7.000000 11.000000 l',
+                '1.000000 19.000000 m',
+                '3.000000 19.000000 l',
+                '3.000000 17.000000 l',
             ],
         ];
 
@@ -312,12 +312,13 @@ final class SvgPathCommandParserTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{pathData: string, maxY: float, transformMatrix: array, source: string, expectedSnippets: list<string>}>
+     * @return iterable<string, array{pathData: string, minX: float, maxY: float, transformMatrix: array, source: string, expectedSnippets: list<string>}>
      */
     public static function provideTransformAndCoordinateConversionScenarios(): iterable
     {
         yield 'relative move with transform matrix applied' => [
             'pathData' => 'm 1 1 2 0 0 2',
+            'minX' => 0.0,
             'maxY' => 20.0,
             'transformMatrix' => [2.0, 0.0, 0.0, 2.0, 1.0, 3.0],
             'source' => '/tmp/transform.svg',
@@ -330,6 +331,7 @@ final class SvgPathCommandParserTest extends TestCase
 
         yield 'minx offset for move and line commands' => [
             'pathData' => 'M 10 10 L 12 8 H 14 V 6',
+            'minX' => 5.0,
             'maxY' => 20.0,
             'transformMatrix' => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
             'source' => '/tmp/minx-lines.svg (via transform)',
@@ -343,6 +345,7 @@ final class SvgPathCommandParserTest extends TestCase
 
         yield 'minx offset for cubic and quadratic commands' => [
             'pathData' => 'M 10 10 C 11 9 12 8 13 7 Q 14 6 15 5',
+            'minX' => 5.0,
             'maxY' => 20.0,
             'transformMatrix' => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
             'source' => '/tmp/minx-curves.svg (via transform)',
@@ -354,6 +357,7 @@ final class SvgPathCommandParserTest extends TestCase
 
         yield 'minx offset for arc commands' => [
             'pathData' => 'M 0 10 A 6 4 0 0 1 12 10',
+            'minX' => 5.0,
             'maxY' => 20.0,
             'transformMatrix' => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
             'source' => '/tmp/minx-arc.svg (via transform)',
@@ -373,10 +377,10 @@ final class SvgPathCommandParserTest extends TestCase
             'pathData' => 'M 0 10 C 2 8 4 8 6 10 Q 8 12 10 10 T 14 10 A 4 2 0 0 1 18 10',
             'maxY' => 20.0,
             'expectedSnippets' => [
-                '-2.000000 10.000000 m',
-                '0.000000 12.000000 2.000000 12.000000 4.000000 10.000000 c',
-                '4.000000 10.000000 c',
-                '12.000000 10.000000 c',
+                '0.000000 10.000000 m',
+                '2.000000 12.000000 4.000000 12.000000 6.000000 10.000000 c',
+                '7.333333 8.666667 8.666667 8.666667 10.000000 10.000000 c',
+                '11.333333 11.333333 12.666667 11.333333 14.000000 10.000000 c',
             ],
             'expectedCurveCount' => 4,
         ];
@@ -484,6 +488,37 @@ final class SvgPathCommandParserTest extends TestCase
         yield 'unsupported command' => [
             'pathData' => 'M 1 1 R 2 2',
             'expectedMessage' => 'SVG path command "R" is not supported for source "/tmp/invalid.svg".',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{pathData: string, expectedSnippets: list<string>, description: string}>
+     */
+    public static function provideSmoothCubicResetScenarios(): iterable
+    {
+        yield 'resets smooth cubic state after line command' => [
+            'pathData' => 'M 0 0 C 2 2 4 2 6 0 L 8 0 S 10 2 12 0',
+            'expectedSnippets' => [
+                '8.000000 10.000000 10.000000 8.000000 12.000000 10.000000 c',
+            ],
+            'description' => 'S after L should not use previous cubic endpoint as control point',
+        ];
+
+        yield 'resets smooth cubic state after arc command' => [
+            'pathData' => 'M 0 10 C 2 8 4 8 6 10 A 2 2 0 0 1 10 10 S 12 12 14 10',
+            'expectedSnippets' => [
+                '10.000000 0.000000 12.000000 -2.000000 14.000000 0.000000 c',
+            ],
+            'description' => 'S after A should not use previous cubic control point as reflection',
+        ];
+
+        yield 'maintains smooth cubic state across relative and absolute commands' => [
+            'pathData' => 'M 0 0 c 2 2 4 2 6 0 s 4 -2 6 0',
+            'expectedSnippets' => [
+                '2.000000 8.000000 4.000000 8.000000 6.000000 10.000000 c',
+                '8.000000 12.000000 10.000000 12.000000 12.000000 10.000000 c',
+            ],
+            'description' => 'relative and absolute smooth cubics should maintain control point state',
         ];
     }
 
