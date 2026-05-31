@@ -95,7 +95,7 @@ final class SvgPathCommandParserTest extends TestCase
         string $pathData,
         float $maxY,
         array $expectedSnippets,
-        int $expectedCurveCount = null,
+        int $expectedCurveCount = 0,
     ): void {
         $parser = new SvgPathCommandParser();
 
@@ -111,13 +111,11 @@ final class SvgPathCommandParserTest extends TestCase
             self::assertStringContainsString($snippet, $result);
         }
 
-        if ($expectedCurveCount !== null) {
-            self::assertGreaterThanOrEqual(
-                $expectedCurveCount,
-                substr_count($result, ' c'),
-                'Expected at least ' . $expectedCurveCount . ' cubic curves',
-            );
-        }
+        self::assertGreaterThanOrEqual(
+            $expectedCurveCount,
+            substr_count($result, ' c'),
+            'Expected at least ' . $expectedCurveCount . ' cubic curves',
+        );
     }
 
     #[DataProvider('provideArcNormalizationScenarios')]
@@ -718,5 +716,61 @@ final class SvgPathCommandParserTest extends TestCase
             ],
             'description' => 'S after Z should treat previous curve as non-existent',
         ];
+    }
+
+    public function testConvertPathDataEnforcesIndexProgressionStrictly(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        // Index must increase (strict > not <=); valid path must complete without error
+        $result = $parser->convertPathData('M 0 0 L 10 10 L 5 5', 0.0, 10.0, 'test.svg', [1, 0, 0, 1, 0, 0]);
+        self::assertNotEmpty($result);
+    }
+
+    public function testConvertPathDataDetectsZeroProgressNotEqualProgress(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        // Boundary: <= versus < check is crucial for progress detection
+        // Valid paths with standard commands must succeed
+
+        try {
+            // Valid path should not throw
+            $result = $parser->convertPathData('M 0 0 L 10 10 L 5 5', 0.0, 10.0, 'test.svg', [1, 0, 0, 1, 0, 0]);
+            self::assertNotEmpty($result);
+        } catch (InvalidArgumentException $e) {
+            self::fail('Valid path should not throw: ' . $e->getMessage());
+        }
+    }
+
+    public function testCoordinateTransformSubtractsMinXNotAdds(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        // Transform must subtract minX from x-coordinates
+        $result = $parser->convertPathData('M 0 0 L 10 10', 5.0, 10.0, 'test.svg', [1, 0, 0, 1, 0, 0]);
+
+        // With minX=5, starting x=0 should become x=0-5=-5, NOT x=0+5=5
+        self::assertStringContainsString('-5.000000 10.000000 m', $result);
+        self::assertStringContainsString('5.000000 0.000000 l', $result);
+    }
+
+    public function testCoordinateTransformMinusOperator(): void
+    {
+        $parser = new SvgPathCommandParser();
+
+        // Verify the cubic bezier transform subtracts minX correctly
+        $result = $parser->convertPathData(
+            'M 2 0 C 4 2 6 2 8 0',
+            2.0,
+            10.0,
+            'test.svg',
+            [1, 0, 0, 1, 0, 0],
+        );
+
+        // Expected: (2-2) (10-0) = 0 10, then cubic
+        self::assertStringContainsString('0.000000 10.000000 m', $result);
+        // Cubic control points: (4-2, 10-2) (6-2, 10-2) (8-2, 10-0)
+        self::assertStringContainsString('2.000000 8.000000 4.000000 8.000000 6.000000 10.000000 c', $result);
     }
 }

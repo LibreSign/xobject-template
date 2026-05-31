@@ -98,10 +98,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         libxml_use_internal_errors($previousErrors);
 
         $root = $document->documentElement;
-        $rootName = '';
-        if ($root instanceof DOMElement) {
-            $rootName = strtolower($root->localName);
-        }
+        $rootName = $root instanceof DOMElement ? $this->normalizeLocalName($root->localName) : '';
 
         if ($rootName !== 'svg') {
             throw new InvalidArgumentException(sprintf('Unable to parse SVG source "%s".', $source));
@@ -118,29 +115,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
     {
         $viewBox = trim($svg->getAttribute('viewBox'));
         if ($viewBox !== '') {
-            $parts = preg_split('/[\s,]+/', $viewBox);
-            if (!is_array($parts) || count($parts) !== 4) {
-                throw new InvalidArgumentException(sprintf('Invalid viewBox in SVG source "%s".', $source));
-            }
-
-            $parsedViewBox = [];
-
-            foreach ($parts as $part) {
-                $parsedPart = filter_var($part, FILTER_VALIDATE_FLOAT);
-                if (!is_float($parsedPart)) {
-                    throw new InvalidArgumentException(sprintf('Invalid viewBox in SVG source "%s".', $source));
-                }
-
-                $parsedViewBox[] = $parsedPart;
-            }
-
-            [$minX, $minY, $width, $height] = $parsedViewBox;
-
-            if ($width <= 0.0 || $height <= 0.0) {
-                throw new InvalidArgumentException(sprintf('SVG source "%s" must define a positive viewBox.', $source));
-            }
-
-            return [$minX, $minY, $width, $height];
+            return $this->parseViewBoxValues($viewBox, $source);
         }
 
         $width = $this->extractNumericSvgLength($svg->getAttribute('width'));
@@ -154,6 +129,36 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         }
 
         return [0.0, 0.0, $width, $height];
+    }
+
+    /**
+     * @return array{0: float, 1: float, 2: float, 3: float}
+     */
+    private function parseViewBoxValues(string $viewBox, string $source): array
+    {
+        $parts = preg_split('/[\s,]+/', $viewBox);
+        if (!is_array($parts) || count($parts) !== 4) {
+            throw new InvalidArgumentException(sprintf('Invalid viewBox in SVG source "%s".', $source));
+        }
+
+        $parsedViewBox = [];
+
+        foreach ($parts as $part) {
+            $parsedPart = filter_var($part, FILTER_VALIDATE_FLOAT);
+            if (!is_float($parsedPart)) {
+                throw new InvalidArgumentException(sprintf('Invalid viewBox in SVG source "%s".', $source));
+            }
+
+            $parsedViewBox[] = $parsedPart;
+        }
+
+        [$minX, $minY, $width, $height] = $parsedViewBox;
+
+        if ($width <= 0.0 || $height <= 0.0) {
+            throw new InvalidArgumentException(sprintf('SVG source "%s" must define a positive viewBox.', $source));
+        }
+
+        return [$minX, $minY, $width, $height];
     }
 
     private function extractNumericSvgLength(string $value): float
@@ -185,6 +190,10 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $strokes = [];
 
         foreach ($svg->getElementsByTagName('style') as $styleNode) {
+            if (!$styleNode instanceof DOMElement) {
+                continue;
+            }
+
             $css = $styleNode->textContent;
             if ($css === '') {
                 continue;
@@ -195,6 +204,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                 continue;
             }
 
+            /** @var list<array{0: string, 1: string, 2: string}> $rules */
             foreach ($rules as $rule) {
                 if (preg_match('/(?:^|;)\s*fill\s*:\s*([^;]+)/i', $rule[2], $fillMatch) === 1) {
                     $color = $this->colorResolver->normalizeColor($fillMatch[1]);
@@ -223,13 +233,22 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $elements = [];
 
         foreach ($svg->getElementsByTagName('*') as $element) {
-            $name = strtolower($element->localName);
+            if (!$element instanceof DOMElement) {
+                continue;
+            }
+
+            $name = $this->normalizeLocalName($element->localName);
             if (in_array($name, ['path', 'polygon', 'polyline', 'rect', 'circle', 'ellipse', 'line'], true)) {
                 $elements[] = $element;
             }
         }
 
         return $elements;
+    }
+
+    private function normalizeLocalName(?string $localName): string
+    {
+        return strtolower($localName ?? '');
     }
 
     private function resolveStrokeWidth(DOMElement $element): float

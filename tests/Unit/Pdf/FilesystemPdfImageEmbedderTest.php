@@ -498,7 +498,7 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     }
 
     #[DataProvider('svgExtensionBoundaryProvider')]
-    public function testEmbedCorrectlyDetectsSvgByFileExtensionBoundary(string $source, bool $shouldBeSvg): void
+    public function testEmbedCorrectlyDetectsSvgByFileExtensionBoundary(string $source, array $expectedDictionary): void
     {
         $svgImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-stream');
         $pngImage = new EmbeddedPdfImage(['Type' => '/Image'], 'png-stream');
@@ -506,41 +506,44 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
 
         $image = $embedder->embed($source);
 
-        if ($shouldBeSvg) {
-            self::assertSame('/XObject', $image->dictionary['Type']);
-            self::assertSame('/Form', $image->dictionary['Subtype']);
-        } else {
-            self::assertSame('/Image', $image->dictionary['Type']);
+        foreach ($expectedDictionary as $key => $expectedValue) {
+            self::assertSame($expectedValue, $image->dictionary[$key]);
         }
     }
 
     /**
-     * @return iterable<string, array{source: string, shouldBeSvg: bool}>
+     * @return iterable<string, array{source: string, expectedDictionary: array<string, string>}>
      */
     public static function svgExtensionBoundaryProvider(): iterable
     {
-        yield 'SVG extension detected' => ['source' => '/path/to/file.svg', 'shouldBeSvg' => true];
-        yield 'SVGZ extension detected' => ['source' => '/path/to/file.svgz', 'shouldBeSvg' => true];
+        yield 'SVG extension detected' => [
+            'source' => '/path/to/file.svg',
+            'expectedDictionary' => ['Type' => '/XObject', 'Subtype' => '/Form'],
+        ];
+        yield 'SVGZ extension detected' => [
+            'source' => '/path/to/file.svgz',
+            'expectedDictionary' => ['Type' => '/XObject', 'Subtype' => '/Form'],
+        ];
         yield 'SVG extension case-insensitive uppercase' => [
             'source' => '/path/to/file.SVG',
-            'shouldBeSvg' => true,
+            'expectedDictionary' => ['Type' => '/XObject', 'Subtype' => '/Form'],
         ];
         yield 'SVG extension case-insensitive mixed' => [
             'source' => '/path/to/file.Svg',
-            'shouldBeSvg' => true,
+            'expectedDictionary' => ['Type' => '/XObject', 'Subtype' => '/Form'],
         ];
         yield 'SVG in middle of filename not detected as SVG' => [
             'source' => '/path/svg.backup',
-            'shouldBeSvg' => false,
+            'expectedDictionary' => ['Type' => '/Image'],
         ];
         yield 'SVG in filename but different extension' => [
             'source' => '/path/my.svg.txt',
-            'shouldBeSvg' => false,
+            'expectedDictionary' => ['Type' => '/Image'],
         ];
     }
 
     #[DataProvider('svgContentDetectionProvider')]
-    public function testEmbedCorrectlyDetectsSvgByContentBoundary(string $content, bool $shouldBeSvg): void
+    public function testEmbedCorrectlyDetectsSvgByContentBoundary(string $content, array $expectedDictionary): void
     {
         $svgImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-stream');
         $pngImage = new EmbeddedPdfImage(['Type' => '/Image'], 'png-stream');
@@ -548,34 +551,31 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
 
         $image = $embedder->embed('/path/to/image.bin');
 
-        if ($shouldBeSvg) {
-            self::assertSame('/XObject', $image->dictionary['Type']);
-            self::assertSame('/Form', $image->dictionary['Subtype']);
-        } else {
-            self::assertSame('/Image', $image->dictionary['Type']);
+        foreach ($expectedDictionary as $key => $expectedValue) {
+            self::assertSame($expectedValue, $image->dictionary[$key]);
         }
     }
 
     /**
-     * @return iterable<string, array{content: string, shouldBeSvg: bool}>
+     * @return iterable<string, array{content: string, expectedDictionary: array<string, string>}>
      */
     public static function svgContentDetectionProvider(): iterable
     {
         yield 'direct svg tag detected by content' => [
             'content' => '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>',
-            'shouldBeSvg' => true,
+            'expectedDictionary' => ['Type' => '/XObject', 'Subtype' => '/Form'],
         ];
         yield 'svg tag with leading whitespace is trimmed and detected' => [
             'content' => "   \n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"></svg>",
-            'shouldBeSvg' => true,
+            'expectedDictionary' => ['Type' => '/XObject', 'Subtype' => '/Form'],
         ];
         yield 'xml declaration followed by svg tag is detected' => [
             'content' => '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"/>',
-            'shouldBeSvg' => true,
+            'expectedDictionary' => ['Type' => '/XObject', 'Subtype' => '/Form'],
         ];
         yield 'xml declaration without svg tag is not detected as svg' => [
             'content' => '<?xml version="1.0"?><document><item/></document>',
-            'shouldBeSvg' => false,
+            'expectedDictionary' => ['Type' => '/Image'],
         ];
     }
 
