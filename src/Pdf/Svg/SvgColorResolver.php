@@ -174,7 +174,11 @@ final class SvgColorResolver
         }
 
         foreach ($declarations as $declaration) {
-            if (trim($declaration) === '') {
+            if ($declaration === '') {
+                continue;
+            }
+
+            if (ctype_space($declaration)) {
                 continue;
             }
 
@@ -238,12 +242,12 @@ final class SvgColorResolver
      */
     private function extractClasses(string $classAttribute): array
     {
-        $normalized = preg_replace('/\s+/', ' ', trim($classAttribute));
-        if (!is_string($normalized) || $normalized === '') {
+        $parts = preg_split('/\s+/', $classAttribute, -1, PREG_SPLIT_NO_EMPTY);
+        if (!is_array($parts)) {
             return [];
         }
 
-        return array_values(array_filter(explode(' ', $normalized), static fn (string $class): bool => $class !== ''));
+        return $parts;
     }
 
     private function isHexColor(string $color): bool
@@ -279,7 +283,7 @@ final class SvgColorResolver
         $channels = [];
 
         foreach ($parts as $part) {
-            if ($part === '' || preg_match('/^\d+$/', $part) !== 1) {
+            if ($part === '' || !ctype_digit($part)) {
                 return null;
             }
 
