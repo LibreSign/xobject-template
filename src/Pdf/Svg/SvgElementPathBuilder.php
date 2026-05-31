@@ -40,7 +40,12 @@ final readonly class SvgElementPathBuilder
         string $source,
         array $transformMatrix,
     ): ?string {
-        $name = strtolower((string) $element->localName);
+        $localName = $element->localName;
+        if (!is_string($localName)) {
+            return null;
+        }
+
+        $name = strtolower($localName);
 
         return match ($name) {
             'path'     => $this->buildPathElementPath($element, $minX, $maxY, $source, $transformMatrix),
@@ -81,14 +86,12 @@ final readonly class SvgElementPathBuilder
         float $maxY,
         array $transformMatrix,
     ): ?string {
-        $points = trim($element->getAttribute('points'));
+        $points = $element->getAttribute('points');
         if ($points === '') {
             return null;
         }
 
-        if (preg_match_all('/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/', $points, $matches) < 1) {
-            return null;
-        }
+        preg_match_all('/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/', $points, $matches);
 
         $raw = $matches[0];
         $rawCount = count($raw);
@@ -102,9 +105,13 @@ final readonly class SvgElementPathBuilder
         [$startX, $startY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $startX, $startY);
         $commands[] = sprintf('%F %F m', $startX - $minX, $maxY - $startY);
 
-        for ($index = 2; $index < $rawCount; $index += 2) {
-            $pointX = (float) $raw[$index];
-            $pointY = (float) $raw[$index + 1];
+        $remainingCoordinates = array_slice($raw, 2);
+        /** @var list<array{0:string,1:string}> $coordinatePairs */
+        $coordinatePairs = array_chunk($remainingCoordinates, 2);
+
+        foreach ($coordinatePairs as [$rawX, $rawY]) {
+            $pointX = (float) $rawX;
+            $pointY = (float) $rawY;
             [$pointX, $pointY] = $this->transformResolver->applyTransformToPoint($transformMatrix, $pointX, $pointY);
             $commands[] = sprintf('%F %F l', $pointX - $minX, $maxY - $pointY);
         }
@@ -168,14 +175,12 @@ final readonly class SvgElementPathBuilder
         float $maxY,
         array $transformMatrix,
     ): ?string {
-        $points = trim($element->getAttribute('points'));
+        $points = $element->getAttribute('points');
         if ($points === '') {
             return null;
         }
 
-        if (preg_match_all('/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/', $points, $matches) < 1) {
-            return null;
-        }
+        preg_match_all('/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/', $points, $matches);
 
         $raw = $matches[0];
         $rawCount = count($raw);
@@ -191,11 +196,15 @@ final readonly class SvgElementPathBuilder
         );
         $commands[] = sprintf('%F %F m', $firstX - $minX, $maxY - $firstY);
 
-        for ($index = 2; $index < $rawCount; $index += 2) {
+        $remainingCoordinates = array_slice($raw, 2);
+        /** @var list<array{0:string,1:string}> $coordinatePairs */
+        $coordinatePairs = array_chunk($remainingCoordinates, 2);
+
+        foreach ($coordinatePairs as [$rawX, $rawY]) {
             [$transformedX, $transformedY] = $this->transformResolver->applyTransformToPoint(
                 $transformMatrix,
-                (float) $raw[$index],
-                (float) $raw[$index + 1],
+                (float) $rawX,
+                (float) $rawY,
             );
             $commands[] = sprintf('%F %F l', $transformedX - $minX, $maxY - $transformedY);
         }
