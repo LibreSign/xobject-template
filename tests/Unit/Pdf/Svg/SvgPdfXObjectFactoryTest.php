@@ -681,6 +681,101 @@ SVG,
         self::assertStringContainsString('0 0 1 RG', $xObject->stream);       // #0000ff
     }
 
+    public function testCreateWithWhitespaceInStrokeWidthAttribute(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="   2.5   "/>
+</svg>
+SVG,
+            '/tmp/whitespace-stroke.svg',
+        );
+
+        // Whitespace should be trimmed
+        self::assertStringContainsString('2.500000 w', $xObject->stream);
+    }
+
+    public function testCreateDetectsElementsRegardlessOfCase(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <PATH fill="#ff0000" d="M0,0 L10,10"/>
+  <RECT x="2" y="2" width="6" height="6" fill="#00ff00"/>
+</svg>
+SVG,
+            '/tmp/uppercase-elements.svg',
+        );
+
+        // Elements should be detected regardless of case
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);  // red from path
+        self::assertStringContainsString('0 1 0 rg', $xObject->stream);  // green from rect
+    }
+
+    public function testCreateHandlesZeroStrokeWidthFromStyle(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" style="stroke-width:0"/>
+</svg>
+SVG,
+            '/tmp/zero-style-stroke.svg',
+        );
+
+        self::assertStringContainsString('0.000000 w', $xObject->stream);
+    }
+
+    public function testCreateWithinArrayCheck(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="50" height="50" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" fill="#ff0000"/>
+  <polygon points="20,20 30,20 25,30" fill="#00ff00"/>
+  <rect x="5" y="5" width="5" height="5" fill="#ffff00"/>
+  <circle cx="40" cy="40" r="5" fill="#ff00ff"/>
+</svg>
+SVG,
+            '/tmp/all-shapes.svg',
+        );
+
+        // All valid shapes should be rendered
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);      // red from path
+        self::assertStringContainsString('0 1 0 rg', $xObject->stream);      // green from polygon
+        self::assertStringContainsString('1 1 0 rg', $xObject->stream);      // yellow from rect
+        self::assertStringContainsString('1 0 1 rg', $xObject->stream);      // magenta from circle
+    }
+
+    public function testCreateUsesCorrectDefaultStrokeWidth(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L20,20" stroke="#ff0000" fill="none"/>
+</svg>
+SVG,
+            '/tmp/default-strokewidth-correct.svg',
+        );
+
+        // Default stroke-width should be exactly 1.0
+        self::assertStringContainsString('1.000000 w', $xObject->stream);
+        // Should not be 0.0
+        self::assertFalse(str_contains($xObject->stream, '0.000000 w'));
+    }
+
     public static function providePaintModeScenarios(): iterable
     {
         yield 'stroke only path without fill' => [
