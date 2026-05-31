@@ -12,13 +12,30 @@ use LibreSign\XObjectTemplate\Pdf\Svg\SvgPathCommandParser;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-// phpcs:disable Generic.Files.LineLength.TooLong -- PHPDoc array-shape types cannot be wrapped
 /**
- * @phpstan-type BasicScenario array{pathData: string, minX: float, maxY: float, source: string, expectedSnippets: list<string>, unexpectedSnippets?: list<string>}
- * @phpstan-type TransformScenario array{pathData: string, minX: float, maxY: float, transformMatrix: array, source: string, expectedSnippets: list<string>}
- * @phpstan-type CurveScenario array{pathData: string, maxY: float, expectedSnippets: list<string>, expectedCurveCount?: int}
+ * @phpstan-type BasicScenario array{
+ *     pathData: string,
+ *     minX: float,
+ *     maxY: float,
+ *     source: string,
+ *     expectedSnippets: list<string>,
+ *     unexpectedSnippets?: list<string>
+ * }
+ * @phpstan-type TransformScenario array{
+ *     pathData: string,
+ *     minX: float,
+ *     maxY: float,
+ *     transformMatrix: array,
+ *     source: string,
+ *     expectedSnippets: list<string>
+ * }
+ * @phpstan-type CurveScenario array{
+ *     pathData: string,
+ *     maxY: float,
+ *     expectedSnippets: list<string>,
+ *     expectedCurveCount?: int
+ * }
  */
-// phpcs:enable Generic.Files.LineLength.TooLong
 final class SvgPathCommandParserTest extends TestCase
 {
     #[DataProvider('provideBasicPathConversionScenarios')]
