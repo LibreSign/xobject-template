@@ -74,6 +74,16 @@ SVG,
         $factory->create('<html></html>', '/tmp/invalid.svg');
     }
 
+    public function testCreateRejectsMalformedSvgRootEvenWhenSvgTagExists(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/malformed-root.svg".');
+
+        $factory->create('<svg xmlns="http://www.w3.org/2000/svg"><g>', '/tmp/malformed-root.svg');
+    }
+
     #[DataProvider('provideInvalidViewportScenarios')]
     public function testCreateRejectsInvalidViewportScenarios(string $svg, string $expectedMessage): void
     {
@@ -225,6 +235,10 @@ SVG,
         $factory = new SvgPdfXObjectFactory();
         $xObject = $factory->create($svg, $sourcePath);
         self::assertStringContainsString($expectedStrokeContent, $xObject->stream);
+
+        if ($expectedStrokeContent === '1.000000 w') {
+            self::assertStringNotContainsString('-1.000000 w', $xObject->stream);
+        }
     }
 
     #[DataProvider('provideShapeElementScenarios')]
@@ -328,6 +342,32 @@ SVG,
         }
     }
 
+    public function testCreateClearsAccumulatedLibxmlErrorsAfterParsing(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $previousSetting = libxml_use_internal_errors(true);
+
+        try {
+            // Seed libxml error buffer before invoking factory parsing.
+            $document = new \DOMDocument('1.0', 'UTF-8');
+            $document->loadXML('<broken');
+            self::assertNotSame([], libxml_get_errors());
+
+            $factory->create(
+                '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">'
+                . '<rect x="0" y="0" width="10" height="10" fill="#000"/>'
+                . '</svg>',
+                '/tmp/libxml-clear-errors.svg',
+            );
+
+            self::assertSame([], libxml_get_errors());
+        } finally {
+            libxml_use_internal_errors($previousSetting);
+            libxml_clear_errors();
+        }
+    }
+
     public function testCreateRespectsViewBoxMinXAndMinYOriginsWhenBuildingPaths(): void
     {
         $factory = new SvgPdfXObjectFactory();
@@ -344,6 +384,34 @@ SVG,
         self::assertSame([0.0, 0.0, 10.0, 6.0], $xObject->dictionary['BBox']);
         self::assertStringContainsString('0.000000 6.000000 m', $xObject->stream);
         self::assertStringContainsString('10.000000 0.000000 l', $xObject->stream);
+    }
+
+    public function testCreateTreatsWhitespaceOnlyViewBoxAsAbsentAndFallsBackToDimensions(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            '<svg viewBox="   " width="12" height="8" xmlns="http://www.w3.org/2000/svg">'
+            . '<rect x="0" y="0" width="12" height="8" fill="#000"/>'
+            . '</svg>',
+            '/tmp/whitespace-viewbox.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 12.0, 8.0], $xObject->dictionary['BBox']);
+    }
+
+    public function testCreateParsesWidthAndHeightWithSurroundingWhitespace(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            '<svg width=" 12.5 " height=" 7.25 " xmlns="http://www.w3.org/2000/svg">'
+            . '<rect x="0" y="0" width="12.5" height="7.25" fill="#000"/>'
+            . '</svg>',
+            '/tmp/whitespace-dimensions.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 12.5, 7.25], $xObject->dictionary['BBox']);
     }
 
     public function testCreateRejectsDimensionWithNonNumericPrefix(): void
@@ -411,6 +479,27 @@ SVG,
     </svg>
     SVG,
             '/tmp/uppercase-css-style.svg',
+        );
+
+        self::assertStringContainsString('0.0667 0.1333 0.2 rg', $xObject->stream);
+        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
+        self::assertStringContainsString('2.000000 w', $xObject->stream);
+    }
+
+    public function testCreateIgnoresEmptyAndNonMatchingStyleBlocksBeforeValidClassRule(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
+  <style></style>
+  <style>path { fill: #00ff00; }</style>
+  <style>.accent { fill: #112233; stroke: #ff0000; }</style>
+  <rect class="accent" x="1" y="1" width="10" height="10" style="stroke-width:2"/>
+</svg>
+SVG,
+            '/tmp/style-continue-coverage.svg',
         );
 
         self::assertStringContainsString('0.0667 0.1333 0.2 rg', $xObject->stream);
@@ -578,8 +667,18 @@ SVG,
             'Invalid viewBox in SVG source "/tmp/invalid-viewport.svg".',
         ];
 
+        yield 'invalid viewbox with non numeric minY' => [
+            '<svg viewBox="0 foo 10 10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'Invalid viewBox in SVG source "/tmp/invalid-viewport.svg".',
+        ];
+
         yield 'non-positive viewbox dimensions' => [
             '<svg viewBox="0 0 0 10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
+        ];
+
+        yield 'zero height viewbox dimensions' => [
+            '<svg viewBox="0 0 10 0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
             'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
         ];
 
