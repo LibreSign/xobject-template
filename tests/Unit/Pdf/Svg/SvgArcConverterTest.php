@@ -134,8 +134,10 @@ final class SvgArcConverterTest extends TestCase
     }
 
     #[DataProvider('provideSegmentCountAndEndpointScenarios')]
-    public function testArcToBezierCurvesGeneratesExpectedSegmentsAndEndsAtTarget(array $input, int $expectedSegmentCount): void
-    {
+    public function testArcToBezierCurvesGeneratesExpectedSegmentsAndEndsAtTarget(
+        array $input,
+        int $expectedSegmentCount,
+    ): void {
         $converter = new SvgArcConverter();
 
         $curves = $converter->arcToBezierCurves(
@@ -239,7 +241,22 @@ final class SvgArcConverterTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{input: array{fromX: float, fromY: float, radiusX: float, radiusY: float, rotation: float, largeArc: int, sweep: int, toX: float, toY: float}, expectedSegmentCount: int, firstCurveExpected: array<int, float>, lastCurveExpected: array<int, float>}>
+     * @return iterable<string, array{
+     *     input: array{
+     *         fromX: float,
+     *         fromY: float,
+     *         radiusX: float,
+     *         radiusY: float,
+     *         rotation: float,
+     *         largeArc: int,
+     *         sweep: int,
+     *         toX: float,
+     *         toY: float
+     *     },
+     *     expectedSegmentCount: int,
+     *     firstCurveExpected: array<int, float>,
+     *     lastCurveExpected: array<int, float>
+     * }>
      */
     public static function provideExpectedCurveSamples(): iterable
     {
@@ -304,14 +321,8 @@ final class SvgArcConverterTest extends TestCase
                 -3.67394039744206E-15,
             ],
         ];
-    }
 
-    /**
-     * @return iterable<string, array{input: array{fromX: float, fromY: float, radiusX: float, radiusY: float, rotation: float, largeArc: int, sweep: int, toX: float, toY: float}, expectedSegmentCount: int}>
-     */
-    public static function provideSegmentCountAndEndpointScenarios(): iterable
-    {
-        yield 'quarter-like path with large-arc sweep yields two segments' => [
+        yield 'quarter-arc flag variant sample' => [
             'input' => [
                 'fromX' => 10.0,
                 'fromY' => 0.0,
@@ -324,19 +335,100 @@ final class SvgArcConverterTest extends TestCase
                 'toY' => 10.0,
             ],
             'expectedSegmentCount' => 2,
+            'firstCurveExpected' => [
+                20.95014085253355,
+                6.808005228802601,
+                20.95014085253355,
+                13.191994771197399,
+                17.071067811865476,
+                17.071067811865476,
+            ],
+            'lastCurveExpected' => [
+                13.1919947711974,
+                20.95014085253355,
+                6.808005228802601,
+                20.95014085253355,
+                2.9289321881345254,
+                17.071067811865476,
+            ],
         ];
 
-        yield 'clockwise path with opposite sweep still produces two segments' => [
+        yield 'asymmetric rotated normalized sample' => [
             'input' => [
-                'fromX' => 10.0,
-                'fromY' => 0.0,
+                'fromX' => 0.0,
+                'fromY' => 10.0,
+                'radiusX' => 15.0,
+                'radiusY' => 8.0,
+                'rotation' => 45.0,
+                'largeArc' => 1,
+                'sweep' => 1,
+                'toX' => 60.0,
+                'toY' => 30.0,
+            ],
+            'expectedSegmentCount' => 2,
+            'firstCurveExpected' => [
+                -4.434385553963552,
+                -6.137506191228175,
+                5.459153479092354,
+                -14.902504650171249,
+                21.916666589738256,
+                -9.416666946622618,
+            ],
+            'lastCurveExpected' => [
+                38.37417970038416,
+                -3.930829243073987,
+                55.56561444603643,
+                13.862493808771795,
+                59.999999923071584,
+                29.99999972004403,
+            ],
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{
+     *     input: array{
+     *         fromX: float,
+     *         fromY: float,
+     *         radiusX: float,
+     *         radiusY: float,
+     *         rotation: float,
+     *         largeArc: int,
+     *         sweep: int,
+     *         toX: float,
+     *         toY: float
+     *     },
+     *     expectedSegmentCount: int
+     * }>
+     */
+    public static function provideSegmentCountAndEndpointScenarios(): iterable
+    {
+        yield 'half ellipse baseline remains two segments and reaches target' => [
+            'input' => [
+                'fromX' => 0.0,
+                'fromY' => 5.0,
                 'radiusX' => 10.0,
-                'radiusY' => 10.0,
+                'radiusY' => 5.0,
                 'rotation' => 0.0,
                 'largeArc' => 0,
-                'sweep' => 0,
-                'toX' => 0.0,
-                'toY' => 10.0,
+                'sweep' => 1,
+                'toX' => 20.0,
+                'toY' => 5.0,
+            ],
+            'expectedSegmentCount' => 2,
+        ];
+
+        yield 'normalized radii scenario still reaches requested endpoint' => [
+            'input' => [
+                'fromX' => 0.0,
+                'fromY' => 0.0,
+                'radiusX' => 5.0,
+                'radiusY' => 5.0,
+                'rotation' => 0.0,
+                'largeArc' => 0,
+                'sweep' => 1,
+                'toX' => 30.0,
+                'toY' => 0.0,
             ],
             'expectedSegmentCount' => 2,
         ];
