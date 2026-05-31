@@ -131,6 +131,13 @@ final class SvgColorResolverTest extends TestCase
             'expected' => 'url(http://example.com/a:b.svg)',
         ];
 
+        yield 'skip blank declarations before valid property' => [
+            'style' => ' ;   ; fill : red ; stroke:#000',
+            'property' => 'fill',
+            'expected' => 'red',
+            'useColorExtractor' => true,
+        ];
+
         yield 'empty style returns null' => [
             'style' => '',
             'property' => 'fill',
@@ -235,9 +242,27 @@ final class SvgColorResolverTest extends TestCase
             'expected' => '#111111',
         ];
 
+        yield 'blank class tokens do not win over real class' => [
+            'attributes' => ['class' => '  primary  '],
+            'classColors' => [
+                '' => '#999999',
+                'primary' => '#111111',
+            ],
+            'expected' => '#111111',
+        ];
+
         yield 'empty class falls back to default fill' => [
             'attributes' => ['class' => ''],
             'classColors' => ['primary' => '#ff0000'],
+            'expected' => '#000000',
+        ];
+
+        yield 'whitespace only class falls back to default fill' => [
+            'attributes' => ['class' => '   '],
+            'classColors' => [
+                '' => '#999999',
+                'primary' => '#ff0000',
+            ],
             'expected' => '#000000',
         ];
     }
@@ -259,7 +284,10 @@ final class SvgColorResolverTest extends TestCase
         yield 'accepts rgb channels with spaces' => ['input' => 'rgb( 255 , 0 , 0 )', 'expected' => '#ff0000'];
         yield 'rejects non numeric channels' => ['input' => 'rgb(25a, 0, 0)', 'expected' => null];
         yield 'rejects negative channels' => ['input' => 'rgb(255, -1, 0)', 'expected' => null];
+        yield 'rejects explicit positive sign' => ['input' => 'rgb(+12, 0, 0)', 'expected' => null];
+        yield 'rejects empty channel' => ['input' => 'rgb(, 0, 0)', 'expected' => null];
         yield 'clamps overflowing channels' => ['input' => 'rgb(256, 0, 0)', 'expected' => '#ff0000'];
+        yield 'rejects integer overflow channel' => ['input' => 'rgb(999999999999999999999999, 0, 0)', 'expected' => null];
         yield 'rejects alphanumeric suffix' => ['input' => 'rgb(123abc, 0, 0)', 'expected' => null];
         yield 'rejects alphanumeric prefix' => ['input' => 'rgb(abc123, 0, 0)', 'expected' => null];
         yield 'rejects embedded spaces inside channel digits' => ['input' => 'rgb(12 3, 0, 0)', 'expected' => null];
@@ -282,6 +310,10 @@ final class SvgColorResolverTest extends TestCase
     {
         yield 'extract from multiple declarations' => [
             'style' => 'fill: red; stroke: blue; opacity: 0.5;',
+            'expected' => 'red',
+        ];
+        yield 'extract from style with blank declarations' => [
+            'style' => ' ; ; fill: red ; stroke: blue;',
             'expected' => 'red',
         ];
         yield 'empty style returns null' => ['style' => '', 'expected' => null];

@@ -400,6 +400,136 @@ SVG,
         self::assertStringContainsString('1 0 0 rg', $xObject->stream);
     }
 
+    public function testCreateWithEmptySvgStringThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/empty.svg".');
+
+        $factory->create('', '/tmp/empty.svg');
+    }
+
+    public function testCreateWithNonSvgRootElementThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/wrong-root.svg".');
+
+        $factory->create('<?xml version="1.0"?><root></root>', '/tmp/wrong-root.svg');
+    }
+
+    public function testCreateWithMissingDimensionsOrViewBoxThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/no-viewport.svg" must define either a valid viewBox or positive width/height.',
+        );
+
+        $factory->create(
+            '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/no-viewport.svg',
+        );
+    }
+
+    public function testCreateWithZeroDimensionsThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/zero-dims.svg" must define a positive viewBox.',
+        );
+
+        $factory->create(
+            '<svg viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/zero-dims.svg',
+        );
+    }
+
+    public function testCreateWithViewBoxButNegativeHeightThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/negative-height.svg" must define a positive viewBox.',
+        );
+
+        $factory->create(
+            '<svg viewBox="0 0 10 -5" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/negative-height.svg',
+        );
+    }
+
+    public function testCreateWithLeadingSignInNumericDimension(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="+100" height="-50" viewBox="+0 +0 +100 +50" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="100" height="50" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/signed-dims.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 100.0, 50.0], $xObject->dictionary['BBox']);
+    }
+
+    public function testCreateWithFractionalDimensions(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="12.5" height="7.25" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="12.5" height="7.25" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/fractional-dims.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 12.5, 7.25], $xObject->dictionary['BBox']);
+    }
+
+    public function testCreateWithStrokeWidthFromStyleAttribute(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" style="stroke-width:2.5"/>
+</svg>
+SVG,
+            '/tmp/style-stroke.svg',
+        );
+
+        self::assertStringContainsString('2.500000 w', $xObject->stream);
+    }
+
+    public function testCreateWithNegativeStrokeWidthClamped(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="-5"/>
+</svg>
+SVG,
+            '/tmp/negative-stroke.svg',
+        );
+
+        // Negative stroke width should be clamped to 0.0
+        self::assertStringContainsString('0.000000 w', $xObject->stream);
+    }
+
     public static function providePaintModeScenarios(): iterable
     {
         yield 'stroke only path without fill' => [
