@@ -190,9 +190,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $strokes = [];
 
         foreach ($svg->getElementsByTagName('style') as $styleNode) {
-            if (!$styleNode instanceof DOMElement) {
-                continue;
-            }
+            /** @var DOMElement $styleNode */
 
             $css = $styleNode->textContent;
             if ($css === '') {
@@ -233,9 +231,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         $elements = [];
 
         foreach ($svg->getElementsByTagName('*') as $element) {
-            if (!$element instanceof DOMElement) {
-                continue;
-            }
+            /** @var DOMElement $element */
 
             $name = $this->normalizeLocalName($element->localName);
             if (in_array($name, ['path', 'polygon', 'polyline', 'rect', 'circle', 'ellipse', 'line'], true)) {
