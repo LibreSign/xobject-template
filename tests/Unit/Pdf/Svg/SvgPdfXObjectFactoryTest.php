@@ -643,20 +643,20 @@ SVG,
             ['0.0667 0.1333 0.2 rg', '1 0 0 RG', '2.000000 w'],
         ];
 
-                yield 'css class matching applies both rules' => [
-                        <<<'SVG'
+        yield 'css class matching applies both rules' => [
+            <<<'SVG'
 <svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-    <style>
-        .red { fill: #ff0000; }
-        .green { fill: #00ff00; }
-    </style>
-    <rect class="red" x="0" y="0" width="10" height="20" fill="inherit"/>
-    <rect class="green" x="10" y="0" width="10" height="20" fill="inherit"/>
+  <style>
+    .red { fill: #ff0000; }
+    .green { fill: #00ff00; }
+  </style>
+  <rect class="red" x="0" y="0" width="10" height="20" fill="inherit"/>
+  <rect class="green" x="10" y="0" width="10" height="20" fill="inherit"/>
 </svg>
 SVG,
-                        '/tmp/css-rules.svg',
-                        ['1 0 0 rg', '0 1 0 rg'],
-                ];
+            '/tmp/css-rules.svg',
+            ['1 0 0 rg', '0 1 0 rg'],
+        ];
     }
 
     public static function provideDimensionScenarios(): iterable
@@ -711,15 +711,15 @@ SVG,
             [0.0, 0.0, 10000.0, 8000.0],
         ];
 
-                yield 'trimmed dimensions remain numeric floats' => [
-                        <<<'SVG'
+        yield 'trimmed dimensions remain numeric floats' => [
+            <<<'SVG'
 <svg width="  10.5  " height="  20.75  " xmlns="http://www.w3.org/2000/svg">
     <rect x="0" y="0" width="10.5" height="20.75" fill="#000"/>
 </svg>
 SVG,
-                        '/tmp/trimmed-dims.svg',
-                        [0.0, 0.0, 10.5, 20.75],
-                ];
+            '/tmp/trimmed-dims.svg',
+            [0.0, 0.0, 10.5, 20.75],
+        ];
     }
 
     public static function provideStrokeWidthScenarios(): iterable
@@ -772,7 +772,7 @@ SVG,
 SVG,
             '/tmp/default-stroke.svg',
             '1.000000 w',
-                        ['-1.000000 w', '0.000000 w'],
+            ['-1.000000 w', '0.000000 w'],
         ];
 
         yield 'large stroke width' => [
@@ -880,8 +880,8 @@ SVG,
             ['1 0 0 rg', '0 1 0 rg', '0 0 1 rg'],
         ];
 
-                yield 'unrecognized text element is skipped with shape parsing' => [
-                        <<<'SVG'
+        yield 'unrecognized text element is skipped with shape parsing' => [
+            <<<'SVG'
 <svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
     <g>
         <path fill="#ff0000" d="M0,0 L20,20 L20,0 Z"/>
@@ -889,9 +889,9 @@ SVG,
     </g>
 </svg>
 SVG,
-                        '/tmp/element-filter.svg',
-                        ['1 0 0 rg'],
-                ];
+            '/tmp/element-filter.svg',
+            ['1 0 0 rg'],
+        ];
     }
 
     public static function provideColorScenarios(): iterable
@@ -945,17 +945,16 @@ SVG,
             ['1 0 0 rg', '0 1 0 rg'],
         ];
 
-                yield 'inline fill beats style fill' => [
-                        <<<'SVG'
+        yield 'inline fill beats style fill' => [
+            <<<'SVG'
 <svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="0" width="10" height="10" fill="#ff0000" style="fill:#00ff00"/>
+      <rect x="0" y="0" width="10" height="10" fill="#ff0000" style="fill:#00ff00"/>
 </svg>
 SVG,
-                        '/tmp/fill-priority.svg',
-                        ['1 0 0 rg'],
-                        ['0 1 0 rg'],
-                ];
-
+            '/tmp/fill-priority.svg',
+            ['1 0 0 rg'],
+            ['0 1 0 rg'],
+        ];
 
         yield 'rgb color notation' => [
             <<<'SVG'
