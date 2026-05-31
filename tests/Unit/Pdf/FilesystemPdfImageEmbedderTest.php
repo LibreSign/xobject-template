@@ -500,70 +500,9 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     #[DataProvider('svgExtensionBoundaryProvider')]
     public function testEmbedCorrectlyDetectsSvgByFileExtensionBoundary(string $source, bool $shouldBeSvg): void
     {
-        // Pre-build expected images based on file extension detection
         $svgImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-stream');
         $pngImage = new EmbeddedPdfImage(['Type' => '/Image'], 'png-stream');
-
-        // Source reader always returns consistent binary
-        $sourceReader = new class implements FilesystemImageSourceReaderInterface {
-            public function read(string $source): string
-            {
-                return "\x89PNG\r\n\x1a\n";
-            }
-        };
-
-        // Metadata inspector
-        $metadataInspector = new class implements ImageMetadataInspectorInterface {
-            public function detect(string $contents, string $source): array
-            {
-                return [];
-            }
-
-            public function resolveMimeType(array $imageInfo, string $source): string
-            {
-                return 'image/png';
-            }
-        };
-
-        // JPEG factory should never be invoked
-        $jpegFactory = new class implements JpegPdfImageFactoryInterface {
-            public function create(string $contents, array $imageInfo): EmbeddedPdfImage
-            {
-                throw new \RuntimeException('JPEG factory should not be used.');
-            }
-        };
-
-        // PNG factory returns pre-built PNG image
-        $pngFactory = new class ($pngImage) implements PngPdfImageFactoryInterface {
-            public function __construct(private readonly EmbeddedPdfImage $image)
-            {
-            }
-
-            public function create(string $contents): EmbeddedPdfImage
-            {
-                return $this->image;
-            }
-        };
-
-        // SVG factory returns pre-built SVG image
-        $svgFactory = new class ($svgImage) implements SvgPdfXObjectFactoryInterface {
-            public function __construct(private readonly EmbeddedPdfImage $image)
-            {
-            }
-
-            public function create(string $svgContents, string $source): EmbeddedPdfImage
-            {
-                return $this->image;
-            }
-        };
-
-        $embedder = new FilesystemPdfImageEmbedder(
-            $sourceReader,
-            $metadataInspector,
-            $jpegFactory,
-            $pngFactory,
-            $svgFactory,
-        );
+        $embedder = $this->buildSvgDetectionEmbedder($svgImage, $pngImage, "\x89PNG\r\n\x1a\n");
 
         $image = $embedder->embed($source);
 
@@ -605,8 +544,47 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
     {
         $svgImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-stream');
         $pngImage = new EmbeddedPdfImage(['Type' => '/Image'], 'png-stream');
+        $embedder = $this->buildSvgDetectionEmbedder($svgImage, $pngImage, $content);
 
-        $sourceReader = new class ($content) implements FilesystemImageSourceReaderInterface {
+        $image = $embedder->embed('/path/to/image.bin');
+
+        if ($shouldBeSvg) {
+            self::assertSame('/XObject', $image->dictionary['Type']);
+            self::assertSame('/Form', $image->dictionary['Subtype']);
+        } else {
+            self::assertSame('/Image', $image->dictionary['Type']);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{content: string, shouldBeSvg: bool}>
+     */
+    public static function svgContentDetectionProvider(): iterable
+    {
+        yield 'direct svg tag detected by content' => [
+            'content' => '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>',
+            'shouldBeSvg' => true,
+        ];
+        yield 'svg tag with leading whitespace is trimmed and detected' => [
+            'content' => "   \n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"></svg>",
+            'shouldBeSvg' => true,
+        ];
+        yield 'xml declaration followed by svg tag is detected' => [
+            'content' => '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"/>',
+            'shouldBeSvg' => true,
+        ];
+        yield 'xml declaration without svg tag is not detected as svg' => [
+            'content' => '<?xml version="1.0"?><document><item/></document>',
+            'shouldBeSvg' => false,
+        ];
+    }
+
+    private function buildSvgDetectionEmbedder(
+        EmbeddedPdfImage $svgImage,
+        EmbeddedPdfImage $pngImage,
+        string $sourceContent,
+    ): FilesystemPdfImageEmbedder {
+        $sourceReader = new class ($sourceContent) implements FilesystemImageSourceReaderInterface {
             public function __construct(private readonly string $content)
             {
             }
@@ -658,45 +636,13 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
             }
         };
 
-        $embedder = new FilesystemPdfImageEmbedder(
+        return new FilesystemPdfImageEmbedder(
             $sourceReader,
             $metadataInspector,
             $jpegFactory,
             $pngFactory,
             $svgFactory,
         );
-
-        $image = $embedder->embed('/path/to/image.bin');
-
-        if ($shouldBeSvg) {
-            self::assertSame('/XObject', $image->dictionary['Type']);
-            self::assertSame('/Form', $image->dictionary['Subtype']);
-        } else {
-            self::assertSame('/Image', $image->dictionary['Type']);
-        }
-    }
-
-    /**
-     * @return iterable<string, array{content: string, shouldBeSvg: bool}>
-     */
-    public static function svgContentDetectionProvider(): iterable
-    {
-        yield 'direct svg tag detected by content' => [
-            'content' => '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>',
-            'shouldBeSvg' => true,
-        ];
-        yield 'svg tag with leading whitespace is trimmed and detected' => [
-            'content' => "   \n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"></svg>",
-            'shouldBeSvg' => true,
-        ];
-        yield 'xml declaration followed by svg tag is detected' => [
-            'content' => '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"/>',
-            'shouldBeSvg' => true,
-        ];
-        yield 'xml declaration without svg tag is not detected as svg' => [
-            'content' => '<?xml version="1.0"?><document><item/></document>',
-            'shouldBeSvg' => false,
-        ];
     }
 
     /**
