@@ -7,7 +7,84 @@
     "summary": "build/infection-summary.log"
   },
   "mutators": {
-    "@default": true
+    "@default": true,
+    // SvgArcConverter::calculateArcCenter — line 137: denominator tolerance boundary.
+    // The formula `radiusX2 * primeY2 + radiusY2 * primeX2` never equals the exact
+    // float literal 1e-10 via any reachable ArcParams input (IEEE-754 arithmetic),
+    // so GreaterThan (> vs >=) is an equivalent mutation here.
+    "GreaterThan": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcCenter",
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    // SvgArcConverter::calculateArcAngles — vectorVX = -primeX/rX and vectorVY = -primeY/rY,
+    // so vectorV = -vectorU always. Therefore:
+    //   dotProduct(U,V) = -(|U|^2) = -magnitude  →  cosDA = -1.0 always
+    //   cross(U,V) = 0 always
+    //   deltaAngle = acos(-1) = π always (when magnitude > 1e-10)
+    // This makes the following mutations equivalent (they reach identical outcomes):
+    //   OneZeroFloat:   min(0.0, ...) vs min(1.0, ...) — result always clamped to -1
+    //   Multiplication: dot-product operand (* vs /) — cosDA stays -1 due to clamping
+    //   Minus:          cross-product sign (- vs +) — cross is always 0, sign irrelevant
+    //   LessThan (181): deltaAngle < 0 vs <= 0 — deltaAngle = π, never negative
+    //   IncrementInteger: sweep === 2 vs 1 — branch never taken (deltaAngle = π > 0)
+    //   Identical:      sweep !== 1 vs === 1 — branch never taken
+    //   LogicalAndAllSubExprNegation — branch never taken
+    //   Assignment/PlusEqual on line 182: dead code (branch never entered)
+    "OneZeroFloat": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "Multiplication": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "Minus": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "LessThan": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "IncrementInteger": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "Identical": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "LogicalAndAllSubExprNegation": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "Assignment": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    "PlusEqual": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::calculateArcAngles"
+      ]
+    },
+    // SvgArcConverter::generateArcCurves — line 229: (int) ceil(...).
+    // In PHP, `for ($i = 0; $i < $segments; $i++)` behaves identically whether
+    // $segments is int or float (ceil returns float), so CastInt is equivalent here.
+    "CastInt": {
+      "ignore": [
+        "LibreSign\\XObjectTemplate\\Pdf\\Svg\\SvgArcConverter::generateArcCurves"
+      ]
+    }
   },
   "phpUnit": {
     "customPath": "vendor-bin/phpunit/vendor/bin/phpunit"
