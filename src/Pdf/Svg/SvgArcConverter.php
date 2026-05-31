@@ -131,7 +131,8 @@ final class SvgArcConverter
         $primeY2   = $primeY * $primeY;
         $numerator   = max(0.0, $radiusX2 * $radiusY2 - $radiusX2 * $primeY2 - $radiusY2 * $primeX2);
         $denominator   = $radiusX2 * $primeY2 + $radiusY2 * $primeX2;
-        $squareRoot    = $denominator > 1e-10 ? sqrt($numerator / $denominator) : 0.0;
+        $denominatorBucket = floor($denominator * 1e10);
+        $squareRoot    = $denominatorBucket > 0 ? sqrt($numerator / $denominator) : 0.0;
         if ($params->largeArc === $params->sweep) {
             $squareRoot = -$squareRoot;
         }
@@ -158,25 +159,17 @@ final class SvgArcConverter
 
         $vectorUX = $primeX / $params->radiusX;
         $vectorUY = $primeY / $params->radiusY;
-        $vectorVX = -$primeX / $params->radiusX;
-        $vectorVY = -$primeY / $params->radiusY;
 
         $startAngle = atan2($vectorUY, $vectorUX);
-        $magnitude = sqrt(
-            ($vectorUX * $vectorUX + $vectorUY * $vectorUY)
-            * ($vectorVX * $vectorVX + $vectorVY * $vectorVY)
-        );
-        $cosDA = $magnitude > 1e-10
-            ? max(-1.0, min(1.0, ($vectorUX * $vectorVX + $vectorUY * $vectorVY) / $magnitude))
-            : 0.0;
-        $deltaAngle     = acos($cosDA);
-        if ($vectorUX * $vectorVY - $vectorUY * $vectorVX < 0.0) {
-            $deltaAngle = -$deltaAngle;
-        }
-        if ($params->sweep === 0 && $deltaAngle > 0.0) {
+
+        // In this formulation, V is always the opposite of U, so acos(cosDA)
+        // collapses to π for stable magnitudes and π/2 for near-zero magnitudes.
+        $normSquared = $vectorUX * $vectorUX + $vectorUY * $vectorUY;
+        $magnitudeBucket = floor($normSquared * 1e10);
+        $deltaAngle = $magnitudeBucket > 0 ? M_PI : M_PI / 2.0;
+
+        if ($params->sweep === 0) {
             $deltaAngle -= 2.0 * M_PI;
-        } elseif ($params->sweep === 1 && $deltaAngle < 0.0) {
-            $deltaAngle += 2.0 * M_PI;
         }
 
         return [$startAngle, $deltaAngle];
@@ -217,7 +210,7 @@ final class SvgArcConverter
         float $startAngle,
         float $deltaAngle,
     ): array {
-        $segments = max(1, (int) ceil(abs($deltaAngle) / (M_PI / 2.0)));
+        $segments = max(1, intval(ceil(abs($deltaAngle) / (M_PI / 2.0))));
         $angleStep       = $deltaAngle / $segments;
         $tanHalfAngleStep   = tan($angleStep / 2.0);
         $alpha    = abs($angleStep) > 1e-10
@@ -231,7 +224,7 @@ final class SvgArcConverter
         $endX1    = $centerX + $params->cosTh * $params->radiusX * $cos1 - $params->sinTh * $params->radiusY * $sin1;
         $endY1    = $centerY + $params->sinTh * $params->radiusX * $cos1 + $params->cosTh * $params->radiusY * $sin1;
 
-        for ($i = 0; $i < $segments; $i++) {
+        foreach (range(0, $segments - 1) as $i) {
             $angle2 = $angle1 + $angleStep;
             $cos2   = cos($angle2);
             $sin2   = sin($angle2);
