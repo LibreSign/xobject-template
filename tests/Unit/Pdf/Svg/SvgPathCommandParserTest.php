@@ -394,178 +394,44 @@ final class SvgPathCommandParserTest extends TestCase
         );
     }
 
-    public function testConvertPathDataResetsSmoothQuadraticStateAfterLineCommand(): void
-    {
+    #[DataProvider('provideSmoothQuadraticResetScenarios')]
+    public function testConvertPathDataResetsSmoothQuadraticStateAfterStateBreakingCommands(
+        string $pathData,
+        float $height,
+        string $source,
+        string $expectedSnippet,
+    ): void {
         $parser = new SvgPathCommandParser();
 
         $result = $parser->convertPathData(
-            'M 0 0 Q 2 2 4 0 L 5 0 T 7 2',
+            $pathData,
             0.0,
-            10.0,
-            '/tmp/smooth-quadratic-after-line.svg',
+            $height,
+            $source,
             [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         );
 
-        self::assertStringContainsString(
-            '5.000000 10.000000 5.666667 9.333333 7.000000 8.000000 c',
-            $result,
-        );
+        self::assertStringContainsString($expectedSnippet, $result);
     }
 
-    public function testConvertPathDataResetsSmoothQuadraticStateAfterCubicCommand(): void
-    {
+    #[DataProvider('provideFinalCommandScenarios')]
+    public function testConvertPathDataAllowsFinalCommandWithoutMalformedError(
+        string $pathData,
+        float $height,
+        string $source,
+        string $expectedSnippet,
+    ): void {
         $parser = new SvgPathCommandParser();
 
         $result = $parser->convertPathData(
-            'M 0 0 Q 2 2 4 0 C 5 1 6 1 7 0 T 9 2',
+            $pathData,
             0.0,
-            10.0,
-            '/tmp/smooth-quadratic-after-cubic.svg',
+            $height,
+            $source,
             [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         );
 
-        self::assertStringContainsString(
-            '7.000000 10.000000 7.666667 9.333333 9.000000 8.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataResetsSmoothQuadraticStateAfterArcCommand(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 10 Q 2 12 4 10 A 2 2 0 0 1 8 10 T 10 12',
-            0.0,
-            20.0,
-            '/tmp/smooth-quadratic-after-arc.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '8.000000 10.000000 8.666667 9.333333 10.000000 8.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataResetsSmoothQuadraticStateAfterHorizontalCommand(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 Q 2 2 4 0 H 5 T 7 2',
-            0.0,
-            10.0,
-            '/tmp/smooth-quadratic-after-horizontal.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '5.000000 10.000000 5.666667 9.333333 7.000000 8.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataResetsSmoothQuadraticStateAfterVerticalCommand(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 Q 2 2 4 0 V 1 T 6 3',
-            0.0,
-            10.0,
-            '/tmp/smooth-quadratic-after-vertical.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '4.000000 9.000000 4.666667 8.333333 6.000000 7.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataResetsSmoothQuadraticStateAfterClosePath(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 Q 2 2 4 0 Z T 6 2',
-            0.0,
-            10.0,
-            '/tmp/smooth-quadratic-after-close.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '0.000000 10.000000 2.000000 9.333333 6.000000 8.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataAllowsFinalHorizontalCommandWithoutMalformedError(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 H 5',
-            0.0,
-            10.0,
-            '/tmp/final-horizontal.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString('5.000000 10.000000 l', $result);
-    }
-
-    public function testConvertPathDataAllowsFinalVerticalCommandWithoutMalformedError(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 V 5',
-            0.0,
-            10.0,
-            '/tmp/final-vertical.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString('0.000000 5.000000 l', $result);
-    }
-
-    public function testConvertPathDataAllowsFinalCubicCommandWithoutMalformedError(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 C 1 2 3 4 5 6',
-            0.0,
-            20.0,
-            '/tmp/final-cubic.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '1.000000 18.000000 3.000000 16.000000 5.000000 14.000000 c',
-            $result,
-        );
-    }
-
-    public function testConvertPathDataAllowsFinalQuadraticCommandWithoutMalformedError(): void
-    {
-        $parser = new SvgPathCommandParser();
-
-        $result = $parser->convertPathData(
-            'M 0 0 Q 3 5 7 11',
-            0.0,
-            20.0,
-            '/tmp/final-quadratic.svg',
-            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        );
-
-        self::assertStringContainsString(
-            '2.000000 16.666667 4.333333 13.000000 7.000000 9.000000 c',
-            $result,
-        );
+        self::assertStringContainsString($expectedSnippet, $result);
     }
 
     public function testConvertPathDataUsesSubpathStartAsCurrentPointAfterClosePath(): void
@@ -625,6 +491,88 @@ final class SvgPathCommandParserTest extends TestCase
         yield 'unsupported command' => [
             'pathData' => 'M 1 1 R 2 2',
             'expectedMessage' => 'SVG path command "R" is not supported for source "/tmp/invalid.svg".',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{pathData: string, height: float, source: string, expectedSnippet: string}>
+     */
+    public static function provideSmoothQuadraticResetScenarios(): iterable
+    {
+        yield 'after line command' => [
+            'pathData' => 'M 0 0 Q 2 2 4 0 L 5 0 T 7 2',
+            'height' => 10.0,
+            'source' => '/tmp/smooth-quadratic-after-line.svg',
+            'expectedSnippet' => '5.000000 10.000000 5.666667 9.333333 7.000000 8.000000 c',
+        ];
+
+        yield 'after cubic command' => [
+            'pathData' => 'M 0 0 Q 2 2 4 0 C 5 1 6 1 7 0 T 9 2',
+            'height' => 10.0,
+            'source' => '/tmp/smooth-quadratic-after-cubic.svg',
+            'expectedSnippet' => '7.000000 10.000000 7.666667 9.333333 9.000000 8.000000 c',
+        ];
+
+        yield 'after arc command' => [
+            'pathData' => 'M 0 10 Q 2 12 4 10 A 2 2 0 0 1 8 10 T 10 12',
+            'height' => 20.0,
+            'source' => '/tmp/smooth-quadratic-after-arc.svg',
+            'expectedSnippet' => '8.000000 10.000000 8.666667 9.333333 10.000000 8.000000 c',
+        ];
+
+        yield 'after horizontal command' => [
+            'pathData' => 'M 0 0 Q 2 2 4 0 H 5 T 7 2',
+            'height' => 10.0,
+            'source' => '/tmp/smooth-quadratic-after-horizontal.svg',
+            'expectedSnippet' => '5.000000 10.000000 5.666667 9.333333 7.000000 8.000000 c',
+        ];
+
+        yield 'after vertical command' => [
+            'pathData' => 'M 0 0 Q 2 2 4 0 V 1 T 6 3',
+            'height' => 10.0,
+            'source' => '/tmp/smooth-quadratic-after-vertical.svg',
+            'expectedSnippet' => '4.000000 9.000000 4.666667 8.333333 6.000000 7.000000 c',
+        ];
+
+        yield 'after close path command' => [
+            'pathData' => 'M 0 0 Q 2 2 4 0 Z T 6 2',
+            'height' => 10.0,
+            'source' => '/tmp/smooth-quadratic-after-close.svg',
+            'expectedSnippet' => '0.000000 10.000000 2.000000 9.333333 6.000000 8.000000 c',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{pathData: string, height: float, source: string, expectedSnippet: string}>
+     */
+    public static function provideFinalCommandScenarios(): iterable
+    {
+        yield 'final horizontal command' => [
+            'pathData' => 'M 0 0 H 5',
+            'height' => 10.0,
+            'source' => '/tmp/final-horizontal.svg',
+            'expectedSnippet' => '5.000000 10.000000 l',
+        ];
+
+        yield 'final vertical command' => [
+            'pathData' => 'M 0 0 V 5',
+            'height' => 10.0,
+            'source' => '/tmp/final-vertical.svg',
+            'expectedSnippet' => '0.000000 5.000000 l',
+        ];
+
+        yield 'final cubic command' => [
+            'pathData' => 'M 0 0 C 1 2 3 4 5 6',
+            'height' => 20.0,
+            'source' => '/tmp/final-cubic.svg',
+            'expectedSnippet' => '1.000000 18.000000 3.000000 16.000000 5.000000 14.000000 c',
+        ];
+
+        yield 'final quadratic command' => [
+            'pathData' => 'M 0 0 Q 3 5 7 11',
+            'height' => 20.0,
+            'source' => '/tmp/final-quadratic.svg',
+            'expectedSnippet' => '2.000000 16.666667 4.333333 13.000000 7.000000 9.000000 c',
         ];
     }
 }
