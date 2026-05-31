@@ -89,6 +89,8 @@ final class SvgArcConverter
             $params->sinTh,
             $startAngle,
             $deltaAngle,
+            $toX,
+            $toY,
         );
     }
 
@@ -214,6 +216,8 @@ final class SvgArcConverter
      * @param float $sinTh Sine of rotation angle
      * @param float $startAngle Starting angle in radians
      * @param float $dAngle Total angle delta in radians
+     * @param float $targetX Target X endpoint coordinate
+     * @param float $targetY Target Y endpoint coordinate
      * @return array<int, array<int, float>> Array of Bézier curve control points
      */
     private function generateArcCurves(
@@ -225,6 +229,8 @@ final class SvgArcConverter
         float $sinTh,
         float $startAngle,
         float $deltaAngle,
+        float $targetX,
+        float $targetY,
     ): array {
         $segments = max(1, (int) ceil(abs($deltaAngle) / (M_PI / 2.0)));
         $angleStep       = $deltaAngle / $segments;
@@ -247,6 +253,13 @@ final class SvgArcConverter
 
             $endX2  = $centerX + $cosTh * $radiusX * $cos2 - $sinTh * $radiusY * $sin2;
             $endY2  = $centerY + $sinTh * $radiusX * $cos2 + $cosTh * $radiusY * $sin2;
+            
+            // For the last segment, ensure the endpoint is exactly the target point
+            if ($i === $segments - 1) {
+                $endX2 = $targetX;
+                $endY2 = $targetY;
+            }
+            
             $tangentXD1 = -$cosTh * $radiusX * $sin1 - $sinTh * $radiusY * $cos1;
             $tangentYD1 = -$sinTh * $radiusX * $sin1 + $cosTh * $radiusY * $cos1;
             $tangentXD2 = -$cosTh * $radiusX * $sin2 - $sinTh * $radiusY * $cos2;

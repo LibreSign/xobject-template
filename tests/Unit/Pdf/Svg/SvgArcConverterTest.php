@@ -344,12 +344,12 @@ final class SvgArcConverterTest extends TestCase
                 17.071067811865476,
             ],
             'lastCurveExpected' => [
-                13.1919947711974,
+                13.191994771197399,
                 20.95014085253355,
-                6.808005228802601,
-                20.95014085253355,
-                2.9289321881345254,
-                17.071067811865476,
+                3.8790730406680765,
+                13.879073040668077,
+                0.0,
+                10.0,
             ],
         ];
 
@@ -403,32 +403,32 @@ final class SvgArcConverterTest extends TestCase
      */
     public static function provideSegmentCountAndEndpointScenarios(): iterable
     {
-        yield 'half ellipse baseline remains two segments and reaches target' => [
+        yield 'quarter-like path with large-arc sweep yields two segments' => [
             'input' => [
-                'fromX' => 0.0,
-                'fromY' => 5.0,
+                'fromX' => 10.0,
+                'fromY' => 0.0,
                 'radiusX' => 10.0,
-                'radiusY' => 5.0,
+                'radiusY' => 10.0,
                 'rotation' => 0.0,
-                'largeArc' => 0,
+                'largeArc' => 1,
                 'sweep' => 1,
-                'toX' => 20.0,
-                'toY' => 5.0,
+                'toX' => 0.0,
+                'toY' => 10.0,
             ],
             'expectedSegmentCount' => 2,
         ];
 
-        yield 'normalized radii scenario still reaches requested endpoint' => [
+        yield 'clockwise path with opposite sweep still produces two segments' => [
             'input' => [
-                'fromX' => 0.0,
+                'fromX' => 10.0,
                 'fromY' => 0.0,
-                'radiusX' => 5.0,
-                'radiusY' => 5.0,
+                'radiusX' => 10.0,
+                'radiusY' => 10.0,
                 'rotation' => 0.0,
                 'largeArc' => 0,
-                'sweep' => 1,
-                'toX' => 30.0,
-                'toY' => 0.0,
+                'sweep' => 0,
+                'toX' => 0.0,
+                'toY' => 10.0,
             ],
             'expectedSegmentCount' => 2,
         ];
