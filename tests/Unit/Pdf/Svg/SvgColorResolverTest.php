@@ -187,6 +187,107 @@ final class SvgColorResolverTest extends TestCase
         yield 'invalid color' => ['input' => 'chartreuse-ish', 'expected' => null];
     }
 
+    #[DataProvider('provideNormalizeColorWhitespaceScenarios')]
+    public function testNormalizeColorTrimsWhitespaceBeforeProcessing(string $input, ?string $expected): void
+    {
+        $resolver = new SvgColorResolver();
+
+        self::assertSame($expected, $resolver->normalizeColor($input));
+    }
+
+    /**
+     * @return iterable<string, array{input: string, expected: ?string}>
+     */
+    public static function provideNormalizeColorWhitespaceScenarios(): iterable
+    {
+        yield 'trim hex color' => ['input' => '  #aabbcc  ', 'expected' => '#aabbcc'];
+        yield 'trim named color' => ['input' => '  black  ', 'expected' => '#000000'];
+        yield 'trim rgb color' => ['input' => '  rgb(255, 0, 0)  ', 'expected' => '#ff0000'];
+    }
+
+    #[DataProvider('provideResolveFillColorClassExtractionScenarios')]
+    public function testResolveFillColorHandlesClassExtraction(
+        array $attributes,
+        array $classColors,
+        string $expected,
+    ): void
+    {
+        $resolver = new SvgColorResolver();
+        $element = $this->createElement('div', $attributes);
+
+        $result = $resolver->resolveFillColor($element, $classColors);
+
+        self::assertSame($expected, $result);
+    }
+
+    /**
+     * @return iterable<string, array{attributes: array<string, string>, classColors: array<string, string>, expected: string}>
+     */
+    public static function provideResolveFillColorClassExtractionScenarios(): iterable
+    {
+        yield 'multiple spaces keep first matching class' => [
+            'attributes' => ['class' => '  primary   secondary  tertiary  '],
+            'classColors' => [
+                'primary' => '#111111',
+                'secondary' => '#222222',
+                'tertiary' => '#333333',
+            ],
+            'expected' => '#111111',
+        ];
+
+        yield 'empty class falls back to default fill' => [
+            'attributes' => ['class' => ''],
+            'classColors' => ['primary' => '#ff0000'],
+            'expected' => '#000000',
+        ];
+    }
+
+    #[DataProvider('provideNormalizeColorRgbValidationScenarios')]
+    public function testNormalizeColorValidatesRgbChannels(string $input, ?string $expected): void
+    {
+        $resolver = new SvgColorResolver();
+
+        self::assertSame($expected, $resolver->normalizeColor($input));
+    }
+
+    /**
+     * @return iterable<string, array{input: string, expected: ?string}>
+     */
+    public static function provideNormalizeColorRgbValidationScenarios(): iterable
+    {
+        yield 'accepts numeric rgb channels' => ['input' => 'rgb(255, 0, 0)', 'expected' => '#ff0000'];
+        yield 'accepts rgb channels with spaces' => ['input' => 'rgb( 255 , 0 , 0 )', 'expected' => '#ff0000'];
+        yield 'rejects non numeric channels' => ['input' => 'rgb(25a, 0, 0)', 'expected' => null];
+        yield 'rejects negative channels' => ['input' => 'rgb(255, -1, 0)', 'expected' => null];
+        yield 'clamps overflowing channels' => ['input' => 'rgb(256, 0, 0)', 'expected' => '#ff0000'];
+        yield 'rejects alphanumeric suffix' => ['input' => 'rgb(123abc, 0, 0)', 'expected' => null];
+        yield 'rejects alphanumeric prefix' => ['input' => 'rgb(abc123, 0, 0)', 'expected' => null];
+        yield 'rejects embedded spaces inside channel digits' => ['input' => 'rgb(12 3, 0, 0)', 'expected' => null];
+    }
+
+    #[DataProvider('provideExtractColorFromStyleScenarios')]
+    public function testExtractColorFromStyleAttributeHandlesExpectedInputs(string $style, ?string $expected): void
+    {
+        $resolver = new SvgColorResolver();
+
+        $result = $resolver->extractColorFromStyleAttribute($style, 'fill');
+
+        self::assertSame($expected, $result);
+    }
+
+    /**
+     * @return iterable<string, array{style: string, expected: ?string}>
+     */
+    public static function provideExtractColorFromStyleScenarios(): iterable
+    {
+        yield 'extract from multiple declarations' => [
+            'style' => 'fill: red; stroke: blue; opacity: 0.5;',
+            'expected' => 'red',
+        ];
+        yield 'empty style returns null' => ['style' => '', 'expected' => null];
+        yield 'whitespace style returns null' => ['style' => '   ', 'expected' => null];
+    }
+
     private function createElement(string $name, array $attributes = []): DOMElement
     {
         $document = new DOMDocument('1.0', 'UTF-8');

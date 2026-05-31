@@ -314,6 +314,92 @@ SVG,
         ];
     }
 
+    public function testCreateWithViewBoxAndDimensionsCombination(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        // ViewBox takes precedence over width/height
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="100" height="100" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L50,50" stroke="#000000" fill="none"/>
+</svg>
+SVG,
+            '/tmp/viewbox-precedence.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 50.0, 50.0], $xObject->dictionary['BBox']);
+    }
+
+    public function testCreateWithScientificNotationDimensions(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="1e2" height="5e1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L100,50" stroke="#000000" fill="none"/>
+</svg>
+SVG,
+            '/tmp/scientific-notation.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 100.0, 50.0], $xObject->dictionary['BBox']);
+    }
+
+    public function testCreateWithStrokeWidthDefaultValue(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000"/>
+</svg>
+SVG,
+            '/tmp/default-stroke.svg',
+        );
+
+        // Default stroke width is 1.0
+        self::assertStringContainsString('1.000000 w', $xObject->stream);
+    }
+
+    public function testCreateWithZeroStrokeWidth(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="0"/>
+</svg>
+SVG,
+            '/tmp/zero-stroke.svg',
+        );
+
+        // Zero stroke width should be clamped to 0.0
+        self::assertStringContainsString('0.000000 w', $xObject->stream);
+    }
+
+    public function testCreateSkipsUnrecognizedShapeElementsGracefully(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <text x="5" y="5">Ignored</text>
+  <image x="0" y="0" width="10" height="10"/>
+  <rect x="5" y="5" width="10" height="10" fill="#ff0000"/>
+</svg>
+SVG,
+            '/tmp/mixed-elements.svg',
+        );
+
+        // Only rect should be rendered
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
+    }
+
     public static function providePaintModeScenarios(): iterable
     {
         yield 'stroke only path without fill' => [
