@@ -217,8 +217,7 @@ final class SvgColorResolverTest extends TestCase
         array $attributes,
         array $classColors,
         string $expected,
-    ): void
-    {
+    ): void {
         $resolver = new SvgColorResolver();
         $element = $this->createElement('div', $attributes);
 
@@ -228,7 +227,8 @@ final class SvgColorResolverTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{attributes: array<string, string>, classColors: array<string, string>, expected: string}>
+     * @return iterable<string, array{attributes: array<string, string>, classColors: array<string, string>,
+     *     expected: string}>
      */
     public static function provideResolveFillColorClassExtractionScenarios(): iterable
     {
@@ -287,7 +287,10 @@ final class SvgColorResolverTest extends TestCase
         yield 'rejects explicit positive sign' => ['input' => 'rgb(+12, 0, 0)', 'expected' => null];
         yield 'rejects empty channel' => ['input' => 'rgb(, 0, 0)', 'expected' => null];
         yield 'clamps overflowing channels' => ['input' => 'rgb(256, 0, 0)', 'expected' => '#ff0000'];
-        yield 'rejects integer overflow channel' => ['input' => 'rgb(999999999999999999999999, 0, 0)', 'expected' => null];
+        yield 'rejects integer overflow channel' => [
+            'input' => 'rgb(999999999999999999999999, 0, 0)',
+            'expected' => null,
+        ];
         yield 'rejects alphanumeric suffix' => ['input' => 'rgb(123abc, 0, 0)', 'expected' => null];
         yield 'rejects alphanumeric prefix' => ['input' => 'rgb(abc123, 0, 0)', 'expected' => null];
         yield 'rejects embedded spaces inside channel digits' => ['input' => 'rgb(12 3, 0, 0)', 'expected' => null];
