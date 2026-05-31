@@ -344,6 +344,108 @@ final class SvgColorResolverTest extends TestCase
         yield 'whitespace style returns null' => ['style' => '   ', 'expected' => null];
     }
 
+    public function testExtractValueFromStyleAttributeSkipsOnlyWhitespaceDeclarations(): void
+    {
+        $resolver = new SvgColorResolver();
+
+        // Tab and spaces should be skipped, not just empty
+        $result = $resolver->extractValueFromStyleAttribute("  \t \n; fill: red", 'fill');
+        self::assertSame('red', $result);
+
+        // Verify leading whitespace is trimmed from properties
+        $result = $resolver->extractValueFromStyleAttribute("   fill : blue", 'fill');
+        self::assertSame('blue', $result);
+    }
+
+    public function testExtractColorFromStyleAttributeWithAllWhitespaceDeclaration(): void
+    {
+        $resolver = new SvgColorResolver();
+
+        // All whitespace-only declarations should be skipped
+        $result = $resolver->extractColorFromStyleAttribute("  ; \t ; \n ; fill: #123456", 'fill');
+        self::assertSame('#123456', $result);
+    }
+
+    public function testExtractValueFromStyleSkipsWhitespaceOnlyDeclarationBeforeProperty(): void
+    {
+        $resolver = new SvgColorResolver();
+
+        $style = "  \t\n;stroke:none;fill:#aabbcc";
+        $result = $resolver->extractValueFromStyleAttribute($style, 'fill');
+        self::assertSame('#aabbcc', $result);
+    }
+
+    public function testNormalizeColorAlwaysTrimsBothEndsBeforeValidation(): void
+    {
+        $resolver = new SvgColorResolver();
+
+        // Ensure leading/trailing space is always removed
+        $result = $resolver->normalizeColor("\t  #fff \n");
+        self::assertSame('#fff', $result);
+
+        $result = $resolver->normalizeColor("  black  \t");
+        self::assertSame('#000000', $result);
+
+        $result = $resolver->normalizeColor("  rgb(10,20,30)  ");
+        self::assertSame('#0a141e', $result);
+    }
+
+    public function testNormalizeColorRejectsInvalidLogicalConditions(): void
+    {
+        $resolver = new SvgColorResolver();
+
+        // Ensure both conditions in logical OR are required (not just one)
+        $result = $resolver->normalizeColor("   ");
+        self::assertNull($result);
+
+        // Non-hex starting with # should fail
+        $result = $resolver->normalizeColor("#gggggg");
+        self::assertNull($result);
+
+        // Malformed RGB should fail
+        $result = $resolver->normalizeColor("rgb(300,300,300)");
+        self::assertSame('#ffffff', $result);  // Clamped, not rejected
+    }
+
+    public function testParseRgbColorRejectionEdgeCases(): void
+    {
+        $resolver = new SvgColorResolver();
+
+        // These should all fail parsing and return null
+        $result = $resolver->normalizeColor("rgb(invalid,0,0)");
+        self::assertNull($result);
+
+        $result = $resolver->normalizeColor("rgb(-1,0,0)");
+        self::assertNull($result);
+
+        $result = $resolver->normalizeColor("rgb(0,0)");  // Missing channel
+        self::assertNull($result);
+
+        $result = $resolver->normalizeColor("rgb(0,0,0,0)");  // Extra channel
+        self::assertNull($result);
+    }
+
+    public function testExtractClassesNormalizationAndFiltering(): void
+    {
+        $resolver = new SvgColorResolver();
+        $element = $this->createElement('div', ['class' => '  primary   secondary  tertiary  ']);
+
+        // Access private method via reflection to verify extraction
+        $method = new ReflectionMethod(SvgColorResolver::class, 'extractClasses');
+        $method->setAccessible(true);
+
+        $classes = $method->invoke($resolver, '  primary   secondary  tertiary  ');
+        self::assertSame(['primary', 'secondary', 'tertiary'], $classes);
+
+        // Empty class attribute should return empty array
+        $classes = $method->invoke($resolver, '');
+        self::assertSame([], $classes);
+
+        // Whitespace-only class attribute should return empty array (preg_split with PREG_SPLIT_NO_EMPTY filters these)
+        $classes = $method->invoke($resolver, '   ');
+        self::assertSame([], $classes);
+    }
+
     private function createElement(string $name, array $attributes = []): DOMElement
     {
         $document = new DOMDocument('1.0', 'UTF-8');
