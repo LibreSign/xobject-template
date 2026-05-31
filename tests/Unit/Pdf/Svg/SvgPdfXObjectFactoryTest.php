@@ -1,0 +1,790 @@
+<?php
+
+// SPDX-FileCopyrightText: 2026 LibreSign
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+declare(strict_types=1);
+
+namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
+
+use InvalidArgumentException;
+use LibreSign\XObjectTemplate\Pdf\Svg\SvgPdfXObjectFactory;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+final class SvgPdfXObjectFactoryTest extends TestCase
+{
+    public function testCreateBuildsFormXObjectFromPathBasedSvg(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="10" height="8" viewBox="0 0 10 8" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .accent { fill: #112233; }
+  </style>
+  <path class="accent" d="M0,0 L10,0 L10,8 L0,8 z"/>
+</svg>
+SVG,
+            '/tmp/test.svg',
+        );
+
+        self::assertSame('/XObject', $xObject->dictionary['Type']);
+        self::assertSame('/Form', $xObject->dictionary['Subtype']);
+        self::assertSame(1, $xObject->dictionary['FormType']);
+        self::assertSame([0.0, 0.0, 10.0, 8.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('0.0667 0.1333 0.2 rg', $xObject->stream);
+        self::assertStringContainsString('0.000000 8.000000 m', $xObject->stream);
+        self::assertStringContainsString('10.000000 0.000000 l', $xObject->stream);
+        self::assertStringContainsString('h', $xObject->stream);
+        self::assertStringContainsString('f', $xObject->stream);
+    }
+
+    public function testCreateSupportsPolygonAndRectElements(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <polygon fill="#ff0000" points="0,0 10,0 10,10 0,10"/>
+  <rect x="10" y="10" width="10" height="10" style="fill:#00ff00"/>
+</svg>
+SVG,
+            '/tmp/polygon-rect.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 20.0, 20.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
+        self::assertStringContainsString('0.000000 20.000000 m', $xObject->stream);
+        self::assertStringContainsString('0 1 0 rg', $xObject->stream);
+        self::assertStringContainsString('10.000000 10.000000 m', $xObject->stream);
+        self::assertStringContainsString('20.000000 0.000000 l', $xObject->stream);
+    }
+
+    public function testCreateRejectsInvalidSvgPayloads(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/invalid.svg".');
+
+        $factory->create('<html></html>', '/tmp/invalid.svg');
+    }
+
+    #[DataProvider('provideInvalidViewportScenarios')]
+    public function testCreateRejectsInvalidViewportScenarios(string $svg, string $expectedMessage): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($expectedMessage);
+
+        $factory->create($svg, '/tmp/invalid-viewport.svg');
+    }
+
+    public function testCreateSupportsTransformOperationsAndStrokeInheritance(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="40" height="20" viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+  <style>.shape{fill:rgb(10,20,30);stroke:#ff0000;}</style>
+  <g transform="translate(2,3) rotate(10 5 5) scale(1.1,0.9) skewX(3) skewY(2)">
+    <path class="shape" d="M 1,1 L 8,1 H 10 V 5 Z"/>
+  </g>
+  <g stroke="#00ff00" transform="matrix(1,0,0,1,3,0)">
+    <line x1="0" y1="10" x2="10" y2="10" fill="none"/>
+  </g>
+</svg>
+SVG,
+            '/tmp/transforms.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 40.0, 20.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('0.0392 0.0784 0.1176 rg', $xObject->stream);
+        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
+        self::assertStringContainsString('0 1 0 RG', $xObject->stream);
+        self::assertStringContainsString('B', $xObject->stream);
+        self::assertStringContainsString('S', $xObject->stream);
+    }
+
+    public function testCreateSkipsInvalidOrUnpaintedShapesWithoutFailing(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+  <polygon fill="#ff0000" points="0,0 10,0 10"/>
+  <polyline stroke="#ff0000" points="0,0 10"/>
+  <rect x="1" y="1" width="0" height="10" fill="#000"/>
+  <circle cx="8" cy="8" r="0" fill="#000"/>
+  <ellipse cx="12" cy="12" rx="6" ry="0" fill="#000"/>
+  <path d="M 1,1 L 5,5" fill="none" stroke="none"/>
+  <path d="M 2,2 L 9,2" fill="#123456"/>
+</svg>
+SVG,
+            '/tmp/skip-invalid-shapes.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 20.0, 20.0], $xObject->dictionary['BBox']);
+        self::assertStringContainsString('0.0706 0.2039 0.3373 rg', $xObject->stream);
+        self::assertStringContainsString('f', $xObject->stream);
+        self::assertStringNotContainsString('RG', $xObject->stream);
+    }
+
+    public function testCreateRejectsMalformedAndUnsupportedPathCommands(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        try {
+            $factory->create(
+                '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M 1"/></svg>',
+                '/tmp/malformed-path.svg',
+            );
+            self::fail('Expected malformed path to be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            self::assertStringContainsString('Malformed SVG path data', $exception->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('SVG path command "R" is not supported');
+
+        $factory->create(
+            '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M 1,1 R 2,2"/></svg>',
+            '/tmp/unsupported-path.svg',
+        );
+    }
+
+    #[DataProvider('provideSupportedShapeScenarios')]
+    public function testCreateSupportsShapeScenarios(
+        string $svg,
+        string $sourcePath,
+        array $expectedBBox,
+        array $requiredStreamFragments,
+        ?int $minimumCubicBezierOperators = null,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+
+        self::assertSame($expectedBBox, $xObject->dictionary['BBox']);
+
+        foreach ($requiredStreamFragments as $requiredStreamFragment) {
+            self::assertStringContainsString($requiredStreamFragment, $xObject->stream);
+        }
+
+        if ($minimumCubicBezierOperators !== null) {
+            self::assertGreaterThanOrEqual($minimumCubicBezierOperators, substr_count($xObject->stream, ' c'));
+        }
+    }
+
+    #[DataProvider('providePaintModeScenarios')]
+    public function testCreateRendersPaintModeScenarios(
+        string $svg,
+        string $sourcePath,
+        array $expectedBBox,
+        array $requiredStreamFragments,
+        array $forbiddenStreamFragments,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create($svg, $sourcePath);
+
+        self::assertSame($expectedBBox, $xObject->dictionary['BBox']);
+
+        foreach ($requiredStreamFragments as $requiredStreamFragment) {
+            self::assertStringContainsString($requiredStreamFragment, $xObject->stream);
+        }
+
+        foreach ($forbiddenStreamFragments as $forbiddenStreamFragment) {
+            self::assertStringNotContainsString($forbiddenStreamFragment, $xObject->stream);
+        }
+    }
+
+    #[DataProvider('provideDimensionScenarios')]
+    public function testCreateWithVariousDimensions(
+        string $svg,
+        string $sourcePath,
+        array $expectedBBox,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        self::assertSame($expectedBBox, $xObject->dictionary['BBox']);
+    }
+
+    #[DataProvider('provideStrokeWidthScenarios')]
+    public function testCreateWithVariousStrokeWidths(
+        string $svg,
+        string $sourcePath,
+        string $expectedStrokeContent,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        self::assertStringContainsString($expectedStrokeContent, $xObject->stream);
+    }
+
+    #[DataProvider('provideShapeElementScenarios')]
+    public function testCreateWithShapeElements(
+        string $svg,
+        string $sourcePath,
+        array $requiredStreamFragments,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        foreach ($requiredStreamFragments as $fragment) {
+            self::assertStringContainsString($fragment, $xObject->stream);
+        }
+    }
+
+    #[DataProvider('provideColorScenarios')]
+    public function testCreateWithColorScenarios(
+        string $svg,
+        string $sourcePath,
+        array $expectedColors,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        foreach ($expectedColors as $color) {
+            self::assertStringContainsString($color, $xObject->stream);
+        }
+    }
+
+    public function testCreateSkipsUnrecognizedShapeElementsGracefully(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <text x="5" y="5">Ignored</text>
+  <image x="0" y="0" width="10" height="10"/>
+  <rect x="5" y="5" width="10" height="10" fill="#ff0000"/>
+</svg>
+SVG,
+            '/tmp/mixed-elements.svg',
+        );
+
+        // Only rect should be rendered
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
+    }
+
+    public function testCreateWithEmptySvgStringThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/empty.svg".');
+
+        $factory->create('', '/tmp/empty.svg');
+    }
+
+    public function testCreateWithNonSvgRootElementThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/wrong-root.svg".');
+
+        $factory->create('<?xml version="1.0"?><root></root>', '/tmp/wrong-root.svg');
+    }
+
+    public function testCreateWithMissingDimensionsOrViewBoxThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/no-viewport.svg" must define either a valid viewBox or positive width/height.',
+        );
+
+        $factory->create(
+            '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/no-viewport.svg',
+        );
+    }
+
+    public function testCreateWithZeroDimensionsThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/zero-dims.svg" must define a positive viewBox.',
+        );
+
+        $factory->create(
+            '<svg viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/zero-dims.svg',
+        );
+    }
+
+    public function testCreateWithViewBoxButNegativeHeightThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/negative-height.svg" must define a positive viewBox.',
+        );
+
+        $factory->create(
+            '<svg viewBox="0 0 10 -5" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/negative-height.svg',
+        );
+    }
+
+    public function testCreateWithViewBoxAndDimensionsCombination(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        // ViewBox takes precedence over width/height
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="100" height="100" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L50,50" stroke="#000000" fill="none"/>
+</svg>
+SVG,
+            '/tmp/viewbox-precedence.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 50.0, 50.0], $xObject->dictionary['BBox']);
+    }
+
+    public static function provideSupportedShapeScenarios(): iterable
+    {
+        yield 'quadratic bezier path commands' => [
+            <<<'SVG'
+<svg width="20" height="10" viewBox="0 0 20 10" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#0000ff" d="M 0,10 Q 5,0 10,10 T 20,10"/>
+</svg>
+SVG,
+            '/tmp/quadratic.svg',
+            [0.0, 0.0, 20.0, 10.0],
+            [' c', '0 0 1 rg'],
+            null,
+        ];
+
+        yield 'absolute arc command' => [
+            <<<'SVG'
+<svg width="20" height="10" viewBox="0 0 20 10" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#ff0000" d="M 0,5 A 10,5 0 0 1 20,5 Z"/>
+</svg>
+SVG,
+            '/tmp/arc.svg',
+            [0.0, 0.0, 20.0, 10.0],
+            [' c', '1 0 0 rg'],
+            null,
+        ];
+
+        yield 'relative arc command' => [
+            <<<'SVG'
+<svg width="20" height="10" viewBox="0 0 20 10" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#00ff00" d="M 0,5 a 10,5 0 0 1 20,0 Z"/>
+</svg>
+SVG,
+            '/tmp/arc-relative.svg',
+            [0.0, 0.0, 20.0, 10.0],
+            [' c'],
+            null,
+        ];
+
+        yield 'circle element' => [
+            <<<'SVG'
+<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="10" cy="10" r="8" fill="#ff8800"/>
+</svg>
+SVG,
+            '/tmp/circle.svg',
+            [0.0, 0.0, 20.0, 20.0],
+            [],
+            4,
+        ];
+
+        yield 'ellipse element' => [
+            <<<'SVG'
+<svg width="30" height="20" viewBox="0 0 30 20" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="15" cy="10" rx="14" ry="8" fill="#0088ff"/>
+</svg>
+SVG,
+            '/tmp/ellipse.svg',
+            [0.0, 0.0, 30.0, 20.0],
+            [],
+            4,
+        ];
+
+        yield 'fill inherited from parent group' => [
+            <<<'SVG'
+<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+  <g fill="#ff0000">
+    <path d="M 0,0 L 10,0 L 10,10 L 0,10 Z"/>
+  </g>
+</svg>
+SVG,
+            '/tmp/group-fill.svg',
+            [0.0, 0.0, 10.0, 10.0],
+            ['1 0 0 rg'],
+            null,
+        ];
+
+        yield 'group translate transform affects child geometry' => [
+            <<<'SVG'
+<svg width="20" height="10" viewBox="0 0 20 10" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(5,0)">
+    <rect x="1" y="7" width="3" height="2" fill="#000000"/>
+  </g>
+</svg>
+SVG,
+            '/tmp/group-transform-translate.svg',
+            [0.0, 0.0, 20.0, 10.0],
+            ['6.000000 3.000000 m', '9.000000 1.000000 l'],
+            null,
+        ];
+    }
+
+    public static function provideInvalidViewportScenarios(): iterable
+    {
+        yield 'invalid viewbox token count' => [
+            '<svg viewBox="0 0 10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'Invalid viewBox in SVG source "/tmp/invalid-viewport.svg".',
+        ];
+
+        yield 'non-positive viewbox dimensions' => [
+            '<svg viewBox="0 0 0 10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
+        ];
+
+        yield 'missing usable viewport and dimensions' => [
+            '<svg width="auto" height="" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define either a valid viewBox or positive width/height.',
+        ];
+    }
+
+    public static function provideDimensionScenarios(): iterable
+    {
+        yield 'signed dimensions with leading +' => [
+            <<<'SVG'
+<svg width="+100" height="+50" viewBox="+0 +0 +100 +50" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="100" height="50" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/signed-dims.svg',
+            [0.0, 0.0, 100.0, 50.0],
+        ];
+
+        yield 'fractional dimensions' => [
+            <<<'SVG'
+<svg width="12.5" height="7.25" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="12.5" height="7.25" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/fractional-dims.svg',
+            [0.0, 0.0, 12.5, 7.25],
+        ];
+
+        yield 'scientific notation in dimensions' => [
+            <<<'SVG'
+<svg width="1e2" height="5e1" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="100" height="50" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/scientific-notation.svg',
+            [0.0, 0.0, 100.0, 50.0],
+        ];
+
+        yield 'very small fractional dimensions' => [
+            <<<'SVG'
+<svg width="0.125" height="0.25" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="0.125" height="0.25" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/tiny-dims.svg',
+            [0.0, 0.0, 0.125, 0.25],
+        ];
+
+        yield 'large dimensions' => [
+            <<<'SVG'
+<svg width="10000" height="8000" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="10000" height="8000" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/large-dims.svg',
+            [0.0, 0.0, 10000.0, 8000.0],
+        ];
+    }
+
+    public static function provideStrokeWidthScenarios(): iterable
+    {
+        yield 'stroke width from style attribute' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" style="stroke-width:2.5"/>
+</svg>
+SVG,
+            '/tmp/style-stroke.svg',
+            '2.500000 w',
+        ];
+
+        yield 'negative stroke width clamped to 0' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="-5"/>
+</svg>
+SVG,
+            '/tmp/negative-stroke.svg',
+            '0.000000 w',
+        ];
+
+        yield 'stroke width with leading whitespace' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="   2.5   "/>
+</svg>
+SVG,
+            '/tmp/whitespace-stroke.svg',
+            '2.500000 w',
+        ];
+
+        yield 'zero stroke width from style' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" style="stroke-width:0"/>
+</svg>
+SVG,
+            '/tmp/zero-style-stroke.svg',
+            '0.000000 w',
+        ];
+
+        yield 'default stroke width is 1.0' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L20,20" stroke="#ff0000" fill="none"/>
+</svg>
+SVG,
+            '/tmp/default-stroke.svg',
+            '1.000000 w',
+        ];
+
+        yield 'large stroke width' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="10"/>
+</svg>
+SVG,
+            '/tmp/large-stroke.svg',
+            '10.000000 w',
+        ];
+
+        yield 'very small stroke width' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="0.01"/>
+</svg>
+SVG,
+            '/tmp/tiny-stroke.svg',
+            '0.010000 w',
+        ];
+    }
+
+    public static function provideShapeElementScenarios(): iterable
+    {
+        yield 'path element' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" fill="#ff0000"/>
+</svg>
+SVG,
+            '/tmp/path.svg',
+            ['1 0 0 rg'],
+        ];
+
+        yield 'rect element' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="20" height="20" fill="#00ff00"/>
+</svg>
+SVG,
+            '/tmp/rect.svg',
+            ['0 1 0 rg'],
+        ];
+
+        yield 'circle element with colors' => [
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="15" cy="15" r="10" fill="#0000ff"/>
+</svg>
+SVG,
+            '/tmp/circle-elem.svg',
+            ['0 0 1 rg'],
+        ];
+
+        yield 'ellipse element' => [
+            <<<'SVG'
+<svg width="30" height="20" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="15" cy="10" rx="15" ry="10" fill="#ff6600"/>
+</svg>
+SVG,
+            '/tmp/ellipse-elem.svg',
+            ['1 0.4 0 rg'],
+        ];
+
+        yield 'line element' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <line x1="0" y1="0" x2="20" y2="20" stroke="#000000" stroke-width="2"/>
+</svg>
+SVG,
+            '/tmp/line-elem.svg',
+            ['0 0 0 RG', '2.000000 w'],
+        ];
+
+        yield 'polyline element' => [
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <polyline points="0,0 10,10 20,0" stroke="#aa00aa" stroke-width="1.5"/>
+</svg>
+SVG,
+            '/tmp/polyline-elem.svg',
+            ['0.6667 0 0.6667 RG', '1.500000 w'],
+        ];
+
+        yield 'polygon element' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="10,0 20,20 0,20" fill="#ffff00"/>
+</svg>
+SVG,
+            '/tmp/polygon-elem.svg',
+            ['1 1 0 rg'],
+        ];
+
+        yield 'multiple elements mixed' => [
+            <<<'SVG'
+<svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" fill="#ff0000"/>
+  <rect x="10" y="10" width="10" height="10" fill="#00ff00"/>
+  <circle cx="25" cy="25" r="5" fill="#0000ff"/>
+</svg>
+SVG,
+            '/tmp/multi-shapes-elem.svg',
+            ['1 0 0 rg', '0 1 0 rg', '0 0 1 rg'],
+        ];
+    }
+
+    public static function provideColorScenarios(): iterable
+    {
+        yield 'class-based colors from style block' => [
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .red { fill: #ff0000; }
+    .green { fill: #00ff00; }
+    .blue { fill: #0000ff; }
+  </style>
+  <path class="red" d="M0,0 L10,10"/>
+  <rect class="green" x="10" y="10" width="10" height="10"/>
+  <circle class="blue" cx="25" cy="25" r="5"/>
+</svg>
+SVG,
+            '/tmp/multi-class-styles.svg',
+            ['1 0 0 rg', '0 1 0 rg', '0 0 1 rg'],
+        ];
+
+        yield 'stroke and fill from style attribute' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L20,20" style="stroke:#ff0000;stroke-width:3.5;fill:none"/>
+</svg>
+SVG,
+            '/tmp/style-stroke-fill.svg',
+            ['3.500000 w', '1 0 0 RG'],
+        ];
+
+        yield 'fill and stroke combined' => [
+            <<<'SVG'
+<svg width="15" height="15" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="15" height="15" style="fill:#123456;stroke:#ff0000;stroke-width:1.5"/>
+</svg>
+SVG,
+            '/tmp/both-colors-style.svg',
+            ['0.0706 0.2039 0.3373 rg', '1 0 0 RG', '1.500000 w'],
+        ];
+
+        yield 'element case insensitivity with colors' => [
+            <<<'SVG'
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <PATH fill="#ff0000" d="M0,0 L10,10"/>
+  <RECT x="2" y="2" width="6" height="6" fill="#00ff00"/>
+</svg>
+SVG,
+            '/tmp/uppercase-colors.svg',
+            ['1 0 0 rg', '0 1 0 rg'],
+        ];
+
+
+        yield 'rgb color notation' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="10" height="10" fill="rgb(255, 0, 0)"/>
+</svg>
+SVG,
+            '/tmp/rgb-color.svg',
+            ['1 0 0 rg'],
+        ];
+    }
+
+    public static function providePaintModeScenarios(): iterable
+    {
+        yield 'stroke only path without fill' => [
+            <<<'SVG'
+<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+  <path style="fill:none;stroke:#0000ff;stroke-width:2" d="M 0,5 L 10,5"/>
+</svg>
+SVG,
+            '/tmp/stroke-only.svg',
+            [0.0, 0.0, 10.0, 10.0],
+            ['0 0 1 RG', '2.000000 w', "\nS\n"],
+            ["\nf\n"],
+        ];
+
+        yield 'fill and stroke together' => [
+            <<<'SVG'
+<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="8" height="8" fill="#ff0000" stroke="#000000" stroke-width="1"/>
+</svg>
+SVG,
+            '/tmp/fill-stroke.svg',
+            [0.0, 0.0, 10.0, 10.0],
+            ['1 0 0 rg', '0 0 0 RG', "\nB\n"],
+            [],
+        ];
+
+        yield 'fill only without stroke' => [
+            <<<'SVG'
+<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="5" cy="5" r="4" fill="#00ff00" stroke="none"/>
+</svg>
+SVG,
+            '/tmp/fill-only.svg',
+            [0.0, 0.0, 10.0, 10.0],
+            ['0 1 0 rg', "\nf\n"],
+            ['RG', "\nS\n"],
+        ];
+
+        yield 'stroke attribute with color' => [
+            <<<'SVG'
+<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="8" height="8" stroke="#ff00ff" stroke-width="2" fill="none"/>
+</svg>
+SVG,
+            '/tmp/stroke-attr.svg',
+            [0.0, 0.0, 10.0, 10.0],
+            ['1 0 1 RG', '2.000000 w', "\nS\n"],
+            ["\nf\n"],
+        ];
+    }
+}

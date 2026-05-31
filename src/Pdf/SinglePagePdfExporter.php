@@ -127,14 +127,10 @@ final readonly class SinglePagePdfExporter
         $imageReferences = [];
 
         foreach ($xObjects as $alias => $resource) {
-            if (($resource['Subtype'] ?? null) !== '/Image') {
-                throw new InvalidArgumentException(sprintf('Unsupported XObject subtype for "%s".', $alias));
-            }
-
             $source = $resource['Source'] ?? null;
             if (!is_string($source) || $source === '') {
                 throw new InvalidArgumentException(
-                    sprintf('Image resource "%s" must expose a non-empty Source.', $alias),
+                    sprintf('XObject resource "%s" must expose a non-empty Source.', $alias),
                 );
             }
 

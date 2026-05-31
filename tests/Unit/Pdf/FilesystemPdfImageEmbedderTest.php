@@ -13,6 +13,7 @@ use LibreSign\XObjectTemplate\Pdf\FilesystemImageSourceReaderInterface;
 use LibreSign\XObjectTemplate\Pdf\ImageMetadataInspectorInterface;
 use LibreSign\XObjectTemplate\Pdf\Jpeg\JpegPdfImageFactoryInterface;
 use LibreSign\XObjectTemplate\Pdf\Png\PngPdfImageFactoryInterface;
+use LibreSign\XObjectTemplate\Pdf\Svg\SvgPdfXObjectFactoryInterface;
 use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
 use LibreSign\XObjectTemplate\Tests\Support\UsesTemporaryFiles;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -109,6 +110,62 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
         );
 
         self::assertSame($expectedImage, $embedder->embed('/tmp/virtual-image.png'));
+    }
+
+    public function testEmbedSupportsSvgSourcesViaInjectedFactory(): void
+    {
+        $expectedImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-form-stream');
+        $embedder = new FilesystemPdfImageEmbedder(
+            new class implements FilesystemImageSourceReaderInterface {
+                public function read(string $source): string
+                {
+                    return '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
+                }
+            },
+            new class implements ImageMetadataInspectorInterface {
+                public function detect(string $contents, string $source): array
+                {
+                    throw new \RuntimeException('Metadata inspector should not run for native SVG embeds.');
+                }
+
+                public function resolveMimeType(array $imageInfo, string $source): string
+                {
+                    throw new \RuntimeException('MIME resolution should not run for native SVG embeds.');
+                }
+            },
+            new class implements JpegPdfImageFactoryInterface {
+                public function create(string $contents, array $imageInfo): EmbeddedPdfImage
+                {
+                    throw new \RuntimeException('JPEG factory should not be used for SVG images.');
+                }
+            },
+            new class ($expectedImage) implements PngPdfImageFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $expectedImage)
+                {
+                }
+
+                public function create(string $contents): EmbeddedPdfImage
+                {
+                    throw new \RuntimeException('PNG factory should not be used for SVG images.');
+                }
+            },
+            new class ($expectedImage) implements SvgPdfXObjectFactoryInterface {
+                public function __construct(private readonly EmbeddedPdfImage $expectedImage)
+                {
+                }
+
+                public function create(string $svgContents, string $source): EmbeddedPdfImage
+                {
+                    if (str_contains($svgContents, '<svg') === false || $source !== '/tmp/virtual-image.svg') {
+                        throw new \RuntimeException('Unexpected SVG payload for native SVG embedding.');
+                    }
+
+                    return $this->expectedImage;
+                }
+            },
+        );
+
+        self::assertSame($expectedImage, $embedder->embed('/tmp/virtual-image.svg'));
     }
 
     public function testEmbedReturnsPredictorBackedImageForOpaqueRgbPng(): void
@@ -438,6 +495,109 @@ final class FilesystemPdfImageEmbedderTest extends TestCase
             gzuncompress($image->stream),
         );
         self::assertSame("\x00\x40\x80\x00\xc0\xff", gzuncompress($image->softMask->stream));
+    }
+
+    #[DataProvider('svgExtensionBoundaryProvider')]
+    public function testEmbedCorrectlyDetectsSvgByFileExtensionBoundary(string $source, bool $shouldBeSvg): void
+    {
+        // Pre-build expected images based on file extension detection
+        $svgImage = new EmbeddedPdfImage(['Type' => '/XObject', 'Subtype' => '/Form'], 'svg-stream');
+        $pngImage = new EmbeddedPdfImage(['Type' => '/Image'], 'png-stream');
+
+        // Source reader always returns consistent binary
+        $sourceReader = new class implements FilesystemImageSourceReaderInterface {
+            public function read(string $source): string
+            {
+                return "\x89PNG\r\n\x1a\n";
+            }
+        };
+
+        // Metadata inspector
+        $metadataInspector = new class implements ImageMetadataInspectorInterface {
+            public function detect(string $contents, string $source): array
+            {
+                return [];
+            }
+
+            public function resolveMimeType(array $imageInfo, string $source): string
+            {
+                return 'image/png';
+            }
+        };
+
+        // JPEG factory should never be invoked
+        $jpegFactory = new class implements JpegPdfImageFactoryInterface {
+            public function create(string $contents, array $imageInfo): EmbeddedPdfImage
+            {
+                throw new \RuntimeException('JPEG factory should not be used.');
+            }
+        };
+
+        // PNG factory returns pre-built PNG image
+        $pngFactory = new class ($pngImage) implements PngPdfImageFactoryInterface {
+            public function __construct(private readonly EmbeddedPdfImage $image)
+            {
+            }
+
+            public function create(string $contents): EmbeddedPdfImage
+            {
+                return $this->image;
+            }
+        };
+
+        // SVG factory returns pre-built SVG image
+        $svgFactory = new class ($svgImage) implements SvgPdfXObjectFactoryInterface {
+            public function __construct(private readonly EmbeddedPdfImage $image)
+            {
+            }
+
+            public function create(string $svgContents, string $source): EmbeddedPdfImage
+            {
+                return $this->image;
+            }
+        };
+
+        $embedder = new FilesystemPdfImageEmbedder(
+            $sourceReader,
+            $metadataInspector,
+            $jpegFactory,
+            $pngFactory,
+            $svgFactory,
+        );
+
+        $image = $embedder->embed($source);
+
+        if ($shouldBeSvg) {
+            self::assertSame('/XObject', $image->dictionary['Type']);
+            self::assertSame('/Form', $image->dictionary['Subtype']);
+        } else {
+            self::assertSame('/Image', $image->dictionary['Type']);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{source: string, shouldBeSvg: bool}>
+     */
+    public static function svgExtensionBoundaryProvider(): iterable
+    {
+        yield 'SVG extension detected' => ['source' => '/path/to/file.svg', 'shouldBeSvg' => true];
+        yield 'SVGZ extension detected' => ['source' => '/path/to/file.svgz', 'shouldBeSvg' => true];
+        yield 'SVG extension case-insensitive uppercase' => [
+            'source' => '/path/to/file.SVG',
+            'shouldBeSvg' => true,
+        ];
+        yield 'SVG extension case-insensitive mixed' => [
+            'source' => '/path/to/file.Svg',
+            'shouldBeSvg' => true,
+        ];
+        yield 'SVG in middle of filename not detected as SVG' => [
+            'source' => '/path/svg.backup',
+            'shouldBeSvg' => false,
+        ];
+        yield 'SVG in filename but different extension' => [
+            'source' => '/path/my.svg.txt',
+            'shouldBeSvg' => false,
+        ];
     }
 
     /**

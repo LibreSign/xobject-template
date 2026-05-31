@@ -1,18 +1,27 @@
 # SPDX-FileCopyrightText: 2026 LibreSign
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-name: lint
+name: Lint php
 
-on:
-  pull_request:
-  push:
-    branches: [main]
+on: pull_request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-php-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
-  lint:
+  php-lint:
     runs-on: ubuntu-latest
+    name: php-lint
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Detect minimum PHP from composer.json
         id: php_min
         run: |
@@ -22,6 +31,6 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ steps.php_min.outputs.version }}
-      - run: composer install --no-interaction --prefer-dist
-      - run: composer bin all install --no-interaction --prefer-dist
-      - run: composer lint
+
+      - name: Lint
+        run: composer run php:lint
