@@ -83,7 +83,7 @@ final readonly class SvgPathCommandParser
 
         while ($index < $tokenCount) {
             $token = $tokens[$index];
-            if (preg_match('/^[A-Za-z]$/', $token) === 1) {
+            if ($this->isCommandToken($token)) {
                 $currentCommand = $token;
                 ++$index;
             }
@@ -174,7 +174,7 @@ final readonly class SvgPathCommandParser
         $state->lastCubicControlX = null;
         $state->lastCubicControlY = null;
 
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
             $nextX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
             $nextY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
@@ -195,7 +195,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
             $nextX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
             $nextY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
@@ -214,7 +214,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 1, $context->source);
             $state->currentX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
             [$lineX, $lineY] = $this->transformResolver->applyTransformToPoint(
@@ -241,7 +241,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 1, $context->source);
             $state->currentY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[0]);
             [$lineX, $lineY] = $this->transformResolver->applyTransformToPoint(
@@ -268,7 +268,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 6, $context->source);
             $startX1 = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
             $startY1 = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
@@ -308,7 +308,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 4, $context->source);
             $startX1 = $this->reflectControlPoint($state->lastCubicControlX, $state->currentX);
             $startY1 = $this->reflectControlPoint($state->lastCubicControlY, $state->currentY);
@@ -348,7 +348,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 4, $context->source);
                 $qcpX = $this->resolveCoord($isRelative, $state->currentX, $coordinates[0]);
                 $qcpY = $this->resolveCoord($isRelative, $state->currentY, $coordinates[1]);
@@ -390,7 +390,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 2, $context->source);
             $qcpX = $this->reflectControlPoint($state->prevQuadCpX, $state->currentX);
             $qcpY = $this->reflectControlPoint($state->prevQuadCpY, $state->currentY);
@@ -431,7 +431,7 @@ final readonly class SvgPathCommandParser
         PathParsingState $state,
         PathCommandContext $context,
     ): void {
-        while ($index < $tokenCount && preg_match('/^[A-Za-z]$/', $tokens[$index]) !== 1) {
+        while ($index < $tokenCount && !$this->isCommandToken($tokens[$index])) {
             $coordinates = $this->pathNumberReader->readPathNumbers($tokens, $index, 7, $context->source);
             $radiusX       = abs($coordinates[0]);
             $radiusY       = abs($coordinates[1]);
@@ -506,6 +506,11 @@ final readonly class SvgPathCommandParser
     private function resolveCoord(bool $isRelative, float $current, float $coord): float
     {
         return $isRelative ? $current + $coord : $coord;
+    }
+
+    private function isCommandToken(string $token): bool
+    {
+        return strlen($token) === 1 && ctype_alpha($token);
     }
 
     /**
