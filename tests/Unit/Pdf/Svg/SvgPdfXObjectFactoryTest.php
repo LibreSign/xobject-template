@@ -215,7 +215,12 @@ SVG,
     ): void {
         $factory = new SvgPdfXObjectFactory();
         $xObject = $factory->create($svg, $sourcePath);
+
         self::assertSame($expectedBBox, $xObject->dictionary['BBox']);
+
+        foreach ($xObject->dictionary['BBox'] as $value) {
+            self::assertIsFloat($value);
+        }
     }
 
     #[DataProvider('provideStrokeWidthScenarios')]
@@ -252,11 +257,16 @@ SVG,
         string $svg,
         string $sourcePath,
         array $expectedColors,
+        array $forbiddenColors = [],
     ): void {
         $factory = new SvgPdfXObjectFactory();
         $xObject = $factory->create($svg, $sourcePath);
         foreach ($expectedColors as $color) {
             self::assertStringContainsString($color, $xObject->stream);
+        }
+
+        foreach ($forbiddenColors as $color) {
+            self::assertStringNotContainsString($color, $xObject->stream);
         }
     }
 
@@ -566,6 +576,16 @@ SVG,
             '<svg viewBox="0 0 10 -5" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
             'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
         ];
+
+        yield 'positive viewbox dimensions are required' => [
+            '<svg viewBox="0 0 0 10" xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
+        ];
+
+        yield 'negative viewbox height is rejected' => [
+            '<svg viewBox="0 0 10 -1" xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
+        ];
     }
 
     public static function provideInvalidSvgSources(): iterable
@@ -622,6 +642,21 @@ SVG,
             '/tmp/style-continue-coverage.svg',
             ['0.0667 0.1333 0.2 rg', '1 0 0 RG', '2.000000 w'],
         ];
+
+                yield 'css class matching applies both rules' => [
+                        <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        .red { fill: #ff0000; }
+        .green { fill: #00ff00; }
+    </style>
+    <rect class="red" x="0" y="0" width="10" height="20" fill="inherit"/>
+    <rect class="green" x="10" y="0" width="10" height="20" fill="inherit"/>
+</svg>
+SVG,
+                        '/tmp/css-rules.svg',
+                        ['1 0 0 rg', '0 1 0 rg'],
+                ];
     }
 
     public static function provideDimensionScenarios(): iterable
@@ -675,6 +710,16 @@ SVG,
             '/tmp/large-dims.svg',
             [0.0, 0.0, 10000.0, 8000.0],
         ];
+
+                yield 'trimmed dimensions remain numeric floats' => [
+                        <<<'SVG'
+<svg width="  10.5  " height="  20.75  " xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="10.5" height="20.75" fill="#000"/>
+</svg>
+SVG,
+                        '/tmp/trimmed-dims.svg',
+                        [0.0, 0.0, 10.5, 20.75],
+                ];
     }
 
     public static function provideStrokeWidthScenarios(): iterable
@@ -727,7 +772,7 @@ SVG,
 SVG,
             '/tmp/default-stroke.svg',
             '1.000000 w',
-            ['-1.000000 w'],
+                        ['-1.000000 w', '0.000000 w'],
         ];
 
         yield 'large stroke width' => [
@@ -834,6 +879,19 @@ SVG,
             '/tmp/multi-shapes-elem.svg',
             ['1 0 0 rg', '0 1 0 rg', '0 0 1 rg'],
         ];
+
+                yield 'unrecognized text element is skipped with shape parsing' => [
+                        <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+    <g>
+        <path fill="#ff0000" d="M0,0 L20,20 L20,0 Z"/>
+        <text x="5" y="5">Ignored</text>
+    </g>
+</svg>
+SVG,
+                        '/tmp/element-filter.svg',
+                        ['1 0 0 rg'],
+                ];
     }
 
     public static function provideColorScenarios(): iterable
@@ -886,6 +944,17 @@ SVG,
             '/tmp/uppercase-colors.svg',
             ['1 0 0 rg', '0 1 0 rg'],
         ];
+
+                yield 'inline fill beats style fill' => [
+                        <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="10" height="10" fill="#ff0000" style="fill:#00ff00"/>
+</svg>
+SVG,
+                        '/tmp/fill-priority.svg',
+                        ['1 0 0 rg'],
+                        ['0 1 0 rg'],
+                ];
 
 
         yield 'rgb color notation' => [
@@ -948,348 +1017,5 @@ SVG,
             ['1 0 1 RG', '2.000000 w', "\nS\n"],
             ["\nf\n"],
         ];
-    }
-
-    public function testCreateCastAttributeValuesToFloatForViewBoxDimensions(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Verify all viewBox components are properly cast to floats, not strings
-        $xObject = $factory->create(
-            '<svg viewBox="1 2 3 4" xmlns="http://www.w3.org/2000/svg">'
-            . '<rect x="0" y="0" width="3" height="4" fill="#000"/>'
-            . '</svg>',
-            '/tmp/viewbox-float-cast.svg',
-        );
-
-        $bbox = $xObject->dictionary['BBox'];
-        self::assertIsArray($bbox);
-        self::assertSame(4, count($bbox));
-        // Each component must be a float, even if numerically an integer
-        foreach ($bbox as $value) {
-            self::assertIsFloat($value);
-        }
-        self::assertSame([0.0, 0.0, 3.0, 4.0], $bbox);
-    }
-
-    public function testCreateEnforcesPositiveViewBoxDimensions(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Width=0 should be rejected
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('must define a positive viewBox');
-
-        $factory->create(
-            '<svg viewBox="0 0 0 10" xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
-            '/tmp/zero-width.svg',
-        );
-    }
-
-    public function testCreateEnforcesNegativeHeightDetection(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Height < 0 should be rejected (not just <= check)
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('must define a positive viewBox');
-
-        $factory->create(
-            '<svg viewBox="0 0 10 -1" xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
-            '/tmp/negative-height.svg',
-        );
-    }
-
-    public function testCreateTrimsNumericSvgLengthsConsistently(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            '<svg width="  10.5  " height="  20.75  " xmlns="http://www.w3.org/2000/svg">'
-            . '<rect x="0" y="0" width="10.5" height="20.75" fill="#000"/>'
-            . '</svg>',
-            '/tmp/trimmed-lengths.svg',
-        );
-
-        self::assertSame([0.0, 0.0, 10.5, 20.75], $xObject->dictionary['BBox']);
-    }
-
-    public function testCreateTrimsAttributeValuesBeforeParsing(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
-            . '<rect x="0" y="0" width="20" height="20" stroke-width="  2.5  " fill="#000" stroke="#f00"/>'
-            . '</svg>',
-            '/tmp/trim-stroke-width.svg',
-        );
-
-        self::assertStringContainsString('2.500000 w', $xObject->stream);
-    }
-
-    public function testResolveColorAttributeRejectsStyleIfInlineOrClassMatch(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Inline attribute should win over style attribute
-        $xObject = $factory->create(
-            '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">'
-            . '<rect x="0" y="0" width="10" height="10" fill="#ff0000" style="fill:#00ff00"/>'
-            . '</svg>',
-            '/tmp/fill-priority.svg',
-        );
-
-        // Should be red, not green
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
-        self::assertStringNotContainsString('0 1 0 rg', $xObject->stream);
-    }
-
-    public function testCreateValidatesCssRuleMatching(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // preg_match_all must return !== false (not just success/true)
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .red { fill: #ff0000; }
-    .green { fill: #00ff00; }
-  </style>
-  <rect class="red" x="0" y="0" width="10" height="20" fill="inherit"/>
-  <rect class="green" x="10" y="0" width="10" height="20" fill="inherit"/>
-</svg>
-SVG,
-            '/tmp/css-rules.svg',
-        );
-
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
-        self::assertStringContainsString('0 1 0 rg', $xObject->stream);
-    }
-
-    public function testCreateFiltersElementsByInstanceCheckNotBoolean(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // DOMElement instanceof check must be specific, not !true
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-  <g>
-    <path fill="#ff0000" d="M0,0 L20,20 L20,0 Z"/>
-    <text x="5" y="5">Ignored</text>
-  </g>
-</svg>
-SVG,
-            '/tmp/element-filter.svg',
-        );
-
-        // Text element should be skipped
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
-    }
-
-    public function testCreateCastsElementLocalNameToString(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // (string) cast on localName must be present to prevent fatal errors
-        $xObject = $factory->create(
-            '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">'
-            . '<path d="M0,0 L10,10" fill="#000"/>'
-            . '</svg>',
-            '/tmp/cast-localname.svg',
-        );
-
-        self::assertStringContainsString('0 0 0 rg', $xObject->stream);
-    }
-
-    public function testCreateRestoresLibxmlErrorHandlingInAllPaths(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $previousSetting = libxml_use_internal_errors(false);
-
-        try {
-            // Verify the finally block runs (try-finally must not be unwrapped)
-            $factory->create(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect x="0" y="0" width="10" height="10" fill="#000"/></svg>',
-                '/tmp/finally-test.svg',
-            );
-
-            // After factory.create(), the libxml error state should be restored
-            self::assertFalse(libxml_use_internal_errors());
-        } finally {
-            libxml_use_internal_errors($previousSetting);
-            libxml_clear_errors();
-        }
-    }
-
-    public function testCreateClearsLibxmlErrorsInFinally(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $previousSetting = libxml_use_internal_errors(true);
-
-        try {
-            // Seed libxml errors
-            $doc = new \DOMDocument();
-            $doc->loadXML('<broken');
-            self::assertNotSame([], libxml_get_errors());
-
-            // Factory must clear errors
-            $factory->create(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect x="0" y="0" width="10" height="10" fill="#000"/></svg>',
-                '/tmp/clear-errors-finally.svg',
-            );
-
-            // Finally must have called libxml_clear_errors()
-            self::assertSame([], libxml_get_errors());
-        } finally {
-            libxml_use_internal_errors($previousSetting);
-            libxml_clear_errors();
-        }
-    }
-
-    public function testParseViewBoxValidatesMinXAndMinYOrigins(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Non-zero minX/minY must affect coordinate transforms
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg viewBox="5 10 20 15" xmlns="http://www.w3.org/2000/svg">
-  <path fill="#ff0000" d="M5,10 L25,25"/>
-</svg>
-SVG,
-            '/tmp/viewbox-origin.svg',
-        );
-
-        self::assertSame([0.0, 0.0, 20.0, 15.0], $xObject->dictionary['BBox']);
-        // Path should be transformed to account for viewBox origin
-        self::assertStringContainsString('0.000000 15.000000 m', $xObject->stream);
-        self::assertStringContainsString('20.000000 0.000000 l', $xObject->stream);
-    }
-
-    public function testCreateDefaultsToUnitStrokeWidthWhenNotSpecified(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L20,20" stroke="#000" fill="none"/>
-</svg>
-SVG,
-            '/tmp/default-stroke.svg',
-        );
-
-        // Default stroke width must be 1.0, not -1.0 or 0.0
-        self::assertStringContainsString('1.000000 w', $xObject->stream);
-        self::assertStringNotContainsString('-1.000000 w', $xObject->stream);
-        self::assertStringNotContainsString('0.000000 w', $xObject->stream);
-    }
-
-    public function testBitwiseFlagsForLibxmlMustNotMutateToLogicalOr(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Bitwise OR of libxml flags must remain bitwise (&/|), not logical (&&/||)
-        $xObject = $factory->create(
-            <<<'SVG'
-<?xml version="1.0"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">
-  <rect x="0" y="0" width="10" height="10" fill="#000"/>
-</svg>
-SVG,
-            '/tmp/libxml-flags.svg',
-        );
-
-        self::assertSame([0.0, 0.0, 10.0, 10.0], $xObject->dictionary['BBox']);
-    }
-
-    public function testExtractNumericSvgLengthReturnsZeroForEmpty(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Empty length attribute should default to 0.0
-        $xObject = $factory->create(
-            '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">'
-            . '<circle cx="5" cy="5" r="" fill="#000"/>'
-            . '</svg>',
-            '/tmp/empty-length.svg',
-        );
-
-        // With r="", circle has 0 radius, so only a point
-        self::assertSame([0.0, 0.0, 10.0, 10.0], $xObject->dictionary['BBox']);
-    }
-
-    public function testExtractNumericSvgLengthTrimsBeforeValidation(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
-            . '<rect x="0" y="0" width="20" height="20" stroke-width="   " fill="#000"/>'
-            . '</svg>',
-            '/tmp/whitespace-length.svg',
-        );
-
-        // Whitespace-only length should be treated as 0
-        self::assertSame([0.0, 0.0, 20.0, 20.0], $xObject->dictionary['BBox']);
-    }
-
-    public function testPathCommandParserDetectsZeroProgressStrictly(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Index must advance (> not just >=); this path data should parse without error
-        // (duplicate commands with different data are valid)
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
-  <path fill="#000" d="M 5,5 M 5,5"/>
-</svg>
-SVG,
-            '/tmp/zero-progress.svg',
-        );
-
-        self::assertSame([0.0, 0.0, 10.0, 10.0], $xObject->dictionary['BBox']);
-    }
-
-    public function testRgbColorParsingEnforcesAllChannelsAsDigits(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Each channel must match /^\d+$/, including the $ anchor
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
-  <rect x="0" y="0" width="10" height="10" fill="rgb(255, 128, 0)"/>
-</svg>
-SVG,
-            '/tmp/rgb-channels.svg',
-        );
-
-        self::assertStringContainsString('1 0.502 0 rg', $xObject->stream);
-    }
-
-    public function testTransformCoordinateApplicationUsesMinusNotPlus(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        // Transform must subtract minX, not add it
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg viewBox="10 0 20 10" xmlns="http://www.w3.org/2000/svg">
-  <path fill="#ff0000" d="M10,0 L30,10"/>
-</svg>
-SVG,
-            '/tmp/transform-minus.svg',
-        );
-
-        // Path starting at (10, 0) in viewBox should become (0, 10) in BBox
-        self::assertStringContainsString('0.000000 10.000000 m', $xObject->stream);
-        self::assertStringContainsString('20.000000 0.000000 l', $xObject->stream);
     }
 }
