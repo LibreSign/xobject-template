@@ -82,6 +82,7 @@ final readonly class SvgPathCommandParser
         $currentCommand = null;
 
         while ($index < $tokenCount) {
+            $previousIndex = $index;
             $token = $tokens[$index];
             if ($this->isCommandToken($token)) {
                 $currentCommand = $token;
@@ -106,6 +107,10 @@ final readonly class SvgPathCommandParser
                 $state,
                 $context,
             );
+
+            if ($index <= $previousIndex) {
+                throw new InvalidArgumentException(sprintf('Malformed SVG path data in "%s".', $context->source));
+            }
         }
     }
 
