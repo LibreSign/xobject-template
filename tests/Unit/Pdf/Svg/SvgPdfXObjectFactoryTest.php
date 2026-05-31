@@ -205,6 +205,155 @@ SVG,
         }
     }
 
+    #[DataProvider('provideDimensionScenarios')]
+    public function testCreateWithVariousDimensions(
+        string $svg,
+        string $sourcePath,
+        array $expectedBBox,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        self::assertSame($expectedBBox, $xObject->dictionary['BBox']);
+    }
+
+    #[DataProvider('provideStrokeWidthScenarios')]
+    public function testCreateWithVariousStrokeWidths(
+        string $svg,
+        string $sourcePath,
+        string $expectedStrokeContent,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        self::assertStringContainsString($expectedStrokeContent, $xObject->stream);
+    }
+
+    #[DataProvider('provideShapeElementScenarios')]
+    public function testCreateWithShapeElements(
+        string $svg,
+        string $sourcePath,
+        array $requiredStreamFragments,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        foreach ($requiredStreamFragments as $fragment) {
+            self::assertStringContainsString($fragment, $xObject->stream);
+        }
+    }
+
+    #[DataProvider('provideColorScenarios')]
+    public function testCreateWithColorScenarios(
+        string $svg,
+        string $sourcePath,
+        array $expectedColors,
+    ): void {
+        $factory = new SvgPdfXObjectFactory();
+        $xObject = $factory->create($svg, $sourcePath);
+        foreach ($expectedColors as $color) {
+            self::assertStringContainsString($color, $xObject->stream);
+        }
+    }
+
+    public function testCreateSkipsUnrecognizedShapeElementsGracefully(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <text x="5" y="5">Ignored</text>
+  <image x="0" y="0" width="10" height="10"/>
+  <rect x="5" y="5" width="10" height="10" fill="#ff0000"/>
+</svg>
+SVG,
+            '/tmp/mixed-elements.svg',
+        );
+
+        // Only rect should be rendered
+        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
+    }
+
+    public function testCreateWithEmptySvgStringThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/empty.svg".');
+
+        $factory->create('', '/tmp/empty.svg');
+    }
+
+    public function testCreateWithNonSvgRootElementThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/wrong-root.svg".');
+
+        $factory->create('<?xml version="1.0"?><root></root>', '/tmp/wrong-root.svg');
+    }
+
+    public function testCreateWithMissingDimensionsOrViewBoxThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/no-viewport.svg" must define either a valid viewBox or positive width/height.',
+        );
+
+        $factory->create(
+            '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/no-viewport.svg',
+        );
+    }
+
+    public function testCreateWithZeroDimensionsThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/zero-dims.svg" must define a positive viewBox.',
+        );
+
+        $factory->create(
+            '<svg viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/zero-dims.svg',
+        );
+    }
+
+    public function testCreateWithViewBoxButNegativeHeightThrows(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'SVG source "/tmp/negative-height.svg" must define a positive viewBox.',
+        );
+
+        $factory->create(
+            '<svg viewBox="0 0 10 -5" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            '/tmp/negative-height.svg',
+        );
+    }
+
+    public function testCreateWithViewBoxAndDimensionsCombination(): void
+    {
+        $factory = new SvgPdfXObjectFactory();
+
+        // ViewBox takes precedence over width/height
+        $xObject = $factory->create(
+            <<<'SVG'
+<svg width="100" height="100" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L50,50" stroke="#000000" fill="none"/>
+</svg>
+SVG,
+            '/tmp/viewbox-precedence.svg',
+        );
+
+        self::assertSame([0.0, 0.0, 50.0, 50.0], $xObject->dictionary['BBox']);
+    }
+
     public static function provideSupportedShapeScenarios(): iterable
     {
         yield 'quadratic bezier path commands' => [
@@ -314,227 +463,205 @@ SVG,
         ];
     }
 
-    public function testCreateWithViewBoxAndDimensionsCombination(): void
+    public static function provideDimensionScenarios(): iterable
     {
-        $factory = new SvgPdfXObjectFactory();
-
-        // ViewBox takes precedence over width/height
-        $xObject = $factory->create(
+        yield 'signed dimensions with leading +' => [
             <<<'SVG'
-<svg width="100" height="100" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L50,50" stroke="#000000" fill="none"/>
-</svg>
-SVG,
-            '/tmp/viewbox-precedence.svg',
-        );
-
-        self::assertSame([0.0, 0.0, 50.0, 50.0], $xObject->dictionary['BBox']);
-    }
-
-    public function testCreateWithScientificNotationDimensions(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="1e2" height="5e1" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L100,50" stroke="#000000" fill="none"/>
-</svg>
-SVG,
-            '/tmp/scientific-notation.svg',
-        );
-
-        self::assertSame([0.0, 0.0, 100.0, 50.0], $xObject->dictionary['BBox']);
-    }
-
-    public function testCreateWithStrokeWidthDefaultValue(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L10,10" stroke="#000000"/>
-</svg>
-SVG,
-            '/tmp/default-stroke.svg',
-        );
-
-        // Default stroke width is 1.0
-        self::assertStringContainsString('1.000000 w', $xObject->stream);
-    }
-
-    public function testCreateWithZeroStrokeWidth(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L10,10" stroke="#000000" stroke-width="0"/>
-</svg>
-SVG,
-            '/tmp/zero-stroke.svg',
-        );
-
-        // Zero stroke width should be clamped to 0.0
-        self::assertStringContainsString('0.000000 w', $xObject->stream);
-    }
-
-    public function testCreateSkipsUnrecognizedShapeElementsGracefully(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-  <text x="5" y="5">Ignored</text>
-  <image x="0" y="0" width="10" height="10"/>
-  <rect x="5" y="5" width="10" height="10" fill="#ff0000"/>
-</svg>
-SVG,
-            '/tmp/mixed-elements.svg',
-        );
-
-        // Only rect should be rendered
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
-    }
-
-    public function testCreateWithEmptySvgStringThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/empty.svg".');
-
-        $factory->create('', '/tmp/empty.svg');
-    }
-
-    public function testCreateWithNonSvgRootElementThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/wrong-root.svg".');
-
-        $factory->create('<?xml version="1.0"?><root></root>', '/tmp/wrong-root.svg');
-    }
-
-    public function testCreateWithMissingDimensionsOrViewBoxThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/no-viewport.svg" must define either a valid viewBox or positive width/height.',
-        );
-
-        $factory->create(
-            '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
-            '/tmp/no-viewport.svg',
-        );
-    }
-
-    public function testCreateWithZeroDimensionsThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/zero-dims.svg" must define a positive viewBox.',
-        );
-
-        $factory->create(
-            '<svg viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
-            '/tmp/zero-dims.svg',
-        );
-    }
-
-    public function testCreateWithViewBoxButNegativeHeightThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/negative-height.svg" must define a positive viewBox.',
-        );
-
-        $factory->create(
-            '<svg viewBox="0 0 10 -5" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
-            '/tmp/negative-height.svg',
-        );
-    }
-
-    public function testCreateWithLeadingSignInNumericDimension(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="+100" height="-50" viewBox="+0 +0 +100 +50" xmlns="http://www.w3.org/2000/svg">
+<svg width="+100" height="+50" viewBox="+0 +0 +100 +50" xmlns="http://www.w3.org/2000/svg">
   <rect x="0" y="0" width="100" height="50" fill="#000000"/>
 </svg>
 SVG,
             '/tmp/signed-dims.svg',
-        );
+            [0.0, 0.0, 100.0, 50.0],
+        ];
 
-        self::assertSame([0.0, 0.0, 100.0, 50.0], $xObject->dictionary['BBox']);
-    }
-
-    public function testCreateWithFractionalDimensions(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'fractional dimensions' => [
             <<<'SVG'
 <svg width="12.5" height="7.25" xmlns="http://www.w3.org/2000/svg">
   <rect x="0" y="0" width="12.5" height="7.25" fill="#000000"/>
 </svg>
 SVG,
             '/tmp/fractional-dims.svg',
-        );
+            [0.0, 0.0, 12.5, 7.25],
+        ];
 
-        self::assertSame([0.0, 0.0, 12.5, 7.25], $xObject->dictionary['BBox']);
+        yield 'scientific notation in dimensions' => [
+            <<<'SVG'
+<svg width="1e2" height="5e1" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="100" height="50" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/scientific-notation.svg',
+            [0.0, 0.0, 100.0, 50.0],
+        ];
+
+        yield 'very small fractional dimensions' => [
+            <<<'SVG'
+<svg width="0.125" height="0.25" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="0.125" height="0.25" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/tiny-dims.svg',
+            [0.0, 0.0, 0.125, 0.25],
+        ];
+
+        yield 'large dimensions' => [
+            <<<'SVG'
+<svg width="10000" height="8000" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="10000" height="8000" fill="#000000"/>
+</svg>
+SVG,
+            '/tmp/large-dims.svg',
+            [0.0, 0.0, 10000.0, 8000.0],
+        ];
     }
 
-    public function testCreateWithStrokeWidthFromStyleAttribute(): void
+    public static function provideStrokeWidthScenarios(): iterable
     {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'stroke width from style attribute' => [
             <<<'SVG'
 <svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
   <path d="M0,0 L10,10" stroke="#000000" style="stroke-width:2.5"/>
 </svg>
 SVG,
             '/tmp/style-stroke.svg',
-        );
+            '2.500000 w',
+        ];
 
-        self::assertStringContainsString('2.500000 w', $xObject->stream);
-    }
-
-    public function testCreateWithNegativeStrokeWidthClamped(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'negative stroke width clamped to 0' => [
             <<<'SVG'
 <svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
   <path d="M0,0 L10,10" stroke="#000000" stroke-width="-5"/>
 </svg>
 SVG,
             '/tmp/negative-stroke.svg',
-        );
+            '0.000000 w',
+        ];
 
-        // Negative stroke width should be clamped to 0.0
-        self::assertStringContainsString('0.000000 w', $xObject->stream);
+        yield 'stroke width with leading whitespace' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="   2.5   "/>
+</svg>
+SVG,
+            '/tmp/whitespace-stroke.svg',
+            '2.500000 w',
+        ];
+
+        yield 'zero stroke width from style' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" style="stroke-width:0"/>
+</svg>
+SVG,
+            '/tmp/zero-style-stroke.svg',
+            '0.000000 w',
+        ];
+
+        yield 'default stroke width is 1.0' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L20,20" stroke="#ff0000" fill="none"/>
+</svg>
+SVG,
+            '/tmp/default-stroke.svg',
+            '1.000000 w',
+        ];
+
+        yield 'large stroke width' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="10"/>
+</svg>
+SVG,
+            '/tmp/large-stroke.svg',
+            '10.000000 w',
+        ];
+
+        yield 'very small stroke width' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" stroke="#000000" stroke-width="0.01"/>
+</svg>
+SVG,
+            '/tmp/tiny-stroke.svg',
+            '0.010000 w',
+        ];
     }
 
-    public function testCreateWithMultipleShapesIteratesAllElements(): void
+    public static function provideShapeElementScenarios(): iterable
     {
-        $factory = new SvgPdfXObjectFactory();
+        yield 'path element' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,0 L10,10" fill="#ff0000"/>
+</svg>
+SVG,
+            '/tmp/path.svg',
+            ['1 0 0 rg'],
+        ];
 
-        $xObject = $factory->create(
+        yield 'rect element' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="20" height="20" fill="#00ff00"/>
+</svg>
+SVG,
+            '/tmp/rect.svg',
+            ['0 1 0 rg'],
+        ];
+
+        yield 'circle element with colors' => [
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="15" cy="15" r="10" fill="#0000ff"/>
+</svg>
+SVG,
+            '/tmp/circle-elem.svg',
+            ['0 0 1 rg'],
+        ];
+
+        yield 'ellipse element' => [
+            <<<'SVG'
+<svg width="30" height="20" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="15" cy="10" rx="15" ry="10" fill="#ff6600"/>
+</svg>
+SVG,
+            '/tmp/ellipse-elem.svg',
+            ['1 0.4 0 rg'],
+        ];
+
+        yield 'line element' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <line x1="0" y1="0" x2="20" y2="20" stroke="#000000" stroke-width="2"/>
+</svg>
+SVG,
+            '/tmp/line-elem.svg',
+            ['0 0 0 RG', '2.000000 w'],
+        ];
+
+        yield 'polyline element' => [
+            <<<'SVG'
+<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+  <polyline points="0,0 10,10 20,0" stroke="#aa00aa" stroke-width="1.5"/>
+</svg>
+SVG,
+            '/tmp/polyline-elem.svg',
+            ['0.6667 0 0.6667 RG', '1.500000 w'],
+        ];
+
+        yield 'polygon element' => [
+            <<<'SVG'
+<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="10,0 20,20 0,20" fill="#ffff00"/>
+</svg>
+SVG,
+            '/tmp/polygon-elem.svg',
+            ['1 1 0 rg'],
+        ];
+
+        yield 'multiple elements mixed' => [
             <<<'SVG'
 <svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
   <path d="M0,0 L10,10" fill="#ff0000"/>
@@ -542,20 +669,14 @@ SVG,
   <circle cx="25" cy="25" r="5" fill="#0000ff"/>
 </svg>
 SVG,
-            '/tmp/multi-shapes.svg',
-        );
-
-        // All three elements should be rendered
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);  // red
-        self::assertStringContainsString('0 1 0 rg', $xObject->stream);  // green
-        self::assertStringContainsString('0 0 1 rg', $xObject->stream);  // blue
+            '/tmp/multi-shapes-elem.svg',
+            ['1 0 0 rg', '0 1 0 rg', '0 0 1 rg'],
+        ];
     }
 
-    public function testCreateWithMultipleClassStyles(): void
+    public static function provideColorScenarios(): iterable
     {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'class-based colors from style block' => [
             <<<'SVG'
 <svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
   <style>
@@ -569,140 +690,30 @@ SVG,
 </svg>
 SVG,
             '/tmp/multi-class-styles.svg',
-        );
+            ['1 0 0 rg', '0 1 0 rg', '0 0 1 rg'],
+        ];
 
-        // All class-based colors should be applied
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);
-        self::assertStringContainsString('0 1 0 rg', $xObject->stream);
-        self::assertStringContainsString('0 0 1 rg', $xObject->stream);
-    }
-
-    public function testCreateWithStyleAndAttributeStroke(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'stroke and fill from style attribute' => [
             <<<'SVG'
 <svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L20,20" style="stroke:#ff0000;stroke-width:3.5" fill="none"/>
+  <path d="M0,0 L20,20" style="stroke:#ff0000;stroke-width:3.5;fill:none"/>
 </svg>
 SVG,
-            '/tmp/style-stroke-width.svg',
-        );
+            '/tmp/style-stroke-fill.svg',
+            ['3.500000 w', '1 0 0 RG'],
+        ];
 
-        self::assertStringContainsString('3.500000 w', $xObject->stream);
-        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
-    }
-
-    public function testCreateWithFillAndStrokeFromStyle(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'fill and stroke combined' => [
             <<<'SVG'
 <svg width="15" height="15" xmlns="http://www.w3.org/2000/svg">
   <rect x="0" y="0" width="15" height="15" style="fill:#123456;stroke:#ff0000;stroke-width:1.5"/>
 </svg>
 SVG,
-            '/tmp/both-from-style.svg',
-        );
+            '/tmp/both-colors-style.svg',
+            ['0.0706 0.2039 0.3373 rg', '1 0 0 RG', '1.500000 w'],
+        ];
 
-        self::assertStringContainsString('0.0706 0.2039 0.3373 rg', $xObject->stream);  // #123456
-        self::assertStringContainsString('1 0 0 RG', $xObject->stream);                   // #ff0000
-        self::assertStringContainsString('1.500000 w', $xObject->stream);
-    }
-
-    public function testCreateWithEllipseElement(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="30" height="20" xmlns="http://www.w3.org/2000/svg">
-  <ellipse cx="15" cy="10" rx="15" ry="10" fill="#ff6600" stroke="#0099cc" stroke-width="2"/>
-</svg>
-SVG,
-            '/tmp/ellipse.svg',
-        );
-
-        self::assertStringContainsString('1 0.4 0 rg', $xObject->stream);     // #ff6600
-        self::assertStringContainsString('0 0.6 0.8 RG', $xObject->stream);  // #0099cc
-    }
-
-    public function testCreateWithLineElement(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-  <line x1="0" y1="0" x2="20" y2="20" stroke="#000000" stroke-width="2" fill="none"/>
-</svg>
-SVG,
-            '/tmp/line.svg',
-        );
-
-        self::assertStringContainsString('0 0 0 RG', $xObject->stream);
-        self::assertStringContainsString('2.000000 w', $xObject->stream);
-        self::assertStringContainsString('S', $xObject->stream);  // stroke only
-    }
-
-    public function testCreateWithPolylineElement(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
-  <polyline points="0,0 10,10 20,0" stroke="#aa00aa" stroke-width="1.5" fill="none"/>
-</svg>
-SVG,
-            '/tmp/polyline.svg',
-        );
-
-        self::assertStringContainsString('0.6667 0 0.6667 RG', $xObject->stream);  // #aa00aa
-        self::assertStringContainsString('1.500000 w', $xObject->stream);
-    }
-
-    public function testCreateWithCircleElement(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="15" cy="15" r="10" fill="#00aa00" stroke="#0000ff"/>
-</svg>
-SVG,
-            '/tmp/circle.svg',
-        );
-
-        self::assertStringContainsString('0 0.6667 0 rg', $xObject->stream);   // #00aa00
-        self::assertStringContainsString('0 0 1 RG', $xObject->stream);       // #0000ff
-    }
-
-    public function testCreateWithWhitespaceInStrokeWidthAttribute(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L10,10" stroke="#000000" stroke-width="   2.5   "/>
-</svg>
-SVG,
-            '/tmp/whitespace-stroke.svg',
-        );
-
-        // Whitespace should be trimmed
-        self::assertStringContainsString('2.500000 w', $xObject->stream);
-    }
-
-    public function testCreateDetectsElementsRegardlessOfCase(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'element case insensitivity with colors' => [
             <<<'SVG'
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
@@ -710,70 +721,20 @@ SVG,
   <RECT x="2" y="2" width="6" height="6" fill="#00ff00"/>
 </svg>
 SVG,
-            '/tmp/uppercase-elements.svg',
-        );
+            '/tmp/uppercase-colors.svg',
+            ['1 0 0 rg', '0 1 0 rg'],
+        ];
 
-        // Elements should be detected regardless of case
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);  // red from path
-        self::assertStringContainsString('0 1 0 rg', $xObject->stream);  // green from rect
-    }
 
-    public function testCreateHandlesZeroStrokeWidthFromStyle(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
+        yield 'rgb color notation' => [
             <<<'SVG'
 <svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L10,10" stroke="#000000" style="stroke-width:0"/>
+  <rect x="0" y="0" width="10" height="10" fill="rgb(255, 0, 0)"/>
 </svg>
 SVG,
-            '/tmp/zero-style-stroke.svg',
-        );
-
-        self::assertStringContainsString('0.000000 w', $xObject->stream);
-    }
-
-    public function testCreateWithinArrayCheck(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="50" height="50" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L10,10" fill="#ff0000"/>
-  <polygon points="20,20 30,20 25,30" fill="#00ff00"/>
-  <rect x="5" y="5" width="5" height="5" fill="#ffff00"/>
-  <circle cx="40" cy="40" r="5" fill="#ff00ff"/>
-</svg>
-SVG,
-            '/tmp/all-shapes.svg',
-        );
-
-        // All valid shapes should be rendered
-        self::assertStringContainsString('1 0 0 rg', $xObject->stream);      // red from path
-        self::assertStringContainsString('0 1 0 rg', $xObject->stream);      // green from polygon
-        self::assertStringContainsString('1 1 0 rg', $xObject->stream);      // yellow from rect
-        self::assertStringContainsString('1 0 1 rg', $xObject->stream);      // magenta from circle
-    }
-
-    public function testCreateUsesCorrectDefaultStrokeWidth(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0,0 L20,20" stroke="#ff0000" fill="none"/>
-</svg>
-SVG,
-            '/tmp/default-strokewidth-correct.svg',
-        );
-
-        // Default stroke-width should be exactly 1.0
-        self::assertStringContainsString('1.000000 w', $xObject->stream);
-        // Should not be 0.0
-        self::assertFalse(str_contains($xObject->stream, '0.000000 w'));
+            '/tmp/rgb-color.svg',
+            ['1 0 0 rg'],
+        ];
     }
 
     public static function providePaintModeScenarios(): iterable
@@ -800,6 +761,30 @@ SVG,
             [0.0, 0.0, 10.0, 10.0],
             ['1 0 0 rg', '0 0 0 RG', "\nB\n"],
             [],
+        ];
+
+        yield 'fill only without stroke' => [
+            <<<'SVG'
+<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="5" cy="5" r="4" fill="#00ff00" stroke="none"/>
+</svg>
+SVG,
+            '/tmp/fill-only.svg',
+            [0.0, 0.0, 10.0, 10.0],
+            ['0 1 0 rg', "\nf\n"],
+            ['RG', "\nS\n"],
+        ];
+
+        yield 'stroke attribute with color' => [
+            <<<'SVG'
+<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="8" height="8" stroke="#ff00ff" stroke-width="2" fill="none"/>
+</svg>
+SVG,
+            '/tmp/stroke-attr.svg',
+            [0.0, 0.0, 10.0, 10.0],
+            ['1 0 1 RG', '2.000000 w', "\nS\n"],
+            ["\nf\n"],
         ];
     }
 }
