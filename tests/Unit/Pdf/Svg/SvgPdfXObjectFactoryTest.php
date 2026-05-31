@@ -64,24 +64,18 @@ SVG,
         self::assertStringContainsString('20.000000 0.000000 l', $xObject->stream);
     }
 
-    public function testCreateRejectsInvalidSvgPayloads(): void
-    {
+    #[DataProvider('provideInvalidSvgSources')]
+    public function testCreateRejectsInvalidSvgSources(
+        string $svg,
+        string $sourcePath,
+        string $expectedMessage,
+    ): void {
         $factory = new SvgPdfXObjectFactory();
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/invalid.svg".');
+        $this->expectExceptionMessage($expectedMessage);
 
-        $factory->create('<html></html>', '/tmp/invalid.svg');
-    }
-
-    public function testCreateRejectsMalformedSvgRootEvenWhenSvgTagExists(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/malformed-root.svg".');
-
-        $factory->create('<svg xmlns="http://www.w3.org/2000/svg"><g>', '/tmp/malformed-root.svg');
+        $factory->create($svg, $sourcePath);
     }
 
     #[DataProvider('provideInvalidViewportScenarios')]
@@ -286,26 +280,6 @@ SVG,
         self::assertStringContainsString('1 0 0 rg', $xObject->stream);
     }
 
-    public function testCreateWithEmptySvgStringThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/empty.svg".');
-
-        $factory->create('', '/tmp/empty.svg');
-    }
-
-    public function testCreateWithNonSvgRootElementThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unable to parse SVG source "/tmp/wrong-root.svg".');
-
-        $factory->create('<?xml version="1.0"?><root></root>', '/tmp/wrong-root.svg');
-    }
-
     public function testCreateAcceptsUppercaseSvgRootElementName(): void
     {
         $factory = new SvgPdfXObjectFactory();
@@ -414,142 +388,19 @@ SVG,
         self::assertSame([0.0, 0.0, 12.5, 7.25], $xObject->dictionary['BBox']);
     }
 
-    public function testCreateRejectsDimensionWithNonNumericPrefix(): void
-    {
+    #[DataProvider('provideStyleBlockColorExtractionScenarios')]
+    public function testCreateResolvesClassColorMapsFromStyleBlocks(
+        string $svg,
+        string $sourcePath,
+        array $requiredStreamFragments,
+    ): void {
         $factory = new SvgPdfXObjectFactory();
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/non-numeric-dimension.svg" must define either a valid viewBox or positive width/height.',
-        );
+        $xObject = $factory->create($svg, $sourcePath);
 
-        $factory->create(
-            '<svg width="abc12" height="10" xmlns="http://www.w3.org/2000/svg">'
-            . '<path fill="#000" d="M0,0 L1,1"/>'
-            . '</svg>',
-            '/tmp/non-numeric-dimension.svg',
-        );
-    }
-
-    public function testCreateRejectsZeroWidthWhenNoViewBoxIsProvided(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/zero-width.svg" must define either a valid viewBox or positive width/height.',
-        );
-
-        $factory->create(
-            '<svg width="0" height="10" xmlns="http://www.w3.org/2000/svg">'
-            . '<path fill="#000" d="M0,0 L1,1"/>'
-            . '</svg>',
-            '/tmp/zero-width.svg',
-        );
-    }
-
-    public function testCreateRejectsZeroHeightWhenNoViewBoxIsProvided(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/zero-height.svg" must define either a valid viewBox or positive width/height.',
-        );
-
-        $factory->create(
-            '<svg width="10" height="0" xmlns="http://www.w3.org/2000/svg">'
-            . '<path fill="#000" d="M0,0 L1,1"/>'
-            . '</svg>',
-            '/tmp/zero-height.svg',
-        );
-    }
-
-    public function testCreateResolvesUppercaseCssFillAndStrokePropertiesFromStyleBlock(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-    <svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
-      <style>
-    .box { FILL: #112233; STROKE: #ff0000; }
-      </style>
-      <rect class="box" x="1" y="1" width="10" height="10" style="stroke-width:2"/>
-    </svg>
-    SVG,
-            '/tmp/uppercase-css-style.svg',
-        );
-
-        self::assertStringContainsString('0.0667 0.1333 0.2 rg', $xObject->stream);
-        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
-        self::assertStringContainsString('2.000000 w', $xObject->stream);
-    }
-
-    public function testCreateIgnoresEmptyAndNonMatchingStyleBlocksBeforeValidClassRule(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $xObject = $factory->create(
-            <<<'SVG'
-<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
-  <style></style>
-  <style>path { fill: #00ff00; }</style>
-  <style>.accent { fill: #112233; stroke: #ff0000; }</style>
-  <rect class="accent" x="1" y="1" width="10" height="10" style="stroke-width:2"/>
-</svg>
-SVG,
-            '/tmp/style-continue-coverage.svg',
-        );
-
-        self::assertStringContainsString('0.0667 0.1333 0.2 rg', $xObject->stream);
-        self::assertStringContainsString('1 0 0 RG', $xObject->stream);
-        self::assertStringContainsString('2.000000 w', $xObject->stream);
-    }
-
-    public function testCreateWithMissingDimensionsOrViewBoxThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/no-viewport.svg" must define either a valid viewBox or positive width/height.',
-        );
-
-        $factory->create(
-            '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
-            '/tmp/no-viewport.svg',
-        );
-    }
-
-    public function testCreateWithZeroDimensionsThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/zero-dims.svg" must define a positive viewBox.',
-        );
-
-        $factory->create(
-            '<svg viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
-            '/tmp/zero-dims.svg',
-        );
-    }
-
-    public function testCreateWithViewBoxButNegativeHeightThrows(): void
-    {
-        $factory = new SvgPdfXObjectFactory();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'SVG source "/tmp/negative-height.svg" must define a positive viewBox.',
-        );
-
-        $factory->create(
-            '<svg viewBox="0 0 10 -5" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
-            '/tmp/negative-height.svg',
-        );
+        foreach ($requiredStreamFragments as $fragment) {
+            self::assertStringContainsString($fragment, $xObject->stream);
+        }
     }
 
     public function testCreateWithViewBoxAndDimensionsCombination(): void
@@ -685,6 +536,92 @@ SVG,
         yield 'missing usable viewport and dimensions' => [
             '<svg width="auto" height="" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
             'SVG source "/tmp/invalid-viewport.svg" must define either a valid viewBox or positive width/height.',
+        ];
+
+        yield 'missing dimensions and viewbox' => [
+            '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define either a valid viewBox or positive width/height.',
+        ];
+
+        yield 'zero width without viewbox' => [
+            '<svg width="0" height="10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0 L1,1"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define either a valid viewBox or positive width/height.',
+        ];
+
+        yield 'zero height without viewbox' => [
+            '<svg width="10" height="0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0 L1,1"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define either a valid viewBox or positive width/height.',
+        ];
+
+        yield 'non numeric dimension prefix' => [
+            '<svg width="abc12" height="10" xmlns="http://www.w3.org/2000/svg"><path d="M0,0 L1,1"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define either a valid viewBox or positive width/height.',
+        ];
+
+        yield 'viewbox with zero dimensions' => [
+            '<svg viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
+        ];
+
+        yield 'viewbox with negative height' => [
+            '<svg viewBox="0 0 10 -5" xmlns="http://www.w3.org/2000/svg"><path d="M0,0"/></svg>',
+            'SVG source "/tmp/invalid-viewport.svg" must define a positive viewBox.',
+        ];
+    }
+
+    public static function provideInvalidSvgSources(): iterable
+    {
+        yield 'empty svg string' => [
+            '',
+            '/tmp/empty.svg',
+            'Unable to parse SVG source "/tmp/empty.svg".',
+        ];
+
+        yield 'html payload' => [
+            '<html></html>',
+            '/tmp/invalid.svg',
+            'Unable to parse SVG source "/tmp/invalid.svg".',
+        ];
+
+        yield 'non svg root element' => [
+            '<?xml version="1.0"?><root></root>',
+            '/tmp/wrong-root.svg',
+            'Unable to parse SVG source "/tmp/wrong-root.svg".',
+        ];
+
+        yield 'malformed svg root' => [
+            '<svg xmlns="http://www.w3.org/2000/svg"><g>',
+            '/tmp/malformed-root.svg',
+            'Unable to parse SVG source "/tmp/malformed-root.svg".',
+        ];
+    }
+
+    public static function provideStyleBlockColorExtractionScenarios(): iterable
+    {
+        yield 'uppercase fill and stroke properties' => [
+            <<<'SVG'
+    <svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
+      <style>
+    .box { FILL: #112233; STROKE: #ff0000; }
+      </style>
+      <rect class="box" x="1" y="1" width="10" height="10" style="stroke-width:2"/>
+    </svg>
+    SVG,
+            '/tmp/uppercase-css-style.svg',
+            ['0.0667 0.1333 0.2 rg', '1 0 0 RG', '2.000000 w'],
+        ];
+
+        yield 'ignore empty and non matching style blocks' => [
+            <<<'SVG'
+<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
+  <style></style>
+  <style>path { fill: #00ff00; }</style>
+  <style>.accent { fill: #112233; stroke: #ff0000; }</style>
+  <rect class="accent" x="1" y="1" width="10" height="10" style="stroke-width:2"/>
+</svg>
+SVG,
+            '/tmp/style-continue-coverage.svg',
+            ['0.0667 0.1333 0.2 rg', '1 0 0 RG', '2.000000 w'],
         ];
     }
 
