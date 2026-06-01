@@ -24,4 +24,6 @@ services:
       # Optional override (default shown): COMPOSER_CACHE_DIR=${HOME}/.composer
       - ${COMPOSER_CACHE_DIR:-${HOME}/.composer}:/var/www/.composer/
       - ./.profile:/var/www/html/.profile
+    ports:
+      - "${DOCS_PORT:-8000}:8000"
     command: ["bash", "-lc", "composer --version && bash"]

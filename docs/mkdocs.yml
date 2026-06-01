@@ -13,13 +13,24 @@ site_dir: ../build/docs-site
 
 theme:
   name: material
+  logo: https://avatars.githubusercontent.com/u/79158919?v=4
+  favicon: https://avatars.githubusercontent.com/u/79158919?v=4
   palette:
-    scheme: default
-    primary: indigo
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
   features:
     - navigation.instant
     - navigation.top
     - content.code.copy
+    - content.action.edit
 
 nav:
   - Home: index.md
@@ -31,6 +42,11 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
       use_pygments: true
-      pygments_lang_class: true
+  - admonition
+  - pymdownx.details
   - pymdownx.superfences
   - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - docs/source
+      check_paths: true

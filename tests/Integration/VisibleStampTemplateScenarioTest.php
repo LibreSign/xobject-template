@@ -7,19 +7,12 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Integration;
 
-use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Dto\CompileResult;
-use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
-use LibreSign\XObjectTemplate\Tests\Support\PngFixtureFactory;
-use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class VisibleStampTemplateScenarioTest extends TestCase
 {
-    private const PREVIEW_WIDTH = 804;
-    private const PREVIEW_HEIGHT = 230;
-
     #[DataProvider('visibleStampLayoutProvider')]
     public function testPhaseOneVisibleStampLayoutsCanBeCompiledAndExported(
         string $slug,
@@ -27,19 +20,21 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         int $expectedImageCount,
         array $expectedTexts,
     ): void {
-        ['assetRoot' => $assetRoot] = $this->ensurePreviewDirectories();
-
-        $backgroundPath = $this->createBackgroundPreview($assetRoot . '/background-' . $slug . '.png');
-        $signaturePath = $this->layoutUsesSignatureImage($layout)
-            ? $this->createSignaturePreview($assetRoot . '/signature-' . $slug . '.png')
-            : null;
-
-        ['result' => $result, 'pdf' => $pdf, 'previewPath' => $previewPath] = $this->compilePreview(
+        $factory = new VisibleStampPreviewFactory(dirname(__DIR__, 2));
+        ['result' => $result, 'pdf' => $pdf, 'previewPath' => $previewPath] = $factory->compilePhaseOneLayoutPreview(
             $slug,
-            $this->buildLayoutHtml($layout, $backgroundPath, $signaturePath),
+            $layout,
+            dirname(__DIR__, 2) . '/build/visible-stamp-previews',
         );
 
-        $this->assertBasePreviewExport($result, $pdf, $previewPath, $expectedImageCount);
+        $this->assertBasePreviewExport(
+            $result,
+            $pdf,
+            $previewPath,
+            $expectedImageCount,
+            VisibleStampPreviewFactory::DEFAULT_PREVIEW_WIDTH,
+            VisibleStampPreviewFactory::DEFAULT_PREVIEW_HEIGHT,
+        );
 
         foreach ($expectedTexts as $expectedText) {
             self::assertStringContainsString($expectedText, $result->contentStream);
@@ -49,32 +44,30 @@ final class VisibleStampTemplateScenarioTest extends TestCase
 
     public function testGovBrLikeVisibleStampCanBeCompiledAndExportedUsingSupportedHtmlAndCssOnly(): void
     {
-        $logoPath = dirname(__DIR__) . '/Fixtures/Pdf/Svg/govbr-logo.svg';
-        self::assertFileExists($logoPath);
+        $scenario = self::govBrLikeScenario();
+        $factory = new VisibleStampPreviewFactory(dirname(__DIR__, 2));
 
-        ['result' => $result, 'pdf' => $pdf, 'previewPath' => $previewPath] = $this->compilePreviewWithSize(
-            'govbr-like-visible-stamp',
-            $this->buildGovBrLikeLayoutHtml($logoPath),
-            760.0,
-            190.0,
+        [
+            'result' => $result,
+            'pdf' => $pdf,
+            'previewPath' => $previewPath,
+            'logoPath' => $logoPath,
+        ] = $factory->compileGovBrLikePreview(
+            $scenario['slug'],
+            $scenario['width'],
+            $scenario['height'],
+            dirname(__DIR__, 2) . '/build/visible-stamp-previews',
         );
 
-        self::assertSame(1, count($result->resources['XObject'] ?? []));
-        self::assertStringStartsWith("%PDF-1.4\n", $pdf);
-        self::assertStringContainsString('/Subtype /Form', $pdf);
-        self::assertStringContainsString('/Im0 Do', $result->contentStream);
-        self::assertFileExists($previewPath);
-        self::assertSame($pdf, file_get_contents($previewPath));
+        $this->assertBasePreviewExport(
+            $result,
+            $pdf,
+            $previewPath,
+            $scenario['expectedImageCount'],
+        );
         self::assertSame($logoPath, $result->resources['XObject']['Im0']['Source']);
 
-        $expectedTexts = [
-            'Documento assinado digitalmente',
-            'ASSINANTE DE EXEMPLO',
-            'Data: 01/01/2026 12:00:00-0300',
-            'Verifique em https://verificador.iti.br',
-        ];
-
-        foreach ($expectedTexts as $expectedText) {
+        foreach ($scenario['expectedTexts'] as $expectedText) {
             self::assertStringContainsString($expectedText, $result->contentStream);
             self::assertStringContainsString($expectedText, $pdf);
         }
@@ -149,164 +142,29 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         ];
     }
 
-    private function buildLayoutHtml(string $layout, string $backgroundPath, ?string $signaturePath): string
-    {
-        $background = sprintf(
-            '<img src="%s" style="position:absolute;left:0;top:0;width:100%%;height:100%%" />',
-            $this->escapeAttribute($backgroundPath),
-        );
-
-        return match ($layout) {
-            'signature_and_metadata_right' => sprintf(
-                '<div style="display:flex;flex-direction:row;width:100%%;height:100%%;padding:14 18">%s'
-                . '<div style="width:52%%;height:100%%;padding:18 10 0 0">'
-                . '<img src="%s" style="width:360px;height:120px;margin:18 0 0 0" />'
-                . '</div>'
-                . '<div style="width:48%%;height:100%%;padding:4 0 0 0">'
-                . '<div style="font-size:20;font-weight:700">Signed with LibreSign</div>'
-                . '<div style="font-size:18;margin:6 0 0 0">admin</div>'
-                . '<div style="font-size:14;margin:8 0 0 0">Issuer: Preview Issuer</div>'
-                . '<div style="font-size:14;margin:4 0 0 0">Date: 2026-05-28T16:40:21+00:00</div>'
-                . '</div>'
-                . '</div>',
-                $background,
-                $this->requireSignaturePath($signaturePath),
-            ),
-            'label_and_metadata_right' => sprintf(
-                '<div style="display:flex;flex-direction:row;width:100%%;height:100%%;padding:14 18">%s'
-                . '<div style="display:flex;justify-content:center;align-items:center;width:42%%;height:100%%">'
-                . '<div style="font-size:46;font-weight:700">admin</div>'
-                . '</div>'
-                . '<div style="width:58%%;height:100%%;padding:10 0 0 0">'
-                . '<div style="font-size:20;font-weight:700">Signed with LibreSign</div>'
-                . '<div style="font-size:18;margin:6 0 0 0">Issuer: Preview Issuer</div>'
-                . '<div style="font-size:18;margin:6 0 0 0">Date: 2026-05-28T16:40:21+00:00</div>'
-                . '</div>'
-                . '</div>',
-                $background,
-            ),
-            'signature_centered' => sprintf(
-                '<div style="display:flex;justify-content:center;align-items:center;width:100%%;height:100%%">%s'
-                . '<img src="%s" style="width:600px;height:140px" />'
-                . '</div>',
-                $background,
-                $this->requireSignaturePath($signaturePath),
-            ),
-            'metadata_only_top_left' => sprintf(
-                '<div style="width:100%%;height:100%%">%s'
-                . '<div style="width:58%%;padding:18 24">'
-                . '<div style="font-size:20;font-weight:700">Signed with LibreSign</div>'
-                . '<div style="font-size:18;margin:6 0 0 0">admin</div>'
-                . '<div style="font-size:16;margin:8 0 0 0">Issuer: Preview Issuer</div>'
-                . '<div style="font-size:16;margin:6 0 0 0">Date: 2026-05-28T16:40:21+00:00</div>'
-                . '</div>'
-                . '</div>',
-                $background,
-            ),
-            'two_columns_centered_cells' => sprintf(
-                '<div style="display:flex;flex-direction:row;width:100%%;height:100%%;padding:14 18">%s'
-                . '<div style="display:flex;justify-content:center;align-items:center;width:44%%;height:100%%">'
-                . '<img src="%s" style="width:320px;height:100px" />'
-                . '</div>'
-                . '<div style="display:flex;justify-content:center;align-items:center;width:56%%;height:100%%">'
-                . '<div style="width:300px;height:120px">'
-                . '<div style="font-size:20;font-weight:700">Signed with LibreSign</div>'
-                . '<div style="font-size:18;margin:8 0 0 0">Preview Issuer</div>'
-                . '<div style="font-size:16;margin:10 0 0 0">Date: 2026-05-28T16:40:21+00:00</div>'
-                . '</div>'
-                . '</div>'
-                . '</div>',
-                $background,
-                $this->requireSignaturePath($signaturePath),
-            ),
-            default => throw new \InvalidArgumentException(sprintf('Unknown visible stamp layout "%s".', $layout)),
-        };
-    }
-
-    private function buildGovBrLikeLayoutHtml(string $logoPath): string
-    {
-        return sprintf(
-            '<div style="display:flex;flex-direction:row;align-items:center;width:100%%;height:100%%;'
-            . 'padding:16px 18px;background-color:#ffffff;border-color:#ef4d3f;border-width:1;border-radius:2">'
-            . '<div style="display:flex;justify-content:center;align-items:center;width:30%%;height:100%%">'
-            . '<img src="%s" style="width:190px;height:58px" />'
-            . '</div>'
-            . '<div style="width:70%%;height:100%%;padding:4px 0 0 6px">'
-            . '<div style="font-size:16px;line-height:18px;color:#333333">Documento assinado digitalmente</div>'
-            . '<div style="font-size:23px;line-height:27px;font-weight:700;color:#111111;'
-            . 'margin:6px 0 0 0">ASSINANTE DE EXEMPLO</div>'
-            . '<div style="font-size:17px;line-height:19px;color:#333333;'
-            . 'margin:8px 0 0 0">Data: 01/01/2026 12:00:00-0300</div>'
-            . '<div style="font-size:17px;line-height:19px;color:#333333;'
-            . 'margin:6px 0 0 0">Verifique em https://verificador.iti.br</div>'
-            . '</div>'
-            . '</div>',
-            $this->escapeAttribute($logoPath),
-        );
-    }
-
     /**
-     * @return array{previewRoot: string, assetRoot: string}
+     * @return array{
+     *     slug: string,
+     *     width: float,
+     *     height: float,
+     *     expectedImageCount: int,
+     *     expectedTexts: list<string>
+     * }
      */
-    private function ensurePreviewDirectories(): array
+    private static function govBrLikeScenario(): array
     {
-        $previewRoot = dirname(__DIR__, 2) . '/build/visible-stamp-previews';
-        $assetRoot = $previewRoot . '/assets';
-        $this->ensureDirectoryExists($previewRoot);
-        $this->ensureDirectoryExists($assetRoot);
-
         return [
-            'previewRoot' => $previewRoot,
-            'assetRoot' => $assetRoot,
+            'slug' => 'govbr-like-visible-stamp',
+            'width' => 760.0,
+            'height' => 210.0,
+            'expectedImageCount' => 1,
+            'expectedTexts' => [
+                'Documento assinado digitalmente',
+                'ASSINANTE DE EXEMPLO',
+                'Data: 01/01/2026 12:00:00-0300',
+                'Verifique em https://verificador.iti.br',
+            ],
         ];
-    }
-
-    /**
-     * @return array{result: CompileResult, pdf: string, previewPath: string}
-     */
-    private function compilePreview(string $slug, string $html): array
-    {
-        return $this->compilePreviewWithSize($slug, $html, (float) self::PREVIEW_WIDTH, (float) self::PREVIEW_HEIGHT);
-    }
-
-    /**
-     * @return array{result: CompileResult, pdf: string, previewPath: string}
-     */
-    private function compilePreviewWithSize(string $slug, string $html, float $width, float $height): array
-    {
-        ['previewRoot' => $previewRoot] = $this->ensurePreviewDirectories();
-        $this->removeLegacyPreviewPngs($previewRoot, $slug);
-
-        $compiler = new XObjectTemplateCompiler();
-        $result = $compiler->compile(new CompileRequest(
-            html: $html,
-            width: $width,
-            height: $height,
-        ));
-
-        $pdf = (new SinglePagePdfExporter())->export($result);
-        $previewPath = $previewRoot . '/' . $slug . '.pdf';
-        file_put_contents($previewPath, $pdf);
-
-        return [
-            'result' => $result,
-            'pdf' => $pdf,
-            'previewPath' => $previewPath,
-        ];
-    }
-
-    private function removeLegacyPreviewPngs(string $previewRoot, string $slug): void
-    {
-        $legacyCandidates = [
-            $previewRoot . '/' . $slug . '.png',
-            $previewRoot . '/' . $slug . '-1.png',
-        ];
-
-        foreach ($legacyCandidates as $legacyCandidate) {
-            if (is_file($legacyCandidate)) {
-                unlink($legacyCandidate);
-            }
-        }
     }
 
     private function assertBasePreviewExport(
@@ -314,22 +172,28 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         string $pdf,
         string $previewPath,
         int $expectedImageCount,
+        ?float $expectedWidth = null,
+        ?float $expectedHeight = null,
     ): void {
         self::assertSame($expectedImageCount, count($result->resources['XObject'] ?? []));
-        self::assertSame((float) self::PREVIEW_WIDTH, $result->resources['XObject']['Im0']['Width']);
-        self::assertSame((float) self::PREVIEW_HEIGHT, $result->resources['XObject']['Im0']['Height']);
+
+        if ($expectedWidth !== null && $expectedHeight !== null) {
+            self::assertSame($expectedWidth, $result->resources['XObject']['Im0']['Width']);
+            self::assertSame($expectedHeight, $result->resources['XObject']['Im0']['Height']);
+            self::assertStringContainsString(
+                sprintf(
+                    'q %F 0 0 %F %F %F cm /Im0 Do Q',
+                    $expectedWidth,
+                    $expectedHeight,
+                    0.0,
+                    0.0,
+                ),
+                $result->contentStream,
+            );
+        }
+
         self::assertStringStartsWith("%PDF-1.4\n", $pdf);
         self::assertStringContainsString('/Subtype /Form', $pdf);
-        self::assertStringContainsString(
-            sprintf(
-                'q %F 0 0 %F %F %F cm /Im0 Do Q',
-                (float) self::PREVIEW_WIDTH,
-                (float) self::PREVIEW_HEIGHT,
-                0.0,
-                0.0,
-            ),
-            $result->contentStream,
-        );
         self::assertStringContainsString('/Im0 Do', $result->contentStream);
         self::assertFileExists($previewPath);
         self::assertSame($pdf, file_get_contents($previewPath));
@@ -337,112 +201,5 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         if ($expectedImageCount > 1) {
             self::assertStringContainsString('/Im1 Do', $result->contentStream);
         }
-    }
-
-    private function createBackgroundPreview(string $path): string
-    {
-        if (is_file($path)) {
-            return $path;
-        }
-
-        $contents = PngFixtureFactory::createRgbaPngFromPixelRenderer(
-            self::PREVIEW_WIDTH,
-            self::PREVIEW_HEIGHT,
-            function (int $x, int $y, int $width, int $height): array {
-                $background = [245, 247, 250, 255];
-                $diagonal = abs(($height * $x) - ($width * $y));
-                $inverseDiagonal = abs(($height * ($width - $x)) - ($width * $y));
-                $bandStrength = ($diagonal < $width * 10 || $inverseDiagonal < $width * 10) ? 55 : 0;
-                $ringCenterX = $width * 0.74;
-                $ringCenterY = $height * 0.5;
-                $distance = sqrt((($x - $ringCenterX) ** 2) + (($y - $ringCenterY) ** 2));
-                $ringStrength = ($distance > $height * 0.18 && $distance < $height * 0.24) ? 35 : 0;
-                $strength = max($bandStrength, $ringStrength);
-
-                return [
-                    max(0, $background[0] - $strength),
-                    max(0, $background[1] - $strength),
-                    max(0, $background[2] - $strength),
-                    255,
-                ];
-            },
-        );
-
-        file_put_contents($path, $contents);
-
-        return $path;
-    }
-
-    private function createSignaturePreview(string $path): string
-    {
-        if (is_file($path)) {
-            return $path;
-        }
-
-        $contents = PngFixtureFactory::createRgbaPngFromPixelRenderer(
-            640,
-            180,
-            function (int $x, int $y, int $width, int $height): array {
-                $normalizedX = $width === 1 ? 0.0 : $x / ($width - 1);
-                $primaryWave = ($height * 0.56)
-                    + sin($normalizedX * 7.1) * ($height * 0.13)
-                    + sin($normalizedX * 14.2) * ($height * 0.035);
-                $secondaryWave = ($height * 0.4)
-                    + cos($normalizedX * 16.0) * ($height * 0.05);
-                $underline = ($height * 0.78) + sin($normalizedX * 5.6) * ($height * 0.015);
-
-                $alpha = 0;
-                if (abs($y - $primaryWave) <= 2.2 && $normalizedX >= 0.08 && $normalizedX <= 0.92) {
-                    $alpha = 255;
-                }
-
-                if (abs($y - $secondaryWave) <= 1.6 && $normalizedX >= 0.0 && $normalizedX <= 0.18) {
-                    $alpha = max($alpha, 220);
-                }
-
-                if (abs($y - $underline) <= 1.0 && $normalizedX >= 0.16 && $normalizedX <= 0.9) {
-                    $alpha = max($alpha, 185);
-                }
-
-                return [20, 28, 40, $alpha];
-            },
-        );
-
-        file_put_contents($path, $contents);
-
-        return $path;
-    }
-
-
-    private function requireSignaturePath(?string $signaturePath): string
-    {
-        if ($signaturePath === null) {
-            throw new \InvalidArgumentException('This visible stamp layout requires a signature image.');
-        }
-
-        return $this->escapeAttribute($signaturePath);
-    }
-
-    private function ensureDirectoryExists(string $directory): void
-    {
-        if (is_dir($directory)) {
-            return;
-        }
-
-        mkdir($directory, 0777, true);
-    }
-
-    private function layoutUsesSignatureImage(string $layout): bool
-    {
-        return in_array(
-            $layout,
-            ['signature_and_metadata_right', 'signature_centered', 'two_columns_centered_cells'],
-            true,
-        );
-    }
-
-    private function escapeAttribute(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }
