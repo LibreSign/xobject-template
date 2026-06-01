@@ -5,16 +5,17 @@ name: performance
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   performance:
     runs-on: ubuntu-latest
-    env:
-      BENCH_ITERATIONS: 250
-      BENCH_MAX_AVG_MS: 4.0
-      BENCH_MAX_MEM_KB: 2048
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Detect minimum PHP from composer.json
         id: php_min
         run: |
@@ -24,5 +25,33 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ steps.php_min.outputs.version }}
+          coverage: none
       - run: composer install --no-interaction --prefer-dist
-      - run: php benchmarks/compiler-benchmark.php
+      - run: composer bin all install --no-interaction --prefer-dist
+      
+      - name: Run benchmarks (strict CI mode with verbose output)
+        run: |
+          composer benchmark:run:ci
+          
+          echo "✓ Benchmarks completed"
+          echo ""
+          echo "Results saved to build/benchmark-results.xml"
+          echo "Review: Ensure no individual benchmark takes >10ms average"
+
+      - name: Validate regression against baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          if composer benchmark:baseline:exists; then
+            composer benchmark:baseline:check
+          else
+            echo "No 'baseline' tag found in phpbench storage. Skipping baseline comparison."
+            echo "Run 'composer benchmark:baseline:update' and commit .github/.performance/.phpbench to enable regression gate."
+          fi
+      
+      - name: Save benchmark results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: build/benchmark-results.xml
+          retention-days: 90
