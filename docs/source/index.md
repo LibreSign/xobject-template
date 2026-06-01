@@ -11,7 +11,7 @@ Docs content.
 
 - [Getting started](guides/)
 - [Examples](reference/examples.md)
-- [Visible signature use case](use-cases/)
+- [Visible signature use case](use-cases/visible-signatures.md)
 
 ## Quick example
 

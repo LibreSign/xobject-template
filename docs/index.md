@@ -9,7 +9,7 @@
 
 - [Getting started](source/guides/)
 - [Examples](source/reference/examples.md)
-- [Visible signature use case](source/use-cases/)
+- [Visible signature use case](source/use-cases/visible-signatures.md)
 
 ## Quick example
 
