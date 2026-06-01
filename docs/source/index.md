@@ -10,7 +10,7 @@ Docs content.
 ## Start here
 
 - [Getting started](guides/)
-- [Examples](reference/)
+- [Examples](reference/examples.md)
 - [Visible signature use case](use-cases/)
 
 ## Quick example
@@ -28,4 +28,4 @@ $result = $compiler->compile(new CompileRequest(
 ));
 ```
 
-For executable samples, see the [examples page](reference/).
+For executable samples, see the [examples page](reference/examples.md).
