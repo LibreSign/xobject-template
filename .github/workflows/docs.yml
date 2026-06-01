@@ -9,20 +9,18 @@ on:
       - main
     paths:
       - 'docs/**'
-      - 'mkdocs.yml'
-      - 'requirements-docs.txt'
+      - 'docs/mkdocs.yml'
+      - 'docs/requirements-docs.txt'
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,21 +30,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install docs dependencies
-        run: pip install -r requirements-docs.txt
+        run: pip install -r docs/requirements-docs.txt
 
-      - name: Build docs
-        run: mkdocs build --strict
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to gh-pages
+        run: mkdocs gh-deploy --force --config-file docs/mkdocs.yml
