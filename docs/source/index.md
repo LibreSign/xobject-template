@@ -9,7 +9,7 @@ Docs content.
 
 ## Start here
 
-- [Getting started](guides/)
+- [Getting started](guides/getting-started.md)
 - [Examples](reference/examples.md)
 - [Visible signature use case](use-cases/visible-signatures.md)
 
