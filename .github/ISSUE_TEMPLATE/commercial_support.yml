@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: Commercial support
+description: Ask about paid support or sponsored prioritization
+labels: [support]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in commercial support.
+
+        This template does not guarantee free consulting. Sponsored or paid work can help prioritize compatibility, features, and long-term maintenance.
+
+        Current public funding channel: https://github.com/sponsors/LibreSign
+  - type: textarea
+    id: context
+    attributes:
+      label: Project context
+      description: Describe your use case, expected timeline, and technical scope.
+    validations:
+      required: true
+  - type: textarea
+    id: requested_scope
+    attributes:
+      label: Requested support scope
+      description: Include expected deliverables (for example SVG compatibility work, integration support, QA hardening).
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Preferred contact method
+      placeholder: email or issue-based follow-up
+    validations:
+      required: true

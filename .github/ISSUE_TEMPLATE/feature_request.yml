@@ -9,11 +9,18 @@ body:
     id: problem
     attributes:
       label: Problem statement
+      description: Describe the user or integration problem first.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: Proposed solution
+      description: Keep scope explicit and include expected API/behavior impact.
     validations:
       required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals / out of scope
+      description: Clarify what should not be included.

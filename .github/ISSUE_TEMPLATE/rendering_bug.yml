@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: Rendering bug
+description: Report a minimal reproducible rendering issue for HTML/CSS/SVG to XObject output
+labels: [bug, rendering]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the rendering issue in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: minimal_input
+    attributes:
+      label: Minimal HTML/CSS/SVG input
+      description: Paste the smallest possible input that reproduces the issue.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: expected_output
+    attributes:
+      label: Expected output
+    validations:
+      required: true
+  - type: textarea
+    id: actual_output
+    attributes:
+      label: Actual output
+    validations:
+      required: true
+  - type: textarea
+    id: payload_details
+    attributes:
+      label: Generated content stream/resources (if possible)
+      description: Include compile result content stream/resources snippet when available.
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      options:
+        - text
+        - PNG/JPEG
+        - SVG
+        - layout
+        - CSS
+        - interpolation
+        - placement
+    validations:
+      required: true
+  - type: input
+    id: php_version
+    attributes:
+      label: PHP version
+      placeholder: '8.2.x'
+    validations:
+      required: true
+  - type: input
+    id: package_version
+    attributes:
+      label: Package version or commit
+      placeholder: 'composer version, tag, or commit hash'
+    validations:
+      required: true
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Minimal fixture attachment details
+      description: If possible, attach or describe a minimal fixture file set.

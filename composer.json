@@ -73,6 +73,15 @@
     "sh:security": "shellcheck scripts/*.sh",
     "test:unit": "vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --testsuite unit",
     "test:integration": "vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --testsuite integration",
+    "docs:examples": "vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --testsuite documentation --filter ExamplesTest",
+    "docs:check-drift": "php scripts/check-docs-drift.php",
+    "docs:build": "python3 -m mkdocs build --strict",
+    "docs:serve": "python3 -m mkdocs serve",
+    "docs:test": [
+      "@docs:examples",
+      "@docs:check-drift",
+      "@docs:build"
+    ],
     "test:coverage": "XDEBUG_MODE=coverage vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --coverage-text --coverage-clover=build/coverage/clover.xml",
     "mutation:test": "vendor-bin/mutation/vendor/infection/infection/bin/infection --threads=max",
     "benchmark:run": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --config=phpbench.json --report=aggregate",
