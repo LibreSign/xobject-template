@@ -3,14 +3,12 @@
 
 # xobject-template documentation
 
-Read the docs.
-
 `xobject-template` compiles a HTML/CSS template into PDF Form XObject output.
 
 ## Start here
 
 - [Getting started](source/guides/)
-- [Examples](source/reference/)
+- [Examples](source/reference/examples.md)
 - [Visible signature use case](source/use-cases/)
 
 ## Quick example
@@ -28,4 +26,4 @@ $result = $compiler->compile(new CompileRequest(
 ));
 ```
 
-For executable samples, see the [examples page](source/reference/).
+For executable samples, see the [examples page](source/reference/examples.md).
