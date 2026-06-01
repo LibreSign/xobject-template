@@ -9,8 +9,8 @@ on:
       - main
     paths:
       - 'docs/**'
-      - 'docs/mkdocs.yml'
-      - 'docs/requirements-docs.txt'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
 
 permissions:
   contents: write
@@ -30,7 +30,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install docs dependencies
-        run: pip install -r docs/requirements-docs.txt
+        run: pip install -r requirements-docs.txt
 
       - name: Deploy to gh-pages
-        run: mkdocs gh-deploy --force --config-file docs/mkdocs.yml
+        run: mkdocs gh-deploy --force

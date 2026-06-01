@@ -8,8 +8,8 @@ repo_url: https://github.com/LibreSign/xobject-template
 repo_name: LibreSign/xobject-template
 edit_uri: edit/main/docs/
 
-docs_dir: .
-site_dir: ../build/docs-site
+docs_dir: docs
+site_dir: build/docs-site
 
 theme:
   name: material
