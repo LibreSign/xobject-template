@@ -34,7 +34,8 @@
     "process-timeout": 600,
     "allow-plugins": {
       "bamarni/composer-bin-plugin": true,
-      "infection/extension-installer": true
+      "infection/extension-installer": true,
+      "phpbench/extension-installer": true
     }
   },
   "extra": {
@@ -70,12 +71,12 @@
     "docker:lint": "docker run --rm -i hadolint/hadolint < .docker/Dockerfile",
     "sh:lint": "shfmt -d scripts",
     "sh:security": "shellcheck scripts/*.sh",
-    "profile:xdebug": "XDEBUG_MODE=profile php benchmarks/profile.php",
     "test:unit": "vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --testsuite unit",
     "test:integration": "vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --testsuite integration",
     "test:coverage": "XDEBUG_MODE=coverage vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --coverage-text --coverage-clover=build/coverage/clover.xml",
     "mutation:test": "vendor-bin/mutation/vendor/infection/infection/bin/infection --threads=max",
-    "performance:check": "php benchmarks/compiler-benchmark.php",
+    "benchmark:run": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run",
+    "benchmark:compare": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --report=compare --baseline=main",
     "bin": [
       "composer bin all list"
     ]
