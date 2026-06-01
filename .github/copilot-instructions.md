@@ -18,7 +18,7 @@ Benchmarks use **PHPBench** for rigorous performance testing with statistical an
 composer benchmark:run
 
 # Run with stricter settings (multiple revisions)
-vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --revs=10 --iterations=20 --warmup=2
+composer benchmark:run:ci
 
 # Direct PHPBench invocation with custom options
 vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --report=aggregate
