@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 LibreSign -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
-# xobject-template documentation
+# XObject Template documentation
 
 `xobject-template` compiles a HTML/CSS template into PDF Form XObject output.
 
