@@ -29,6 +29,10 @@ PHPBench automatically:
 - Executes multiple revisions for statistical confidence
 - Reports mean, min, max, stdev, variance per benchmark (CI dump file: `build/benchmark-results.xml`)
 
+Baseline persistence policy:
+- Regression gate compares PR results against `.github/.performance/baseline.json`.
+- Baseline updates are made via pull request (no direct commit to protected `main`).
+
 ## Compliance and contribution
 
 - DCO sign-off is mandatory for every commit.
