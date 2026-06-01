@@ -7,9 +7,9 @@
 
 ## Start here
 
-- [Getting started](source/guides/getting-started.md)
-- [Examples](source/reference/examples.md)
-- [Visible signature use case](source/use-cases/visible-signatures.md)
+- [Getting started](guides/getting-started.md)
+- [Examples](reference/examples.md)
+- [Visible signature use case](use-cases/visible-signatures.md)
 
 ## Quick example
 
@@ -26,4 +26,4 @@ $result = $compiler->compile(new CompileRequest(
 ));
 ```
 
-For executable samples, see the [examples page](source/reference/examples.md).
+For executable samples, see the [examples page](reference/examples.md).

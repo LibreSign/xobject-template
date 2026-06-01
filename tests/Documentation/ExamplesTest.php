@@ -41,7 +41,7 @@ final class ExamplesTest extends TestCase
     public function testExampleScriptsExecuteAndGenerateExpectedArtifacts(string $exampleFile): void
     {
         $projectRoot = dirname(__DIR__, 2);
-        $examplePath = $projectRoot . '/docs/source/examples/' . $exampleFile;
+        $examplePath = $projectRoot . '/docs/examples/' . $exampleFile;
         self::assertFileExists($examplePath);
 
         $result = require $examplePath;
@@ -87,7 +87,7 @@ final class ExamplesTest extends TestCase
     public function testEveryPhpExampleFileIsCoveredByTheProvider(): void
     {
         $projectRoot = dirname(__DIR__, 2);
-        $allPhpExamples = glob($projectRoot . '/docs/source/examples/*.php');
+        $allPhpExamples = glob($projectRoot . '/docs/examples/*.php');
         self::assertIsArray($allPhpExamples);
 
         $actual = array_map(static fn (string $path): string => basename($path), $allPhpExamples);
