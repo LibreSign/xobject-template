@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: Documentation
+description: Report documentation errors or suggest improvements
+labels: [documentation]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is unclear or incorrect?
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Affected page/path
+      placeholder: docs/reference/supported-svg.md
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: Keep suggestions objective and user-focused.

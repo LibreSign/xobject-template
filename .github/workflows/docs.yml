@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: docs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Detect minimum PHP from composer.json
+        id: php_min
+        run: |
+          php_version=$(grep -Po '"php"\s*:\s*"\K[^"]+' composer.json | grep -Eo '[0-9]+\.[0-9]+' | head -n1)
+          [[ -n "$php_version" ]] || { echo "Could not determine minimum PHP version"; exit 1; }
+          echo "version=$php_version" >> "$GITHUB_OUTPUT"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ steps.php_min.outputs.version }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Install PHPUnit bin dependencies
+        run: composer bin phpunit install --no-interaction --prefer-dist
+
+      - name: Install docs dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements-docs.txt
+
+      # Pull requests only validate docs. No deployment from PRs.
+      - name: Run docs tests
+        run: composer run docs:test
+
+  deploy-docs:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate-docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install docs dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements-docs.txt
+
+      - name: Build docs site
+        run: python -m mkdocs build --strict
+
+      # Pushes to main publish docs to gh-pages branch.
+      # Maintainers should configure GitHub Pages source as:
+      # Deploy from branch -> gh-pages -> /root
+      - name: Deploy site to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+          force_orphan: true

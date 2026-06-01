@@ -19,8 +19,7 @@
 
 ## Performance
 
-- [ ] Performance impact assessed
-- [ ] Benchmark threshold still green
+- [ ] Performance impact considered
 
 ## Output integrity
 
