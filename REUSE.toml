@@ -17,3 +17,13 @@ path = ["phpunit.xml.dist", "vendor-bin/**/composer.json"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 LibreSign"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = [
+	"docs/source/examples/assets/sample.svg",
+	"docs/source/examples/assets/tiny-jpeg.base64",
+	"docs/source/examples/assets/tiny-png.base64",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 LibreSign"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
