@@ -32,7 +32,11 @@ final class VisibleStampTemplateScenarioTest extends TestCase
         self::ensureDirectoryExists($previewRoot);
         self::ensureDirectoryExists($assetRoot);
 
-        $backgroundPath = self::createBackgroundPreview($assetRoot . '/background-' . $slug . '.png', (int) $width, (int) $height);
+        $backgroundPath = self::createBackgroundPreview(
+            $assetRoot . '/background-' . $slug . '.png',
+            (int) $width,
+            (int) $height,
+        );
         $signaturePath = self::layoutUsesSignatureImage($layout)
             ? self::createSignaturePreview($assetRoot . '/signature-' . $slug . '.png')
             : null;
@@ -61,7 +65,14 @@ final class VisibleStampTemplateScenarioTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{slug: string, layout: string, width: float, height: float, expectedImageCount: int, expectedTexts: list<string>}>
+     * @return iterable<string, array{
+     *     slug: string,
+     *     layout: string,
+     *     width: float,
+     *     height: float,
+     *     expectedImageCount: int,
+     *     expectedTexts: list<string>
+     * }>
      */
     public static function visibleStampLayoutScenarios(): iterable
     {
