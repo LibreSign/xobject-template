@@ -77,6 +77,9 @@
     "mutation:test": "vendor-bin/mutation/vendor/infection/infection/bin/infection --threads=max",
     "benchmark:run": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --report=aggregate benchmarks",
     "benchmark:run:ci": "mkdir -p build && vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --iterations=20 --revs=10 --warmup=2 --report=aggregate --dump-file=build/benchmark-results.xml benchmarks",
+    "benchmark:baseline:update": "composer benchmark:run:ci | tee build/benchmark-output.txt && php benchmarks/baseline.php update",
+    "benchmark:baseline:check": "php benchmarks/baseline.php check",
+    "benchmark:baseline:stale": "php benchmarks/baseline.php check-stale",
     "bin": [
       "composer bin all list"
     ]

@@ -20,6 +20,15 @@ composer benchmark:run
 # Run with stricter settings (multiple revisions)
 composer benchmark:run:ci
 
+# Update baseline after accepted performance changes
+composer benchmark:baseline:update
+
+# Check PR against baseline (regression gate)
+composer benchmark:baseline:check
+
+# Check whether baseline is stale and should be refreshed
+composer benchmark:baseline:stale
+
 # Direct PHPBench invocation with custom options
 vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --report=aggregate benchmarks
 ```

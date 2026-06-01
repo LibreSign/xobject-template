@@ -40,68 +40,11 @@ jobs:
 
       - name: Validate regression against baseline
         if: github.event_name == 'pull_request'
-        run: |
-          python3 - <<'PY'
-          import json
-          import pathlib
-          import re
-          import sys
+        run: composer benchmark:baseline:check
 
-          baseline_path = pathlib.Path('.github/.performance/baseline.json')
-          output_path = pathlib.Path('build/benchmark-output.txt')
-
-          if not baseline_path.exists():
-            print('Baseline file not found, skipping regression validation.')
-            sys.exit(0)
-
-          if not output_path.exists():
-            print('Benchmark output not found, cannot validate regression.')
-            sys.exit(1)
-
-          baseline = json.loads(baseline_path.read_text())
-          output = output_path.read_text()
-
-          patterns = {
-            'LibreSign\\XObjectTemplate\\Benchmarks\\CompilerBench::benchSimpleHtml': r'benchSimpleHtml.*?Mo([0-9]+(?:\\.[0-9]+)?)(μs|us|ms)',
-            'LibreSign\\XObjectTemplate\\Benchmarks\\CompilerBench::benchComplexHtml': r'benchComplexHtml.*?Mo([0-9]+(?:\\.[0-9]+)?)(μs|us|ms)',
-          }
-
-          tolerance = float(baseline.get('allowed_regression_pct', 25.0)) / 100.0
-          benchmark_baseline = baseline.get('benchmarks', {})
-
-          failures = []
-          for name, pattern in patterns.items():
-            match = re.search(pattern, output)
-            if not match:
-              failures.append(f'{name}: metric not found in benchmark output')
-              continue
-
-            value = float(match.group(1))
-            unit = match.group(2)
-            current_ms = value / 1000.0 if unit in ('μs', 'us') else value
-
-            if name not in benchmark_baseline:
-              failures.append(f'{name}: missing baseline entry')
-              continue
-
-            baseline_ms = float(benchmark_baseline[name]['mean'])
-            limit_ms = baseline_ms * (1.0 + tolerance)
-
-            print(f'{name}: current={current_ms:.6f}ms baseline={baseline_ms:.6f}ms limit={limit_ms:.6f}ms')
-
-            if current_ms > limit_ms:
-              failures.append(
-                f'{name}: regression detected ({current_ms:.6f}ms > {limit_ms:.6f}ms)'
-              )
-
-          if failures:
-            print('\nPerformance regression gate failed:')
-            for failure in failures:
-              print(f' - {failure}')
-            sys.exit(1)
-
-          print('\nPerformance regression gate passed.')
-          PY
+      - name: Validate baseline freshness
+        if: github.event_name == 'pull_request'
+        run: composer benchmark:baseline:stale
       
       - name: Save benchmark results as artifact
         if: always()
