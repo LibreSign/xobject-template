@@ -3,9 +3,7 @@
 
 # xobject-template documentation
 
-Editable source for the public docs site.
-
-Use this folder when you want to update the pages that get published.
+Docs content.
 
 `xobject-template` compiles a constrained HTML/CSS subset into PDF Form XObject output.
 
@@ -14,13 +12,6 @@ Use this folder when you want to update the pages that get published.
 - [Getting started](guides/)
 - [Examples](reference/)
 - [Visible signature use case](use-cases/)
-
-## Repository layout
-
-- `src/` — library code
-- `tests/` — unit, integration, and documentation tests
-- `docs/source/` — documentation pages intended for publication
-- `docs/source/examples/` — executable examples with fixtures
 
 ## Quick example
 

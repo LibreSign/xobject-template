@@ -3,9 +3,7 @@
 
 # xobject-template documentation
 
-This is the front door for the public docs site.
-
-If you're a developer trying to use `xobject-template`, start with the install guide, then open an example, then check a real use case.
+Read the docs.
 
 `xobject-template` compiles a constrained HTML/CSS subset into PDF Form XObject output.
 
@@ -14,13 +12,6 @@ If you're a developer trying to use `xobject-template`, start with the install g
 - [Getting started](source/guides/)
 - [Examples](source/reference/)
 - [Visible signature use case](source/use-cases/)
-
-## Repository layout
-
-- `src/` — library code
-- `tests/` — unit, integration, and documentation tests
-- `docs/` — public documentation pages
-- `docs/source/` — editable source pages and examples
 
 ## Quick example
 
