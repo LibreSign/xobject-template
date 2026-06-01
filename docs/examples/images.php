@@ -9,10 +9,10 @@ use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 
-require dirname(__DIR__, 3) . '/vendor/autoload.php';
+require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-$projectRoot = dirname(__DIR__, 3);
-$assetDir = $projectRoot . '/docs/source/examples/assets';
+$projectRoot = dirname(__DIR__, 2);
+$assetDir = $projectRoot . '/docs/examples/assets';
 $outputDir = $projectRoot . '/build/examples';
 $outputAssetDir = $outputDir . '/assets';
 
