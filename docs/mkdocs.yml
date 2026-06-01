@@ -9,7 +9,7 @@ repo_name: LibreSign/xobject-template
 edit_uri: edit/main/docs/source/
 
 docs_dir: source
-site_dir: ../../build/docs-site
+site_dir: ../build/docs-site
 
 theme:
   name: material
