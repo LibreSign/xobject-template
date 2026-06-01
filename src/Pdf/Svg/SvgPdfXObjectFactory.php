@@ -79,6 +79,7 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
                 'Subtype' => '/Form',
                 'FormType' => 1,
                 'BBox' => [0.0, 0.0, $width, $height],
+                'Matrix' => [1.0 / $width, 0.0, 0.0, 1.0 / $height, 0.0, 0.0],
             ],
             stream: implode("\n", $commands),
         );
