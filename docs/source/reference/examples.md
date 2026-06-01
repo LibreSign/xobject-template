@@ -24,7 +24,3 @@ composer run examples:test
 ## Output files
 
 The examples write their generated artifacts to `build/examples/` so the repository stays clean and the outputs remain disposable.
-
-## Assets
-
-Supporting fixtures live in `docs/source/examples/assets/`.
