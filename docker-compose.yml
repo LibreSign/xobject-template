@@ -26,4 +26,4 @@ services:
       - ./.profile:/var/www/html/.profile
     ports:
       - "${DOCS_PORT:-8000}:8000"
-    command: ["bash", "-lc", "composer --version && bash"]
+    command: ["bash", "-lc", "composer run docs:watch"]

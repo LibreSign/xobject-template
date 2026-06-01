@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 LibreSign -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
-# xobject-template
+# XObject Template
 
 Minimal HTML+CSS to reusable PDF Form XObject compiler for visible signature appearances and document overlays.
 
