@@ -76,7 +76,7 @@
     "test:coverage": "XDEBUG_MODE=coverage vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --coverage-text --coverage-clover=build/coverage/clover.xml",
     "mutation:test": "vendor-bin/mutation/vendor/infection/infection/bin/infection --threads=max",
     "benchmark:run": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --report=aggregate benchmarks",
-    "benchmark:run:ci": "mkdir -p build && vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --iterations=20 --revs=10 --warmup=2 --report=aggregate --output=json:build/benchmark-results.json benchmarks",
+    "benchmark:run:ci": "mkdir -p build && vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --iterations=20 --revs=10 --warmup=2 --report=aggregate --dump-file=build/benchmark-results.xml benchmarks",
     "bin": [
       "composer bin all list"
     ]
