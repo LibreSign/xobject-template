@@ -9,11 +9,11 @@ use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 
-require dirname(__DIR__, 2) . '/vendor/autoload.php';
+require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
-$projectRoot = dirname(__DIR__, 2);
+$projectRoot = dirname(__DIR__, 3);
 $outputDir = $projectRoot . '/build/examples';
-$svgPath = $projectRoot . '/docs/examples/assets/sample.svg';
+$svgPath = $projectRoot . '/docs/source/examples/assets/sample.svg';
 
 if (!is_dir($outputDir)) {
     mkdir($outputDir, 0777, true);

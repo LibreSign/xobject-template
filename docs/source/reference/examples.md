@@ -3,7 +3,7 @@
 
 # Examples
 
-The examples are executable PHP files under `docs/examples/`.
+The examples are executable PHP files under `docs/source/examples/`.
 Each one is covered by `tests/Documentation/ExamplesTest.php`.
 
 ## Included examples
