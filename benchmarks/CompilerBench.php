@@ -9,28 +9,22 @@ namespace LibreSign\XObjectTemplate\Benchmarks;
 
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
-use PhpBench\Attributes\Iterations;
-use PhpBench\Attributes\OutputTimeUnit;
-use PhpBench\Attributes\Revs;
-use PhpBench\Attributes\Warmup;
 
-#[Warmup(1)]
-#[Revs(5)]
-#[Iterations(10)]
-#[OutputTimeUnit('milliseconds')]
 class CompilerBench
 {
-    private XObjectTemplateCompiler $compiler;
+  private ?XObjectTemplateCompiler $compiler = null;
 
-    public function setup(): void
+  private function compiler(): XObjectTemplateCompiler
     {
-        $this->compiler = new XObjectTemplateCompiler();
+    $this->compiler ??= new XObjectTemplateCompiler();
+
+    return $this->compiler;
     }
 
     public function benchSimpleHtml(): void
     {
         $html = '<div style="font-size:10;color:#000">Signed by Demo User</div><p style="font-size:9">Document approved</p>';
-        $this->compiler->compile(new CompileRequest(html: $html, width: 240, height: 84));
+      $this->compiler()->compile(new CompileRequest(html: $html, width: 240, height: 84));
     }
 
     public function benchComplexHtml(): void
@@ -49,6 +43,6 @@ class CompilerBench
   <p>Signature validated and timestamp recorded.</p>
 </div>
 HTML;
-        $this->compiler->compile(new CompileRequest(html: $html, width: 280, height: 120));
+  $this->compiler()->compile(new CompileRequest(html: $html, width: 280, height: 120));
     }
 }
