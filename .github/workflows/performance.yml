@@ -30,13 +30,14 @@ jobs:
       
       - name: Run benchmarks (strict CI mode with verbose output)
         run: |
+          mkdir -p build
           vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run \
             --iterations=20 \
             --revs=10 \
             --warmup=2 \
             --report=aggregate \
             --output=json:build/benchmark-results.json \
-            --output=console
+            benchmarks
           
           echo "✓ Benchmarks completed"
           echo ""
