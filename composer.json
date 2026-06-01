@@ -75,11 +75,11 @@
     "test:integration": "vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --testsuite integration",
     "test:coverage": "XDEBUG_MODE=coverage vendor-bin/phpunit/vendor/phpunit/phpunit/phpunit --coverage-text --coverage-clover=build/coverage/clover.xml",
     "mutation:test": "vendor-bin/mutation/vendor/infection/infection/bin/infection --threads=max",
-    "benchmark:run": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --report=aggregate benchmarks",
-    "benchmark:run:ci": "mkdir -p build && vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --iterations=20 --revs=10 --warmup=2 --report=aggregate --dump-file=build/benchmark-results.xml benchmarks",
-    "benchmark:baseline:update": "composer benchmark:run:ci | tee build/benchmark-output.txt && php benchmarks/baseline.php update",
-    "benchmark:baseline:check": "php benchmarks/baseline.php check",
-    "benchmark:baseline:stale": "php benchmarks/baseline.php check-stale",
+    "benchmark:run": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --config=phpbench.json --report=aggregate",
+    "benchmark:run:ci": "mkdir -p build && vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --config=phpbench.json --iterations=20 --revs=10 --warmup=2 --progress=plain --report=aggregate --dump-file=build/benchmark-results.xml",
+    "benchmark:baseline:update": "mkdir -p build && vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --config=phpbench.json --iterations=20 --revs=10 --warmup=2 --progress=plain --report=aggregate --dump-file=build/benchmark-results.xml --store --tag=baseline",
+    "benchmark:baseline:check": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --config=phpbench.json --iterations=20 --revs=10 --warmup=2 --progress=plain --report=aggregate --ref=baseline --assert=\"mode(variant.time.avg) <= mode(baseline.time.avg) +/- 25%\"",
+    "benchmark:baseline:exists": "vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench log --config=phpbench.json | grep -q 'Tag: baseline'",
     "bin": [
       "composer bin all list"
     ]
