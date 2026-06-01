@@ -33,11 +33,17 @@ $result = $compiler->compile(new CompileRequest(
 
 ## Validate the examples
 
-Run the documentation test suite to execute every example file and verify the generated artifacts:
+Run the integration scenario for examples to execute every example file and verify the generated artifacts:
 
 ```bash
 composer run examples:test
 ```
+
+This command also materializes additional reusable integration scenarios under
+`build/examples/integration-scenarios/`.
+
+Visible stamp scenarios (including GovBR-like) are also materialized under
+`build/examples/visible-stamp/`.
 
 ## Where to look next
 

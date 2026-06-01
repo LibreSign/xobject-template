@@ -14,6 +14,8 @@
 ## Quick example
 
 ```php
+<?php
+
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 
