@@ -35,6 +35,7 @@ SVG,
         self::assertSame('/Form', $xObject->dictionary['Subtype']);
         self::assertSame(1, $xObject->dictionary['FormType']);
         self::assertSame([0.0, 0.0, 10.0, 8.0], $xObject->dictionary['BBox']);
+        self::assertSame([0.1, 0.0, 0.0, 0.125, 0.0, 0.0], $xObject->dictionary['Matrix']);
         self::assertStringContainsString('0.0667 0.1333 0.2 rg', $xObject->stream);
         self::assertStringContainsString('0.000000 8.000000 m', $xObject->stream);
         self::assertStringContainsString('10.000000 0.000000 l', $xObject->stream);
@@ -57,6 +58,7 @@ SVG,
         );
 
         self::assertSame([0.0, 0.0, 20.0, 20.0], $xObject->dictionary['BBox']);
+        self::assertSame([0.05, 0.0, 0.0, 0.05, 0.0, 0.0], $xObject->dictionary['Matrix']);
         self::assertStringContainsString('1 0 0 rg', $xObject->stream);
         self::assertStringContainsString('0.000000 20.000000 m', $xObject->stream);
         self::assertStringContainsString('0 1 0 rg', $xObject->stream);
