@@ -577,6 +577,11 @@ final class SvgPathCommandParserTest extends TestCase
             'pathData' => 'M 0 0 Z 1',
             'expectedMessage' => 'Malformed SVG path data in "/tmp/invalid.svg".',
         ];
+
+        yield 'trailing scalar after lowercase close command' => [
+            'pathData' => 'M 0 0 z 1',
+            'expectedMessage' => 'Malformed SVG path data in "/tmp/invalid.svg".',
+        ];
     }
 
     /**
