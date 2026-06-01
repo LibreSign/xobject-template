@@ -6,7 +6,6 @@
 /vendor-bin/**/composer.lock
 /composer.lock
 /build/
-/site/
 /docs/site/
 /.phpunit.result.cache
 /.infection.cache
