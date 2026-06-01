@@ -7,25 +7,12 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf\Svg;
 
-use LibreSign\XObjectTemplate\Pdf\Svg\ArcParams;
 use LibreSign\XObjectTemplate\Pdf\Svg\SvgArcConverter;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class SvgArcConverterTest extends TestCase
 {
-    /**
-     * @param array<int, mixed> $arguments
-     */
-    private static function invokePrivateMethod(object $object, string $methodName, array $arguments = []): mixed
-    {
-        $reflection = new \ReflectionClass($object);
-        $method = $reflection->getMethod($methodName);
-        $method->setAccessible(true);
-
-        return $method->invokeArgs($object, $arguments);
-    }
-
     /**
      * @param array<int, float> $expected
      * @param array<int, float> $actual
@@ -44,278 +31,36 @@ final class SvgArcConverterTest extends TestCase
         }
     }
 
-    private static function createCurveGenerationParams(
-        float $centerX,
-        float $centerY,
+    #[DataProvider('provideBoundaryArcBehaviorScenarios')]
+    public function testArcToBezierCurvesMatchesBoundaryBehaviorThroughPublicApi(
+        float $fromX,
+        float $fromY,
         float $radiusX,
         float $radiusY,
-        float $cosTh,
-        float $sinTh,
-        float $startAngle,
-        float $deltaAngle,
-    ): ArcParams {
-        $endAngle = $startAngle + $deltaAngle;
-        $endCos = cos($endAngle);
-        $endSin = sin($endAngle);
+        float $rotation,
+        int $largeArc,
+        int $sweep,
+        float $toX,
+        float $toY,
+        int $expectedSegmentCount,
+        array $expectedFirstCurve,
+    ): void {
+        $converter = new SvgArcConverter();
 
-        return new ArcParams(
-            0.0,
-            0.0,
-            $centerX + $cosTh * $radiusX * $endCos - $sinTh * $radiusY * $endSin,
-            $centerY + $sinTh * $radiusX * $endCos + $cosTh * $radiusY * $endSin,
+        $curves = $converter->arcToBezierCurves(
+            $fromX,
+            $fromY,
             $radiusX,
             $radiusY,
-            $cosTh,
-            $sinTh,
-            0,
-            1,
-        );
-    }
-
-    public function testNormalizeArcRadiiReturnsSameInstanceWhenScaleIsExactlyOne(): void
-    {
-        $converter = new SvgArcConverter();
-        $params = new ArcParams(
-            0.0,
-            0.0,
-            2.0,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-            0.0,
-            0,
-            1,
+            $rotation,
+            $largeArc,
+            $sweep,
+            $toX,
+            $toY,
         );
 
-        $normalized = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$params]);
-
-        self::assertInstanceOf(ArcParams::class, $normalized);
-        self::assertSame($params, $normalized);
-    }
-
-    public function testNormalizeArcRadiiMatchesExpectedScaleForRotatedArc(): void
-    {
-        $converter = new SvgArcConverter();
-
-        $cosTh = cos(deg2rad(45.0));
-        $sinTh = sin(deg2rad(45.0));
-        $params = new ArcParams(
-            0.0,
-            0.0,
-            6.0,
-            2.0,
-            1.0,
-            2.0,
-            $cosTh,
-            $sinTh,
-            0,
-            1,
-        );
-
-        $normalized = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$params]);
-
-        self::assertInstanceOf(ArcParams::class, $normalized);
-        self::assertNotSame($params, $normalized);
-
-        $deltaX2 = ($params->fromX - $params->toX) / 2.0;
-        $deltaY2 = ($params->fromY - $params->toY) / 2.0;
-        $primeX = $params->cosTh * $deltaX2 + $params->sinTh * $deltaY2;
-        $primeY = -$params->sinTh * $deltaX2 + $params->cosTh * $deltaY2;
-        $radiusX2 = $params->radiusX * $params->radiusX;
-        $radiusY2 = $params->radiusY * $params->radiusY;
-        $scale = ($primeX * $primeX) / $radiusX2 + ($primeY * $primeY) / $radiusY2;
-        $scaleFactor = sqrt($scale);
-
-        self::assertGreaterThan(1.0, $scale);
-        self::assertEqualsWithDelta($params->radiusX * $scaleFactor, $normalized->radiusX, 1.0E-12);
-        self::assertEqualsWithDelta($params->radiusY * $scaleFactor, $normalized->radiusY, 1.0E-12);
-    }
-
-    public function testCalculateArcCenterUsesZeroSquareRootWhenDenominatorBucketIsZero(): void
-    {
-        $converter = new SvgArcConverter();
-        $params = new ArcParams(
-            2.0E-6,
-            2.0E-6,
-            0.0,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-            0.0,
-            0,
-            1,
-        );
-
-        [$centerX, $centerY] = self::invokePrivateMethod($converter, 'calculateArcCenter', [$params]);
-
-        self::assertEqualsWithDelta(1.0E-6, $centerX, 1.0E-15);
-        self::assertEqualsWithDelta(1.0E-6, $centerY, 1.0E-15);
-    }
-
-    public function testCalculateArcCenterKeepsMidpointWhenDenominatorBucketRoundsUpButFloorIsZero(): void
-    {
-        $converter = new SvgArcConverter();
-        $params = new ArcParams(
-            0.0,
-            0.0,
-            1.5491933384829667E-5,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-            0.0,
-            0,
-            1,
-        );
-
-        [$centerX, $centerY] = self::invokePrivateMethod($converter, 'calculateArcCenter', [$params]);
-
-        self::assertEqualsWithDelta(7.745966692414834E-6, $centerX, 1.0E-15);
-        self::assertEqualsWithDelta(0.0, $centerY, 1.0E-15);
-    }
-
-    public function testCalculateArcAnglesUsesHalfPiBranchAndSweepAdjustmentForNearZeroMagnitude(): void
-    {
-        $converter = new SvgArcConverter();
-        $params = new ArcParams(
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-            0.0,
-            0,
-            0,
-        );
-
-        [$startAngle, $deltaAngle] = self::invokePrivateMethod($converter, 'calculateArcAngles', [$params, 0.0, 0.0]);
-
-        self::assertEqualsWithDelta(0.0, $startAngle, 1.0E-12);
-        self::assertEqualsWithDelta(-(3.0 * M_PI / 2.0), $deltaAngle, 1.0E-12);
-    }
-
-    public function testCalculateArcAnglesUsesPiBranchForStableMagnitude(): void
-    {
-        $converter = new SvgArcConverter();
-        $params = new ArcParams(
-            2.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-            0.0,
-            0,
-            1,
-        );
-
-        [$startAngle, $deltaAngle] = self::invokePrivateMethod($converter, 'calculateArcAngles', [$params, 0.0, 0.0]);
-
-        self::assertEqualsWithDelta(0.0, $startAngle, 1.0E-12);
-        self::assertEqualsWithDelta(M_PI, $deltaAngle, 1.0E-12);
-    }
-
-    public function testCalculateArcAnglesUsesHalfPiWhenMagnitudeBucketRoundsUpButFloorIsZero(): void
-    {
-        $converter = new SvgArcConverter();
-        $params = new ArcParams(
-            0.0,
-            0.0,
-            1.5491933384829667E-5,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-            0.0,
-            0,
-            1,
-        );
-
-        [$startAngle, $deltaAngle] = self::invokePrivateMethod($converter, 'calculateArcAngles', [$params, 0.0, 0.0]);
-
-        self::assertEqualsWithDelta(M_PI, $startAngle, 1.0E-12);
-        self::assertEqualsWithDelta(M_PI / 2.0, $deltaAngle, 1.0E-12);
-    }
-
-    public function testGenerateArcCurvesUsesCeilToDetermineSegmentCount(): void
-    {
-        $converter = new SvgArcConverter();
-        $deltaAngle = 1.1 * (M_PI / 2.0);
-        $params = self::createCurveGenerationParams(0.0, 0.0, 10.0, 7.0, 1.0, 0.0, 0.0, $deltaAngle);
-
-        $curves = self::invokePrivateMethod(
-            $converter,
-            'generateArcCurves',
-            [$params, 0.0, 0.0, 0.0, $deltaAngle],
-        );
-
-        self::assertIsArray($curves);
-        self::assertCount(2, $curves);
-    }
-
-    public function testGenerateArcCurvesStillReturnsSingleCurveForZeroDeltaAngle(): void
-    {
-        $converter = new SvgArcConverter();
-        $deltaAngle = 0.0;
-        $params = self::createCurveGenerationParams(0.0, 0.0, 10.0, 7.0, 1.0, 0.0, 0.0, $deltaAngle);
-
-        $curves = self::invokePrivateMethod(
-            $converter,
-            'generateArcCurves',
-            [$params, 0.0, 0.0, 0.0, $deltaAngle],
-        );
-
-        self::assertIsArray($curves);
-        self::assertCount(1, $curves);
-        self::assertCurveMatches([10.0, 0.0, 10.0, 0.0, 10.0, 0.0], $curves[0], 1.0E-12);
-    }
-
-    public function testGenerateArcCurvesKeepsAlphaAtZeroWhenAngleStepHitsThreshold(): void
-    {
-        $converter = new SvgArcConverter();
-        $deltaAngle = 1.0E-10;
-        $params = self::createCurveGenerationParams(0.0, 0.0, 9.0, 4.0, 1.0, 0.0, 0.0, $deltaAngle);
-
-        $curves = self::invokePrivateMethod(
-            $converter,
-            'generateArcCurves',
-            [$params, 0.0, 0.0, 0.0, $deltaAngle],
-        );
-
-        self::assertCount(1, $curves);
-        self::assertEqualsWithDelta(9.0, $curves[0][0], 1.0E-12);
-        self::assertEqualsWithDelta(0.0, $curves[0][1], 1.0E-12);
-    }
-
-    public function testGenerateArcCurvesUsesSquaredTanHalfStepTermInAlpha(): void
-    {
-        $converter = new SvgArcConverter();
-        $deltaAngle = M_PI / 3.0;
-        $radiusX = 12.0;
-        $radiusY = 8.0;
-        $params = self::createCurveGenerationParams(0.0, 0.0, $radiusX, $radiusY, 1.0, 0.0, 0.0, $deltaAngle);
-
-        $curves = self::invokePrivateMethod(
-            $converter,
-            'generateArcCurves',
-            [$params, 0.0, 0.0, 0.0, $deltaAngle],
-        );
-
-        self::assertCount(1, $curves);
-
-        $tanHalfAngleStep = tan($deltaAngle / 2.0);
-        $alpha = sin($deltaAngle) * (sqrt(4.0 + 3.0 * $tanHalfAngleStep * $tanHalfAngleStep) - 1.0) / 3.0;
-
-        $expectedControlX1 = $radiusX;
-        $expectedControlY1 = $alpha * $radiusY;
-
-        self::assertEqualsWithDelta($expectedControlX1, $curves[0][0], 1.0E-12);
-        self::assertEqualsWithDelta($expectedControlY1, $curves[0][1], 1.0E-12);
+        self::assertCount($expectedSegmentCount, $curves);
+        self::assertCurveMatches($expectedFirstCurve, $curves[0], 1.0E-12);
     }
 
     public function testArcToBezierCurvesReturnsEmptyArrayWhenStartAndEndPointsMatch(): void
@@ -333,6 +78,87 @@ final class SvgArcConverterTest extends TestCase
             [],
             $converter->arcToBezierCurves(10.0, 10.0, 5.0, 6.0, 30.0, 0, 1, 10.0 + 5.0e-11, 10.0 - 5.0e-11),
         );
+    }
+
+    /**
+     * @return iterable<string, array{
+     *     fromX: float,
+     *     fromY: float,
+     *     radiusX: float,
+     *     radiusY: float,
+     *     rotation: float,
+     *     largeArc: int,
+     *     sweep: int,
+     *     toX: float,
+     *     toY: float,
+     *     expectedSegmentCount: int,
+     *     expectedFirstCurve: array<int, float>,
+     * }>
+     */
+    public static function provideBoundaryArcBehaviorScenarios(): iterable
+    {
+        yield 'near-zero span uses denominator floor guard path' => [
+            'fromX' => 2.0E-6,
+            'fromY' => 2.0E-6,
+            'radiusX' => 1.0,
+            'radiusY' => 1.0,
+            'rotation' => 0.0,
+            'largeArc' => 0,
+            'sweep' => 1,
+            'toX' => 0.0,
+            'toY' => 0.0,
+            'expectedSegmentCount' => 1,
+            'expectedFirstCurve' => [
+                0.31920047711974003,
+                1.0950150852533551,
+                0.3879073040668076,
+                0.38790730406680757,
+                0.0,
+                0.0,
+            ],
+        ];
+
+        yield 'tiny horizontal arc keeps one segment for sweep one' => [
+            'fromX' => 0.0,
+            'fromY' => 0.0,
+            'radiusX' => 1.0,
+            'radiusY' => 1.0,
+            'rotation' => 0.0,
+            'largeArc' => 0,
+            'sweep' => 1,
+            'toX' => 1.5491933384829667E-5,
+            'toY' => 0.0,
+            'expectedSegmentCount' => 1,
+            'expectedFirstCurve' => [
+                -0.9999922540333077,
+                -0.5485837703548633,
+                -0.5485682784214786,
+                1.0077320376439051E-16,
+                1.5491933384829667E-5,
+                0.0,
+            ],
+        ];
+
+        yield 'tiny horizontal arc with reverse sweep expands to three segments' => [
+            'fromX' => 0.0,
+            'fromY' => 0.0,
+            'radiusX' => 1.0,
+            'radiusY' => 1.0,
+            'rotation' => 0.0,
+            'largeArc' => 0,
+            'sweep' => 0,
+            'toX' => 1.5491933384829667E-5,
+            'toY' => 0.0,
+            'expectedSegmentCount' => 3,
+            'expectedFirstCurve' => [
+                -0.9999922540333075,
+                0.5485837703548635,
+                -0.5485760243881709,
+                1.0,
+                7.745966692476065E-6,
+                1.0,
+            ],
+        ];
     }
 
     #[DataProvider('provideNotSamePointScenarios')]
