@@ -1,8 +1,0 @@
-{
-  "runner.bootstrap": "vendor/autoload.php",
-  "runner.path": "benchmarks",
-  "runner.iterations": 10,
-  "runner.revs": 5,
-  "runner.warmup": 1,
-  "report.generators": ["aggregate"]
-}
