@@ -121,8 +121,7 @@ final class SvgTransformResolverTest extends TestCase
     #[DataProvider('provideIdentityFallbackTransformScenarios')]
     public function testResolveElementTransformMatrixFallsBackToIdentityForUnsupportedOrMalformedTransformText(
         string $transform,
-    ): void
-    {
+    ): void {
         $resolver = new SvgTransformResolver();
         $element = $this->createNestedElement([$transform]);
 
