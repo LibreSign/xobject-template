@@ -30,5 +30,7 @@ nav:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
+      use_pygments: true
+      pygments_lang_class: true
   - pymdownx.superfences
   - pymdownx.inlinehilite
