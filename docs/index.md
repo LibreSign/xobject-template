@@ -3,9 +3,9 @@
 
 # xobject-template documentation
 
-Public docs for `xobject-template`.
+This is the front door for the public docs site.
 
-Source pages live in `docs/source/`.
+If you're a developer trying to use `xobject-template`, start with the install guide, then open an example, then check a real use case.
 
 `xobject-template` compiles a constrained HTML/CSS subset into PDF Form XObject output.
 
