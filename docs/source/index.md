@@ -3,7 +3,9 @@
 
 # xobject-template documentation
 
-Editable source for the public docs.
+Editable source for the public docs site.
+
+Use this folder when you want to update the pages that get published.
 
 `xobject-template` compiles a constrained HTML/CSS subset into PDF Form XObject output.
 
