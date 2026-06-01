@@ -1,2 +1,5 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 mkdocs>=1.6
 mkdocs-material>=9.5
