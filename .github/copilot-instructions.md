@@ -21,7 +21,7 @@ composer benchmark:run
 composer benchmark:run:ci
 
 # Direct PHPBench invocation with custom options
-vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --report=aggregate
+vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --report=aggregate benchmarks
 ```
 
 PHPBench automatically:
