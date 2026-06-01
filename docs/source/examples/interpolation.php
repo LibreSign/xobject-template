@@ -8,9 +8,9 @@ declare(strict_types=1);
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
-$projectRoot = dirname(__DIR__);
+$projectRoot = dirname(__DIR__, 3);
 $outputDir = $projectRoot . '/build/examples';
 if (!is_dir($outputDir)) {
     mkdir($outputDir, 0777, true);
