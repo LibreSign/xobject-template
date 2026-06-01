@@ -6,9 +6,6 @@ contact_links:
   - name: Security disclosure
     url: https://github.com/LibreSign/xobject-template/security
     about: Please report vulnerabilities privately.
-  - name: Documentation site
-    url: https://github.com/LibreSign/xobject-template/tree/main/docs
-    about: Browse the user documentation source.
   - name: Sponsor maintenance
     url: https://github.com/sponsors/LibreSign
     about: Funding helps prioritize fixes and compatibility work.
