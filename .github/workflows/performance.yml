@@ -9,12 +9,10 @@ on:
 jobs:
   performance:
     runs-on: ubuntu-latest
-    env:
-      BENCH_ITERATIONS: 250
-      BENCH_MAX_AVG_MS: 4.0
-      BENCH_MAX_MEM_KB: 2048
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Detect minimum PHP from composer.json
         id: php_min
         run: |
@@ -25,4 +23,6 @@ jobs:
         with:
           php-version: ${{ steps.php_min.outputs.version }}
       - run: composer install --no-interaction --prefer-dist
-      - run: php benchmarks/compiler-benchmark.php
+      - run: composer bin all install --no-interaction --prefer-dist
+      - name: Run benchmarks
+        run: vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --report=aggregate
