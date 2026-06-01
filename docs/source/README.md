@@ -3,10 +3,21 @@
 
 # Documentation sources
 
-Place documentation source files in this directory.
+This directory contains the hand-written documentation pages that are meant to be published.
 
-Suggested future convention:
+## Entry point
+
+- `index.md` — documentation home
+
+## Suggested structure
 
 - one page per topic,
 - short user-focused sections,
 - examples that map to runnable files under `examples/`.
+
+## Published pages
+
+- `guides/getting-started.md`
+- `reference/examples.md`
+- `use-cases/visible-signatures.md`
+- `examples/` — runnable example sources and fixtures
