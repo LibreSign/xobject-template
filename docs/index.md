@@ -7,7 +7,7 @@
 
 ## Start here
 
-- [Getting started](source/guides/)
+- [Getting started](source/guides/getting-started.md)
 - [Examples](source/reference/examples.md)
 - [Visible signature use case](source/use-cases/visible-signatures.md)
 
