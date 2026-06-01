@@ -5,7 +5,7 @@
 
 Read the docs.
 
-`xobject-template` compiles a constrained HTML/CSS subset into PDF Form XObject output.
+`xobject-template` compiles a HTML/CSS template into PDF Form XObject output.
 
 ## Start here
 
