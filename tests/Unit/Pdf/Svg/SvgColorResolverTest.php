@@ -92,7 +92,7 @@ final class SvgColorResolverTest extends TestCase
     {
         $resolver = new SvgColorResolver();
 
-        self::assertTrue(is_callable([$resolver, 'resolveColorAttribute']));
+        self::assertTrue(is_callable($resolver->resolveColorAttribute(...)));
     }
 
     #[DataProvider('provideExtractValueFromStyleAttributeScenarios')]
@@ -169,6 +169,26 @@ final class SvgColorResolverTest extends TestCase
             'useColorExtractor' => true,
         ];
 
+        yield 'skip whitespace-only declarations before valid property' => [
+            'style' => "  \t \n; fill: red",
+            'property' => 'fill',
+            'expected' => 'red',
+            'useColorExtractor' => true,
+        ];
+
+        yield 'skip whitespace-only declarations before another property' => [
+            'style' => "  \t\n;stroke:none;fill:#aabbcc",
+            'property' => 'fill',
+            'expected' => '#aabbcc',
+        ];
+
+        yield 'skip all-whitespace declarations before valid color' => [
+            'style' => "  ; \t ; \n ; fill: #123456",
+            'property' => 'fill',
+            'expected' => '#123456',
+            'useColorExtractor' => true,
+        ];
+
         yield 'empty style returns null' => [
             'style' => '',
             'property' => 'fill',
@@ -214,6 +234,13 @@ final class SvgColorResolverTest extends TestCase
         yield 'rgb notation rejects missing closing parenthesis' => ['input' => 'rgb(255,0,12', 'expected' => null];
         yield 'rgb notation rejects missing opening marker' => ['input' => '255,0,12)', 'expected' => null];
         yield 'rgb notation rejects contaminated channel' => ['input' => 'rgb(12x,0,0)', 'expected' => null];
+        yield 'rgb notation rejects missing channel' => ['input' => 'rgb(0,0)', 'expected' => null];
+        yield 'rgb notation rejects extra channel' => ['input' => 'rgb(0,0,0,0)', 'expected' => null];
+        yield 'rgb notation clamps overflowing all channels' => [
+            'input' => 'rgb(300,300,300)',
+            'expected' => '#ffffff',
+        ];
+        yield 'hex with invalid characters' => ['input' => '#gggggg', 'expected' => null];
         yield 'named black' => ['input' => 'black', 'expected' => '#000000'];
         yield 'named white' => ['input' => 'white', 'expected' => '#ffffff'];
         yield 'named red' => ['input' => 'red', 'expected' => '#ff0000'];
@@ -241,6 +268,9 @@ final class SvgColorResolverTest extends TestCase
         yield 'trim hex color' => ['input' => '  #aabbcc  ', 'expected' => '#aabbcc'];
         yield 'trim named color' => ['input' => '  black  ', 'expected' => '#000000'];
         yield 'trim rgb color' => ['input' => '  rgb(255, 0, 0)  ', 'expected' => '#ff0000'];
+        yield 'trim rgb with tabs' => ['input' => "\t  #fff \n", 'expected' => '#fff'];
+        yield 'trim named color with trailing tab' => ['input' => "  black  \t", 'expected' => '#000000'];
+        yield 'trim rgb color with spaces' => ['input' => '  rgb(10,20,30)  ', 'expected' => '#0a141e'];
     }
 
     #[DataProvider('provideResolveFillColorClassExtractionScenarios')]
@@ -352,87 +382,6 @@ final class SvgColorResolverTest extends TestCase
         ];
         yield 'empty style returns null' => ['style' => '', 'expected' => null];
         yield 'whitespace style returns null' => ['style' => '   ', 'expected' => null];
-    }
-
-    public function testExtractValueFromStyleAttributeSkipsOnlyWhitespaceDeclarations(): void
-    {
-        $resolver = new SvgColorResolver();
-
-        // Tab and spaces should be skipped, not just empty
-        $result = $resolver->extractValueFromStyleAttribute("  \t \n; fill: red", 'fill');
-        self::assertSame('red', $result);
-
-        // Verify leading whitespace is trimmed from properties
-        $result = $resolver->extractValueFromStyleAttribute("   fill : blue", 'fill');
-        self::assertSame('blue', $result);
-    }
-
-    public function testExtractColorFromStyleAttributeWithAllWhitespaceDeclaration(): void
-    {
-        $resolver = new SvgColorResolver();
-
-        // All whitespace-only declarations should be skipped
-        $result = $resolver->extractColorFromStyleAttribute("  ; \t ; \n ; fill: #123456", 'fill');
-        self::assertSame('#123456', $result);
-    }
-
-    public function testExtractValueFromStyleSkipsWhitespaceOnlyDeclarationBeforeProperty(): void
-    {
-        $resolver = new SvgColorResolver();
-
-        $style = "  \t\n;stroke:none;fill:#aabbcc";
-        $result = $resolver->extractValueFromStyleAttribute($style, 'fill');
-        self::assertSame('#aabbcc', $result);
-    }
-
-    public function testNormalizeColorAlwaysTrimsBothEndsBeforeValidation(): void
-    {
-        $resolver = new SvgColorResolver();
-
-        // Ensure leading/trailing space is always removed
-        $result = $resolver->normalizeColor("\t  #fff \n");
-        self::assertSame('#fff', $result);
-
-        $result = $resolver->normalizeColor("  black  \t");
-        self::assertSame('#000000', $result);
-
-        $result = $resolver->normalizeColor("  rgb(10,20,30)  ");
-        self::assertSame('#0a141e', $result);
-    }
-
-    public function testNormalizeColorRejectsInvalidLogicalConditions(): void
-    {
-        $resolver = new SvgColorResolver();
-
-        // Ensure both conditions in logical OR are required (not just one)
-        $result = $resolver->normalizeColor("   ");
-        self::assertNull($result);
-
-        // Non-hex starting with # should fail
-        $result = $resolver->normalizeColor("#gggggg");
-        self::assertNull($result);
-
-        // Malformed RGB should fail
-        $result = $resolver->normalizeColor("rgb(300,300,300)");
-        self::assertSame('#ffffff', $result);  // Clamped, not rejected
-    }
-
-    public function testParseRgbColorRejectionEdgeCases(): void
-    {
-        $resolver = new SvgColorResolver();
-
-        // These should all fail parsing and return null
-        $result = $resolver->normalizeColor("rgb(invalid,0,0)");
-        self::assertNull($result);
-
-        $result = $resolver->normalizeColor("rgb(-1,0,0)");
-        self::assertNull($result);
-
-        $result = $resolver->normalizeColor("rgb(0,0)");  // Missing channel
-        self::assertNull($result);
-
-        $result = $resolver->normalizeColor("rgb(0,0,0,0)");  // Extra channel
-        self::assertNull($result);
     }
 
     private function createElement(string $name, array $attributes = []): DOMElement

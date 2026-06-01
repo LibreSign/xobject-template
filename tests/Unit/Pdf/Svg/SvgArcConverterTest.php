@@ -15,6 +15,18 @@ use PHPUnit\Framework\TestCase;
 final class SvgArcConverterTest extends TestCase
 {
     /**
+     * @param array<int, mixed> $arguments
+     */
+    private static function invokePrivateMethod(object $object, string $methodName, array $arguments = []): mixed
+    {
+        $reflection = new \ReflectionClass($object);
+        $method = $reflection->getMethod($methodName);
+        $method->setAccessible(true);
+
+        return $method->invokeArgs($object, $arguments);
+    }
+
+    /**
      * @param array<int, float> $expected
      * @param array<int, float> $actual
      */
@@ -58,6 +70,252 @@ final class SvgArcConverterTest extends TestCase
             0,
             1,
         );
+    }
+
+    public function testNormalizeArcRadiiReturnsSameInstanceWhenScaleIsExactlyOne(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            2.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        $normalized = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$params]);
+
+        self::assertInstanceOf(ArcParams::class, $normalized);
+        self::assertSame($params, $normalized);
+    }
+
+    public function testNormalizeArcRadiiMatchesExpectedScaleForRotatedArc(): void
+    {
+        $converter = new SvgArcConverter();
+
+        $cosTh = cos(deg2rad(45.0));
+        $sinTh = sin(deg2rad(45.0));
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            6.0,
+            2.0,
+            1.0,
+            2.0,
+            $cosTh,
+            $sinTh,
+            0,
+            1,
+        );
+
+        $normalized = self::invokePrivateMethod($converter, 'normalizeArcRadii', [$params]);
+
+        self::assertInstanceOf(ArcParams::class, $normalized);
+        self::assertNotSame($params, $normalized);
+
+        $deltaX2 = ($params->fromX - $params->toX) / 2.0;
+        $deltaY2 = ($params->fromY - $params->toY) / 2.0;
+        $primeX = $params->cosTh * $deltaX2 + $params->sinTh * $deltaY2;
+        $primeY = -$params->sinTh * $deltaX2 + $params->cosTh * $deltaY2;
+        $radiusX2 = $params->radiusX * $params->radiusX;
+        $radiusY2 = $params->radiusY * $params->radiusY;
+        $scale = ($primeX * $primeX) / $radiusX2 + ($primeY * $primeY) / $radiusY2;
+        $scaleFactor = sqrt($scale);
+
+        self::assertGreaterThan(1.0, $scale);
+        self::assertEqualsWithDelta($params->radiusX * $scaleFactor, $normalized->radiusX, 1.0E-12);
+        self::assertEqualsWithDelta($params->radiusY * $scaleFactor, $normalized->radiusY, 1.0E-12);
+    }
+
+    public function testCalculateArcCenterUsesZeroSquareRootWhenDenominatorBucketIsZero(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            2.0E-6,
+            2.0E-6,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        [$centerX, $centerY] = self::invokePrivateMethod($converter, 'calculateArcCenter', [$params]);
+
+        self::assertEqualsWithDelta(1.0E-6, $centerX, 1.0E-15);
+        self::assertEqualsWithDelta(1.0E-6, $centerY, 1.0E-15);
+    }
+
+    public function testCalculateArcCenterKeepsMidpointWhenDenominatorBucketRoundsUpButFloorIsZero(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            1.5491933384829667E-5,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        [$centerX, $centerY] = self::invokePrivateMethod($converter, 'calculateArcCenter', [$params]);
+
+        self::assertEqualsWithDelta(7.745966692414834E-6, $centerX, 1.0E-15);
+        self::assertEqualsWithDelta(0.0, $centerY, 1.0E-15);
+    }
+
+    public function testCalculateArcAnglesUsesHalfPiBranchAndSweepAdjustmentForNearZeroMagnitude(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            0,
+            0,
+        );
+
+        [$startAngle, $deltaAngle] = self::invokePrivateMethod($converter, 'calculateArcAngles', [$params, 0.0, 0.0]);
+
+        self::assertEqualsWithDelta(0.0, $startAngle, 1.0E-12);
+        self::assertEqualsWithDelta(-(3.0 * M_PI / 2.0), $deltaAngle, 1.0E-12);
+    }
+
+    public function testCalculateArcAnglesUsesPiBranchForStableMagnitude(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            2.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        [$startAngle, $deltaAngle] = self::invokePrivateMethod($converter, 'calculateArcAngles', [$params, 0.0, 0.0]);
+
+        self::assertEqualsWithDelta(0.0, $startAngle, 1.0E-12);
+        self::assertEqualsWithDelta(M_PI, $deltaAngle, 1.0E-12);
+    }
+
+    public function testCalculateArcAnglesUsesHalfPiWhenMagnitudeBucketRoundsUpButFloorIsZero(): void
+    {
+        $converter = new SvgArcConverter();
+        $params = new ArcParams(
+            0.0,
+            0.0,
+            1.5491933384829667E-5,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            0,
+            1,
+        );
+
+        [$startAngle, $deltaAngle] = self::invokePrivateMethod($converter, 'calculateArcAngles', [$params, 0.0, 0.0]);
+
+        self::assertEqualsWithDelta(M_PI, $startAngle, 1.0E-12);
+        self::assertEqualsWithDelta(M_PI / 2.0, $deltaAngle, 1.0E-12);
+    }
+
+    public function testGenerateArcCurvesUsesCeilToDetermineSegmentCount(): void
+    {
+        $converter = new SvgArcConverter();
+        $deltaAngle = 1.1 * (M_PI / 2.0);
+        $params = self::createCurveGenerationParams(0.0, 0.0, 10.0, 7.0, 1.0, 0.0, 0.0, $deltaAngle);
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [$params, 0.0, 0.0, 0.0, $deltaAngle],
+        );
+
+        self::assertIsArray($curves);
+        self::assertCount(2, $curves);
+    }
+
+    public function testGenerateArcCurvesStillReturnsSingleCurveForZeroDeltaAngle(): void
+    {
+        $converter = new SvgArcConverter();
+        $deltaAngle = 0.0;
+        $params = self::createCurveGenerationParams(0.0, 0.0, 10.0, 7.0, 1.0, 0.0, 0.0, $deltaAngle);
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [$params, 0.0, 0.0, 0.0, $deltaAngle],
+        );
+
+        self::assertIsArray($curves);
+        self::assertCount(1, $curves);
+        self::assertCurveMatches([10.0, 0.0, 10.0, 0.0, 10.0, 0.0], $curves[0], 1.0E-12);
+    }
+
+    public function testGenerateArcCurvesKeepsAlphaAtZeroWhenAngleStepHitsThreshold(): void
+    {
+        $converter = new SvgArcConverter();
+        $deltaAngle = 1.0E-10;
+        $params = self::createCurveGenerationParams(0.0, 0.0, 9.0, 4.0, 1.0, 0.0, 0.0, $deltaAngle);
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [$params, 0.0, 0.0, 0.0, $deltaAngle],
+        );
+
+        self::assertCount(1, $curves);
+        self::assertEqualsWithDelta(9.0, $curves[0][0], 1.0E-12);
+        self::assertEqualsWithDelta(0.0, $curves[0][1], 1.0E-12);
+    }
+
+    public function testGenerateArcCurvesUsesSquaredTanHalfStepTermInAlpha(): void
+    {
+        $converter = new SvgArcConverter();
+        $deltaAngle = M_PI / 3.0;
+        $radiusX = 12.0;
+        $radiusY = 8.0;
+        $params = self::createCurveGenerationParams(0.0, 0.0, $radiusX, $radiusY, 1.0, 0.0, 0.0, $deltaAngle);
+
+        $curves = self::invokePrivateMethod(
+            $converter,
+            'generateArcCurves',
+            [$params, 0.0, 0.0, 0.0, $deltaAngle],
+        );
+
+        self::assertCount(1, $curves);
+
+        $tanHalfAngleStep = tan($deltaAngle / 2.0);
+        $alpha = sin($deltaAngle) * (sqrt(4.0 + 3.0 * $tanHalfAngleStep * $tanHalfAngleStep) - 1.0) / 3.0;
+
+        $expectedControlX1 = $radiusX;
+        $expectedControlY1 = $alpha * $radiusY;
+
+        self::assertEqualsWithDelta($expectedControlX1, $curves[0][0], 1.0E-12);
+        self::assertEqualsWithDelta($expectedControlY1, $curves[0][1], 1.0E-12);
     }
 
     public function testArcToBezierCurvesReturnsEmptyArrayWhenStartAndEndPointsMatch(): void
