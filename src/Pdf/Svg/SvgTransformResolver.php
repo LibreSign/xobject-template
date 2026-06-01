@@ -93,9 +93,7 @@ final class SvgTransformResolver
         foreach ($matches as $match) {
             $operatorName = strtolower($match[1]);
             $args = preg_split('/[\s,]+/', $match[2], -1, PREG_SPLIT_NO_EMPTY);
-            if (!is_array($args)) {
-                continue;
-            }
+            /** @var list<string> $args */
 
             $values = array_map(
                 static fn(string $arg): float => (float) $arg,

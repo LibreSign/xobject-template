@@ -126,6 +126,14 @@ final class SvgTransformResolverTest extends TestCase
         self::assertSame([1.0, 0.0, 0.0, 1.0, 0.0, 0.0], $resolver->resolveElementTransformMatrix($element));
     }
 
+    public function testResolveElementTransformMatrixFallsBackToIdentityForMalformedTransformSyntax(): void
+    {
+        $resolver = new SvgTransformResolver();
+        $element = $this->createNestedElement(['translate']);
+
+        self::assertSame([1.0, 0.0, 0.0, 1.0, 0.0, 0.0], $resolver->resolveElementTransformMatrix($element));
+    }
+
     public function testResolveElementTransformMatrixBuildsExpectedCompositeMatrix(): void
     {
         $resolver = new SvgTransformResolver();
