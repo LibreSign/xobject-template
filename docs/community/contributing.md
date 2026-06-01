@@ -5,25 +5,29 @@
 
 Contributions are welcome. Keep quality high and changes scoped.
 
-## Setup
+The repository-level governance lives in the root file:
 
-Install dependencies and run checks from repository root.
+- `CONTRIBUTING.md`
 
-## Core quality commands
+Use this page as a **docs/examples complement**, not as a replacement for root contribution policy.
+
+## Docs and examples workflow
+
+From repository root, run:
 
 - `composer lint`
 - `composer test:unit`
 - `composer test:integration`
 - `composer docs:test`
 
-## Documentation and examples
+## Documentation and examples rules
 
 - Add/update runnable examples in `examples/`.
 - Keep examples small and deterministic.
 - Ensure docs snippets come from real examples.
 - Run docs drift checks before opening a PR.
 
-## Adding supported behavior
+## When adding supported behavior
 
 When adding HTML/CSS/SVG support:
 
