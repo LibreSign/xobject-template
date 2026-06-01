@@ -35,7 +35,7 @@ class CompilerBench
 </div>
 <p style="font-size:10;line-height:1.5">
   This document has been signed by:<br/>
-  <strong>John Doe</strong><br/>
+  <span style="font-weight:bold">John Doe</span><br/>
   Date: 2026-06-01<br/>
   Status: <span style="color:green">Verified</span>
 </p>
