@@ -34,7 +34,7 @@ jobs:
           
           echo "✓ Benchmarks completed"
           echo ""
-          echo "Results saved to build/benchmark-results.json"
+          echo "Results saved to build/benchmark-results.xml"
           echo "Review: Ensure no individual benchmark takes >10ms average"
       
       - name: Save benchmark results as artifact
@@ -42,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
-          path: build/benchmark-results.json
+          path: build/benchmark-results.xml
           retention-days: 90

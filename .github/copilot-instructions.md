@@ -27,7 +27,7 @@ vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor
 PHPBench automatically:
 - Runs warmup iterations (eliminates JIT/opcache startup noise)
 - Executes multiple revisions for statistical confidence
-- Reports mean, min, max, stdev, variance per benchmark
+- Reports mean, min, max, stdev, variance per benchmark (CI dump file: `build/benchmark-results.xml`)
 
 ## Compliance and contribution
 
