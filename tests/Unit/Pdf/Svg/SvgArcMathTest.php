@@ -23,7 +23,12 @@ final class SvgArcMathTest extends TestCase
         self::assertCount(count($expected), $actual);
 
         foreach ($expected as $index => $expectedValue) {
-            self::assertEqualsWithDelta($expectedValue, $actual[$index], $delta, sprintf('Curve index %d differs.', $index));
+            self::assertEqualsWithDelta(
+                $expectedValue,
+                $actual[$index],
+                $delta,
+                sprintf('Curve index %d differs.', $index),
+            );
         }
     }
 
@@ -114,8 +119,11 @@ final class SvgArcMathTest extends TestCase
     }
 
     #[DataProvider('provideCalculateArcCenterScenarios')]
-    public function testCalculateArcCenterBoundaryScenarios(ArcParams $params, float $expectedCenterX, float $expectedCenterY): void
-    {
+    public function testCalculateArcCenterBoundaryScenarios(
+        ArcParams $params,
+        float $expectedCenterX,
+        float $expectedCenterY,
+    ): void {
         $math = new SvgArcMath();
 
         [$centerX, $centerY] = $math->calculateArcCenter($params);
@@ -165,8 +173,11 @@ final class SvgArcMathTest extends TestCase
     }
 
     #[DataProvider('provideCalculateArcAnglesScenarios')]
-    public function testCalculateArcAnglesBoundaryScenarios(ArcParams $params, float $expectedStartAngle, float $expectedDeltaAngle): void
-    {
+    public function testCalculateArcAnglesBoundaryScenarios(
+        ArcParams $params,
+        float $expectedStartAngle,
+        float $expectedDeltaAngle,
+    ): void {
         $math = new SvgArcMath();
 
         [$startAngle, $deltaAngle] = $math->calculateArcAngles($params);
@@ -269,7 +280,9 @@ final class SvgArcMathTest extends TestCase
         $alphaDeltaAngle = M_PI / 3.0;
 
         $alphaTanHalfAngleStep = tan($alphaDeltaAngle / 2.0);
-        $alpha = sin($alphaDeltaAngle) * (sqrt(4.0 + 3.0 * $alphaTanHalfAngleStep * $alphaTanHalfAngleStep) - 1.0) / 3.0;
+        $alpha = sin($alphaDeltaAngle)
+            * (sqrt(4.0 + 3.0 * $alphaTanHalfAngleStep * $alphaTanHalfAngleStep) - 1.0)
+            / 3.0;
 
         yield 'ceil boundary keeps two segments' => [
             'params' => self::createCurveGenerationParams(0.0, 0.0, 10.0, 7.0, 1.0, 0.0, 0.0, $ceilDeltaAngle),

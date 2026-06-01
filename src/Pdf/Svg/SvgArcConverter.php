@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Pdf\Svg;
 
+use LibreSign\XObjectTemplate\Pdf\Svg\SvgArcMath;
+
 /**
  * Converts SVG arc commands to cubic Bézier curve approximations.
  *
@@ -20,7 +22,7 @@ namespace LibreSign\XObjectTemplate\Pdf\Svg;
 final readonly class SvgArcConverter
 {
     public function __construct(
-        private \LibreSign\XObjectTemplate\Pdf\Svg\SvgArcMath $math = new \LibreSign\XObjectTemplate\Pdf\Svg\SvgArcMath(),
+        private SvgArcMath $math = new SvgArcMath(),
     ) {
     }
 
