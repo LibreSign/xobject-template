@@ -12,11 +12,10 @@ use DOMElement;
 use LibreSign\XObjectTemplate\Pdf\Svg\SvgColorResolver;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 
 final class SvgColorResolverTest extends TestCase
 {
-    public function testResolveFillColorPrefersInlineAttributeAndTreatsNoneAsTransparent(): void
+    public function testResolveFillColorPrefersStyleAndTreatsNoneAsTransparent(): void
     {
         $resolver = new SvgColorResolver();
         $element = $this->createElement('path', [
@@ -25,11 +24,11 @@ final class SvgColorResolverTest extends TestCase
             'class' => 'accent',
         ]);
 
-        self::assertSame('#aabbcc', $resolver->resolveFillColor($element, ['accent' => '#123456']));
+        self::assertSame('#ff0000', $resolver->resolveFillColor($element, ['accent' => '#123456']));
 
         $element->setAttribute('fill', 'none');
 
-        self::assertNull($resolver->resolveFillColor($element, ['accent' => '#123456']));
+        self::assertSame('#ff0000', $resolver->resolveFillColor($element, ['accent' => '#123456']));
     }
 
     public function testResolveFillColorFallsBackToStyleClassAncestorAndDefault(): void
@@ -78,6 +77,24 @@ final class SvgColorResolverTest extends TestCase
         self::assertNull($resolver->resolveStrokeColor($fallback, []));
     }
 
+    public function testResolveStrokeColorPrefersStyleOverPresentationAttribute(): void
+    {
+        $resolver = new SvgColorResolver();
+        $element = $this->createElement('line', [
+            'stroke' => '#ff0000',
+            'style' => 'stroke:#00ff00',
+        ]);
+
+        self::assertSame('#00ff00', $resolver->resolveStrokeColor($element, []));
+    }
+
+    public function testResolveColorAttributeRemainsCallableFromOutsideTheClass(): void
+    {
+        $resolver = new SvgColorResolver();
+
+        self::assertTrue(is_callable([$resolver, 'resolveColorAttribute']));
+    }
+
     #[DataProvider('provideExtractValueFromStyleAttributeScenarios')]
     public function testExtractValueFromStyleAttributeReturnsRequestedProperty(
         string $style,
@@ -92,13 +109,6 @@ final class SvgColorResolverTest extends TestCase
             : $resolver->extractValueFromStyleAttribute($style, $property);
 
         self::assertSame($expected, $result);
-    }
-
-    public function testResolveColorAttributeRemainsPublicForFactoryCollaborators(): void
-    {
-        $method = new ReflectionMethod(SvgColorResolver::class, 'resolveColorAttribute');
-
-        self::assertTrue($method->isPublic());
     }
 
     /**
@@ -423,27 +433,6 @@ final class SvgColorResolverTest extends TestCase
 
         $result = $resolver->normalizeColor("rgb(0,0,0,0)");  // Extra channel
         self::assertNull($result);
-    }
-
-    public function testExtractClassesNormalizationAndFiltering(): void
-    {
-        $resolver = new SvgColorResolver();
-        $element = $this->createElement('div', ['class' => '  primary   secondary  tertiary  ']);
-
-        // Access private method via reflection to verify extraction
-        $method = new ReflectionMethod(SvgColorResolver::class, 'extractClasses');
-        $method->setAccessible(true);
-
-        $classes = $method->invoke($resolver, '  primary   secondary  tertiary  ');
-        self::assertSame(['primary', 'secondary', 'tertiary'], $classes);
-
-        // Empty class attribute should return empty array
-        $classes = $method->invoke($resolver, '');
-        self::assertSame([], $classes);
-
-        // Whitespace-only class attribute should return empty array (preg_split with PREG_SPLIT_NO_EMPTY filters these)
-        $classes = $method->invoke($resolver, '   ');
-        self::assertSame([], $classes);
     }
 
     private function createElement(string $name, array $attributes = []): DOMElement

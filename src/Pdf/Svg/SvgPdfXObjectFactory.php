@@ -245,17 +245,17 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
     private function resolveStrokeWidth(DOMElement $element): float
     {
-        $attr = $element->getAttribute('stroke-width');
-        if ($attr !== '') {
-            return max(0.0, $this->extractNumericSvgLength($attr));
-        }
-
         $styleWidth = $this->colorResolver->extractValueFromStyleAttribute(
             $element->getAttribute('style'),
             'stroke-width',
         );
         if ($styleWidth !== null) {
             return max(0.0, $this->extractNumericSvgLength($styleWidth));
+        }
+
+        $attr = $element->getAttribute('stroke-width');
+        if ($attr !== '') {
+            return max(0.0, $this->extractNumericSvgLength($attr));
         }
 
         return 1.0;

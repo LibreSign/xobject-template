@@ -74,16 +74,6 @@ final class SvgColorResolver
         array $classColors,
         ?string $defaultFallback,
     ): ?string {
-        // Check inline attribute
-        $inlineColor = $this->normalizeColor($element->getAttribute($attributeName));
-        if ($inlineColor === 'none') {
-            return null;
-        }
-
-        if ($inlineColor !== null) {
-            return $inlineColor;
-        }
-
         // Check inline style attribute
         $inlineStyle = $this->extractColorFromStyleAttribute($element->getAttribute('style'), $attributeName);
         if ($inlineStyle === 'none') {
@@ -103,6 +93,16 @@ final class SvgColorResolver
             }
         }
 
+        // Check inline presentation attribute
+        $inlineColor = $this->normalizeColor($element->getAttribute($attributeName));
+        if ($inlineColor === 'none') {
+            return null;
+        }
+
+        if ($inlineColor !== null) {
+            return $inlineColor;
+        }
+
         return $this->checkAncestorForColor(
             $element,
             $attributeName,
@@ -120,17 +120,17 @@ final class SvgColorResolver
     ): ?string {
         $ancestor = $element->parentNode;
         while ($ancestor instanceof DOMElement) {
-            $ancestorColor = $this->normalizeColor($ancestor->getAttribute($attributeName));
-            if ($ancestorColor !== null) {
-                return $ancestorColor === 'none' ? null : $ancestorColor;
-            }
-
             $ancestorStyle = $this->extractColorFromStyleAttribute(
                 $ancestor->getAttribute('style'),
                 $attributeName,
             );
             if ($ancestorStyle !== null) {
                 return $ancestorStyle === 'none' ? null : $ancestorStyle;
+            }
+
+            $ancestorColor = $this->normalizeColor($ancestor->getAttribute($attributeName));
+            if ($ancestorColor !== null) {
+                return $ancestorColor === 'none' ? null : $ancestorColor;
             }
 
             $ancestor = $ancestor->parentNode;

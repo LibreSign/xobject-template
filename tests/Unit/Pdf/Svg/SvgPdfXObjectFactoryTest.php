@@ -736,6 +736,17 @@ SVG,
             '2.500000 w',
         ];
 
+        yield 'stroke width style overrides presentation attribute' => [
+            <<<'SVG'
+<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,0 L10,10" stroke="#000000" stroke-width="1" style="stroke-width:2.5"/>
+</svg>
+SVG,
+            '/tmp/style-overrides-stroke-width.svg',
+            '2.500000 w',
+            ['1.000000 w'],
+        ];
+
         yield 'negative stroke width clamped to 0' => [
             <<<'SVG'
 <svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
@@ -947,15 +958,15 @@ SVG,
             ['1 0 0 rg', '0 1 0 rg'],
         ];
 
-        yield 'inline fill beats style fill' => [
+        yield 'style fill beats presentation attribute fill' => [
             <<<'SVG'
 <svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">
       <rect x="0" y="0" width="10" height="10" fill="#ff0000" style="fill:#00ff00"/>
 </svg>
 SVG,
             '/tmp/fill-priority.svg',
-            ['1 0 0 rg'],
             ['0 1 0 rg'],
+            ['1 0 0 rg'],
         ];
 
         yield 'rgb color notation' => [
