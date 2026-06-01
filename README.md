@@ -43,21 +43,13 @@ $result = $compiler->compile(new CompileRequest(
 // $result->bbox
 ```
 
-## Documentation
-
-Full documentation site source is in `docs/` and published via GitHub Pages after merge:
-
-- Installation, guides, examples, and support matrices: `docs/`
-
 ## LibreSign use case
 
-- Docs page: `docs/use-cases/libresign.md`
 - LibreSign project: <https://github.com/LibreSign/libresign>
 
 ## Contributing
 
-- Main guide: `docs/community/contributing.md`
-- Repository policy: `CONTRIBUTING.md`
+- Repository guide: `CONTRIBUTING.md`
 
 If this package helps your project generate reliable PDF signature appearances, please star the repository. It helps other developers discover the project and signals that this work is worth maintaining.
 
