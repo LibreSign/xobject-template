@@ -3,20 +3,15 @@
 
 # xobject-template documentation
 
-`xobject-template` turns a constrained HTML/CSS subset into reusable PDF Form XObject output for signatures, stamps, labels, and overlays.
+Editable source for the public docs.
+
+`xobject-template` compiles a constrained HTML/CSS subset into PDF Form XObject output.
 
 ## Start here
 
 - [Getting started](guides/)
 - [Examples](reference/)
 - [Visible signature use case](use-cases/)
-
-## What you get
-
-- deterministic rendering for PDF workflows,
-- a focused PHP API,
-- runnable examples that are covered by tests,
-- a small documentation footprint that is easier to maintain.
 
 ## Repository layout
 
@@ -25,7 +20,7 @@
 - `docs/source/` — documentation pages intended for publication
 - `docs/source/examples/` — executable examples with fixtures
 
-## Quick preview
+## Quick example
 
 ```php
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
