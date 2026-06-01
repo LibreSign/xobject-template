@@ -3,13 +3,11 @@
 
 # xobject-template documentation
 
-This is the public documentation landing page for the repository.
-The full hand-written source lives under `docs/source/`.
+Public docs for `xobject-template`.
 
-## What this library does
+Source pages live in `docs/source/`.
 
-`xobject-template` compiles a constrained HTML/CSS subset into reusable PDF Form XObject output.
-It is designed for predictable signature appearances, labels, stamps, overlays, and other compact PDF decorations.
+`xobject-template` compiles a constrained HTML/CSS subset into PDF Form XObject output.
 
 ## Start here
 
@@ -17,19 +15,12 @@ It is designed for predictable signature appearances, labels, stamps, overlays, 
 - [Examples](source/reference/)
 - [Visible signature use case](source/use-cases/)
 
-## Highlights
-
-- deterministic rendering for PDF workflows,
-- a focused PHP API,
-- runnable examples covered by tests,
-- a small documentation surface that is easier to maintain.
-
 ## Repository layout
 
 - `src/` — library code
 - `tests/` — unit, integration, and documentation tests
 - `docs/` — public documentation pages
-- `docs/source/` — source pages and example files
+- `docs/source/` — editable source pages and examples
 
 ## Quick example
 
