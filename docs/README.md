@@ -7,8 +7,10 @@ This folder is intentionally split to isolate source content from generated outp
 
 ## Structure
 
-- `docs/source/`: documentation source files maintained by contributors.
+- `docs/source/`: documentation source files maintained by contributors and intended for publication.
 - `docs/site/`: generated static site output (build artifact, not versioned).
+
+The public entry page is `docs/index.md`.
 
 ## Rules
 
