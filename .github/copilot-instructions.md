@@ -23,11 +23,8 @@ composer benchmark:run:ci
 # Update baseline after accepted performance changes
 composer benchmark:baseline:update
 
-# Check PR against baseline (regression gate)
+# Check PR against baseline (native phpbench --ref + --assert)
 composer benchmark:baseline:check
-
-# Check whether baseline is stale and should be refreshed
-composer benchmark:baseline:stale
 
 # Direct PHPBench invocation with custom options
 vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --bootstrap=vendor/autoload.php --report=aggregate benchmarks
@@ -39,8 +36,8 @@ PHPBench automatically:
 - Reports mean, min, max, stdev, variance per benchmark (CI dump file: `build/benchmark-results.xml`)
 
 Baseline persistence policy:
-- Regression gate compares PR results against `.github/.performance/baseline.json`.
-- Baseline updates are made via pull request (no direct commit to protected `main`).
+- Regression gate compares PR results against stored `baseline` tag in `.github/.performance/.phpbench`.
+- Baseline updates are made via pull request (no direct commit to protected `main`) using `composer benchmark:baseline:update`.
 
 ## Compliance and contribution
 

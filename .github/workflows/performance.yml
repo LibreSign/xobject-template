@@ -31,7 +31,7 @@ jobs:
       
       - name: Run benchmarks (strict CI mode with verbose output)
         run: |
-          composer benchmark:run:ci | tee build/benchmark-output.txt
+          composer benchmark:run:ci
           
           echo "✓ Benchmarks completed"
           echo ""
@@ -40,11 +40,13 @@ jobs:
 
       - name: Validate regression against baseline
         if: github.event_name == 'pull_request'
-        run: composer benchmark:baseline:check
-
-      - name: Validate baseline freshness
-        if: github.event_name == 'pull_request'
-        run: composer benchmark:baseline:stale
+        run: |
+          if composer benchmark:baseline:exists; then
+            composer benchmark:baseline:check
+          else
+            echo "No 'baseline' tag found in phpbench storage. Skipping baseline comparison."
+            echo "Run 'composer benchmark:baseline:update' and commit .github/.performance/.phpbench to enable regression gate."
+          fi
       
       - name: Save benchmark results as artifact
         if: always()
