@@ -527,24 +527,6 @@ final class SinglePagePdfExporterTest extends TestCase
             'expectedMessage' => 'XObject resources must be an array.',
         ];
 
-        yield 'unsupported xobject subtype' => [
-            'result' => new CompileResult(
-                contentStream: 'BT ET',
-                resources: [
-                    'Font' => [],
-                    'XObject' => [
-                        'Im0' => [
-                            'Type' => '/XObject',
-                            'Subtype' => '/Form',
-                            'Source' => '/tmp/form.xobject',
-                        ],
-                    ],
-                ],
-                bbox: [0.0, 0.0, 40.0, 40.0],
-            ),
-            'expectedMessage' => 'Unsupported XObject subtype for "Im0".',
-        ];
-
         yield 'missing image source' => [
             'result' => new CompileResult(
                 contentStream: 'BT ET',
@@ -560,7 +542,7 @@ final class SinglePagePdfExporterTest extends TestCase
                 ],
                 bbox: [0.0, 0.0, 40.0, 40.0],
             ),
-            'expectedMessage' => 'Image resource "Im0" must expose a non-empty Source.',
+            'expectedMessage' => 'XObject resource "Im0" must expose a non-empty Source.',
         ];
     }
 
