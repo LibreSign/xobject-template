@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 LibreSign
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+site_name: xobject-template
+site_description: Minimal HTML+CSS to reusable PDF Form XObject compiler.
+site_url: https://libresign.github.io/xobject-template/
+repo_url: https://github.com/LibreSign/xobject-template
+repo_name: LibreSign/xobject-template
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: docs/site
+
+theme:
+  name: material
+  palette:
+    scheme: default
+    primary: indigo
+  features:
+    - navigation.instant
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting started: source/guides/getting-started.md
+  - Examples: source/reference/examples.md
+  - Visible signature use case: source/use-cases/visible-signatures.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
