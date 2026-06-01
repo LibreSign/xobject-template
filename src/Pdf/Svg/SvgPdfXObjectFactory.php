@@ -175,13 +175,10 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
         return (float) $matches[0];
     }
 
-    /**
-     * @return array{0: array<string, string>, 1: array<string, string>}
-        * @psalm-return array{0: array<string, string>, 1: array<string, string>}
-     */
-    /**
-     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
-     */
+     /**
+      * @return array{0: array<string, string>, 1: array<string, string>}
+      * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+      */
     private function extractClassColorMaps(DOMElement $svg): array
     {
         /** @var array<string, string> $fills */
@@ -191,7 +188,6 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
         foreach ($svg->getElementsByTagName('style') as $styleNode) {
             /** @var DOMElement $styleNode */
-
             $css = $styleNode->textContent;
             if ($css === '') {
                 continue;
@@ -232,7 +228,6 @@ final readonly class SvgPdfXObjectFactory implements SvgPdfXObjectFactoryInterfa
 
         foreach ($svg->getElementsByTagName('*') as $element) {
             /** @var DOMElement $element */
-
             $name = $this->normalizeLocalName($element->localName);
             if (in_array($name, ['path', 'polygon', 'polyline', 'rect', 'circle', 'ellipse', 'line'], true)) {
                 $elements[] = $element;

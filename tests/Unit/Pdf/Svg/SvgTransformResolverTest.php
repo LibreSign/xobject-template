@@ -118,18 +118,13 @@ final class SvgTransformResolverTest extends TestCase
         self::assertEqualsWithDelta($expectedPoint[1], $actualY, 0.0001);
     }
 
-    public function testResolveElementTransformMatrixFallsBackToIdentityForUnsupportedTransformText(): void
+    #[DataProvider('provideIdentityFallbackTransformScenarios')]
+    public function testResolveElementTransformMatrixFallsBackToIdentityForUnsupportedOrMalformedTransformText(
+        string $transform,
+    ): void
     {
         $resolver = new SvgTransformResolver();
-        $element = $this->createNestedElement(['banana(10)']);
-
-        self::assertSame([1.0, 0.0, 0.0, 1.0, 0.0, 0.0], $resolver->resolveElementTransformMatrix($element));
-    }
-
-    public function testResolveElementTransformMatrixFallsBackToIdentityForMalformedTransformSyntax(): void
-    {
-        $resolver = new SvgTransformResolver();
-        $element = $this->createNestedElement(['translate']);
+        $element = $this->createNestedElement([$transform]);
 
         self::assertSame([1.0, 0.0, 0.0, 1.0, 0.0, 0.0], $resolver->resolveElementTransformMatrix($element));
     }
@@ -144,20 +139,11 @@ final class SvgTransformResolverTest extends TestCase
         self::assertSame([4.0, 0.0, 0.0, 5.0, 2.0, 3.0], $matrix);
     }
 
-    public function testResolveElementTransformMatrixSkipsEmptyArgumentsBetweenSeparators(): void
+    #[DataProvider('provideTranslateWithEmptyArgumentScenarios')]
+    public function testResolveElementTransformMatrixSkipsEmptyTranslateArguments(string $transform): void
     {
         $resolver = new SvgTransformResolver();
-        $element = $this->createNestedElement(['translate(5,,7)']);
-
-        $matrix = $resolver->resolveElementTransformMatrix($element);
-
-        self::assertSame([1.0, 0.0, 0.0, 1.0, 5.0, 7.0], $matrix);
-    }
-
-    public function testResolveElementTransformMatrixSkipsLeadingEmptyArguments(): void
-    {
-        $resolver = new SvgTransformResolver();
-        $element = $this->createNestedElement(['translate(,5,7)']);
+        $element = $this->createNestedElement([$transform]);
 
         $matrix = $resolver->resolveElementTransformMatrix($element);
 
@@ -316,6 +302,34 @@ final class SvgTransformResolverTest extends TestCase
             'x' => 1.0,
             'y' => 2.0,
             'expectedPoint' => [1.0, 2.0],
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{transform: string}>
+     */
+    public static function provideIdentityFallbackTransformScenarios(): iterable
+    {
+        yield 'unsupported transform operator text' => [
+            'transform' => 'banana(10)',
+        ];
+
+        yield 'malformed transform syntax without arguments list' => [
+            'transform' => 'translate',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{transform: string}>
+     */
+    public static function provideTranslateWithEmptyArgumentScenarios(): iterable
+    {
+        yield 'skips empty argument between separators' => [
+            'transform' => 'translate(5,,7)',
+        ];
+
+        yield 'skips leading empty argument' => [
+            'transform' => 'translate(,5,7)',
         ];
     }
 
