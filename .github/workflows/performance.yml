@@ -5,6 +5,9 @@ name: performance
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   performance:
@@ -24,5 +27,26 @@ jobs:
           php-version: ${{ steps.php_min.outputs.version }}
       - run: composer install --no-interaction --prefer-dist
       - run: composer bin all install --no-interaction --prefer-dist
-      - name: Run benchmarks
-        run: vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run --report=aggregate
+      
+      - name: Run benchmarks (strict CI mode with verbose output)
+        run: |
+          vendor-bin/phpbench/vendor/phpbench/phpbench/bin/phpbench run \
+            --iterations=20 \
+            --revs=10 \
+            --warmup=2 \
+            --report=aggregate \
+            --output=json:build/benchmark-results.json \
+            --output=console
+          
+          echo "✓ Benchmarks completed"
+          echo ""
+          echo "Results saved to build/benchmark-results.json"
+          echo "Review: Ensure no individual benchmark takes >10ms average"
+      
+      - name: Save benchmark results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: build/benchmark-results.json
+          retention-days: 90
