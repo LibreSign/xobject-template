@@ -54,6 +54,35 @@ final class SinglePagePdfExporterTest extends TestCase
         self::assertStringContainsString('(Rendered for Alice) Tj', $pdf);
     }
 
+    public function testExportKeepsLegacyFontAfterEmbeddedUnicodeFont(): void
+    {
+        $fontPath = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+        self::assertFileExists($fontPath);
+        $font = new \LibreSign\XObjectTemplate\Pdf\TrueTypeFont($fontPath);
+        $pdf = (new SinglePagePdfExporter())->export(new CompileResult(
+            contentStream: 'BT /U1 12 Tf <0001> Tj /F1 12 Tf (Legacy) Tj ET',
+            resources: [
+                'Font' => [
+                    'U1' => [
+                        '__TrueTypeFont' => $font,
+                        '__Mappings' => [['glyph' => 0xE9, 'unicode' => [0xE9]]],
+                    ],
+                    'F1' => [
+                        'Type' => '/Font',
+                        'Subtype' => '/Type1',
+                        'BaseFont' => '/Helvetica',
+                    ],
+                ],
+            ],
+            bbox: [0.0, 0.0, 240.0, 84.0],
+        ));
+        self::assertStringContainsString('/Subtype /CIDFontType2', $pdf);
+        self::assertStringContainsString('/Subtype /Type1', $pdf);
+        self::assertStringContainsString('/BaseFont /Helvetica', $pdf);
+        self::assertStringContainsString('/U1 ', $pdf);
+        self::assertStringContainsString('/F1 ', $pdf);
+    }
+
     public function testExportUsesInjectedImageEmbedderForImageResources(): void
     {
         $embedder = new RecordingPdfImageEmbedder(

@@ -35,6 +35,8 @@ final class UnicodeScalarCodecTest extends TestCase
         yield 'utf8 three-byte lower edge' => ["\xE0\xA0\x80", 0x800, '0800'];
         yield 'utf8 three-byte upper edge' => ["\xEF\xBF\xBF", 0xFFFF, 'FFFF'];
         yield 'utf8 four-byte lower edge' => ["\xF0\x90\x80\x80", 0x10000, 'D800DC00'];
+        yield '4 byte F1' => ["\xF1\x80\x80\x80", 0x40000, 'D8C0DC00'];
+        yield '4 byte F3' => ["\xF3\x80\x80\x80", 0xC0000, 'DAC0DC00'];
         yield 'emoji' => ['😀', 0x1F600, 'D83DDE00'];
         yield 'utf8 four-byte upper edge' => ["\xF4\x8F\xBF\xBF", 0x10FFFF, 'DBFFDFFF'];
     }

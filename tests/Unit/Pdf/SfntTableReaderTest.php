@@ -65,6 +65,14 @@ final class SfntTableReaderTest extends TestCase
         self::assertSame(0xAABBCCDD, $reader->u32(1));
     }
 
+    public function testReadsMustRejectThreeByteWordBeforeUnpack(): void
+    {
+        $reader = new SfntTableReader("\x12\x34\x56");
+        self::assertSame(0x1234, $reader->u16(0));
+        $this->expectException(InvalidArgumentException::class);
+        $reader->u32(0);
+    }
+
     public function testReadMethodsRejectTruncatedData(): void
     {
         $reader = new SfntTableReader("A");

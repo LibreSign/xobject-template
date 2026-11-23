@@ -16,6 +16,33 @@ use PHPUnit\Framework\TestCase;
 
 final class StructuredLayoutRendererTest extends TestCase
 {
+    public function testInjectedUnicodeMetricsControlStructuredRightAlignment(): void
+    {
+        $fontPath = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+        self::assertFileExists($fontPath);
+        $font = new \LibreSign\XObjectTemplate\Pdf\TrueTypeFont($fontPath);
+        $metrics = new \LibreSign\XObjectTemplate\Pdf\StandardFontMetrics([$font]);
+        $node = new Node(
+            tag: 'div',
+            text: 'é',
+            attributes: ['style' => 'font-size:10;text-align:right;width:100'],
+        );
+        $renderer = new StructuredLayoutRenderer(
+            new InlineStyleParser(),
+            new LayoutStyleResolver(),
+            $metrics,
+        );
+        $result = $renderer->layout([$node], 100.0, 84.0);
+        self::assertCount(1, $result->lines);
+        self::assertEqualsWithDelta(
+            100.0 - $metrics->measureString('F1', 10.0, 'é'),
+            $result->lines[0]->x,
+            0.001,
+        );
+        $legacy = $this->createRenderer()->layout([$node], 100.0, 84.0);
+        self::assertNotEquals($legacy->lines[0]->x, $result->lines[0]->x);
+    }
+
     public function testLayoutUsesBreakNodesAsTwelvePointFlowSpacing(): void
     {
         $renderer = $this->createRenderer();
