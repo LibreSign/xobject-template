@@ -21,10 +21,12 @@ final readonly class StructuredLayoutRenderer
     public function __construct(
         private InlineStyleParser $styleParser,
         private LayoutStyleResolver $styleResolver,
+        ?StandardFontMetrics $fontMetrics = null,
     ) {
         $this->boxResolver = new StructuredBoxResolver($styleResolver);
-        $this->flexPlanner = new StructuredFlexLayoutPlanner($styleResolver);
-        $this->textLayouter = new TextBoxLayouter($styleResolver, new StandardFontMetrics());
+        $metrics = $fontMetrics ?? new StandardFontMetrics();
+        $this->flexPlanner = new StructuredFlexLayoutPlanner($styleResolver, fontMetrics: $metrics);
+        $this->textLayouter = new TextBoxLayouter($styleResolver, $metrics);
     }
 
     /**

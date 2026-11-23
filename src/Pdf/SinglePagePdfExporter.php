@@ -109,12 +109,124 @@ final readonly class SinglePagePdfExporter
         $fontReferences = [];
 
         foreach ($fontResources as $alias => $fontResource) {
+            if (isset($fontResource['__TrueTypeFont'])) {
+                $fontReferences[$alias] = $this->createUnicodeFontObject($objects, $fontResource);
+                continue;
+            }
             $reference = $this->reserveObject($objects);
             $objects[$reference] = $this->serializeDictionary($fontResource);
             $fontReferences[$alias] = $this->asReference($reference);
         }
 
         return $fontReferences;
+    }
+
+    /**
+     * Serializes a PDF Type0/Identity-H font with actual font data and an
+     * explicit CIDToGIDMap. A ToUnicode CMap preserves extracted text.
+     *
+     * @param array<int, string|null> $objects
+     * @param array<string, mixed> $resource
+     */
+    private function createUnicodeFontObject(array &$objects, array $resource): string
+    {
+        $font = $resource['__TrueTypeFont'] ?? null;
+        $mappings = $resource['__Mappings'] ?? null;
+        if (!$font instanceof TrueTypeFont || !is_array($mappings) || $mappings === []) {
+            throw new InvalidArgumentException('Invalid Unicode font resource.');
+        }
+        $name = 'LibreSignUnicode' . substr(hash('sha256', $font->fontData()), 0, 12);
+        $fontData = $font->fontData();
+        $fontFile = $this->reserveObject($objects);
+        $objects[$fontFile] = $this->serializeStreamObject(['Length1' => strlen($fontData)], $fontData);
+
+        $cidMap = pack('n', 0);
+        $widths = [];
+        $cmapEntries = [];
+        foreach ($mappings as $index => $entry) {
+            if (
+                !is_array($entry) || !is_int($index) || $index > 65534
+                || !isset($entry['glyph'], $entry['unicode'])
+                || !is_int($entry['glyph']) || !is_array($entry['unicode'])
+            ) {
+                throw new InvalidArgumentException('Invalid Unicode CID.');
+            }
+            $gid = $font->glyphFor($entry['glyph']);
+            if ($gid < 1 || $gid > 65535) {
+                throw new InvalidArgumentException(sprintf('Missing TrueType glyph U+%04X.', $entry['glyph']));
+            }
+            $cid = $index + 1;
+            $cidMap .= pack('n', $gid);
+            $widths[] = $font->widthForGlyph($gid);
+            $unicodeHex = '';
+            foreach ($entry['unicode'] as $cp) {
+                if (!is_int($cp)) {
+                    throw new InvalidArgumentException('Invalid Unicode mapping scalar.');
+                }
+                $unicodeHex .= TrueTypeFont::utf16Hex($cp);
+            }
+            $cmapEntries[] = sprintf('<%04X> <%s>', $cid, $unicodeHex);
+        }
+        $cidMapRef = $this->reserveObject($objects);
+        $objects[$cidMapRef] = $this->serializeStreamObject([], $cidMap);
+
+        $toUnicode = "/CIDInit /ProcSet findresource begin
+"
+            . "12 dict begin
+begincmap
+"
+            . "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+"
+            . "/CMapName /LibreSignToUnicode def
+/CMapType 2 def
+"
+            . "1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+";
+        foreach (array_chunk($cmapEntries, 100) as $chunk) {
+            $toUnicode .= count($chunk) . " beginbfchar
+"
+                . implode("
+", $chunk) . "
+endbfchar
+";
+        }
+        $toUnicode .= "endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+";
+        $toUnicodeRef = $this->reserveObject($objects);
+        $objects[$toUnicodeRef] = $this->serializeStreamObject([], $toUnicode);
+
+        $descriptorRef = $this->reserveObject($objects);
+        $objects[$descriptorRef] = $this->serializeDictionary(
+            $font->descriptor($name, $this->asReference($fontFile)),
+        );
+
+        $cidFontRef = $this->reserveObject($objects);
+        $objects[$cidFontRef] = $this->serializeDictionary([
+            'Type' => '/Font',
+            'Subtype' => '/CIDFontType2',
+            'BaseFont' => '/' . $name,
+            'CIDSystemInfo' => ['Registry' => 'Adobe', 'Ordering' => 'Identity', 'Supplement' => 0],
+            'FontDescriptor' => $this->asReference($descriptorRef),
+            'CIDToGIDMap' => $this->asReference($cidMapRef),
+            'DW' => 1000,
+            'W' => [1, $widths],
+        ]);
+
+        $type0Ref = $this->reserveObject($objects);
+        $objects[$type0Ref] = $this->serializeDictionary([
+            'Type' => '/Font',
+            'Subtype' => '/Type0',
+            'BaseFont' => '/' . $name,
+            'Encoding' => '/Identity-H',
+            'DescendantFonts' => [$this->asReference($cidFontRef)],
+            'ToUnicode' => $this->asReference($toUnicodeRef),
+        ]);
+        return $this->asReference($type0Ref);
     }
 
     /**

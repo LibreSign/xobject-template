@@ -53,6 +53,11 @@ final readonly class StandardFontMetrics
         '{' => 480.0, '|' => 200.0, '}' => 480.0, '~' => 541.0,
     ];
 
+    /** @param list<TrueTypeFont> $unicodeFonts */
+    public function __construct(private array $unicodeFonts = [])
+    {
+    }
+
     public function measureString(string $fontAlias, float $fontSize, string $text): float
     {
         if ($text === '') {
@@ -65,6 +70,21 @@ final readonly class StandardFontMetrics
 
         if (max($fontSize, 0.0) !== $fontSize) {
             return 0.0;
+        }
+
+        if (preg_match('/[^\x00-\x7f]/', $text) && $this->unicodeFonts !== []) {
+            $glyphs = (new ArabicPresentationShaper())->shape(TrueTypeFont::codepoints($text));
+            foreach ($this->unicodeFonts as $font) {
+                $width = 0;
+                foreach ($glyphs as $glyph) {
+                    $gid = $font->glyphFor($glyph['glyph']);
+                    if ($gid === 0) {
+                        continue 2;
+                    }
+                    $width += $font->widthForGlyph($gid);
+                }
+                return $width * $fontSize / 1000;
+            }
         }
 
         $width = 0.0;

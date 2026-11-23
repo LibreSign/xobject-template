@@ -35,10 +35,12 @@ final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerI
     ) {
         $this->htmlParser = $htmlParser ?? new SubsetHtmlParser();
         $this->contextInterpolator = $contextInterpolator ?? new HtmlContextInterpolator();
-        $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine();
         $this->documentBuilder = $documentBuilder ?? new TemplateDocumentBuilder(
             $pdfEscaper ?? new PdfEscaper(),
             $colorParser ?? new ColorParser(),
+        );
+        $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine(
+            fontMetrics: new \LibreSign\XObjectTemplate\Pdf\StandardFontMetrics($this->documentBuilder->unicodeFonts()),
         );
     }
 
