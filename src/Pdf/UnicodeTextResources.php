@@ -91,9 +91,6 @@ final readonly class UnicodeTextResources
                 $mappings[] = $glyph;
                 $index = count($mappings) - 1;
             }
-            if ($index >= 65535) {
-                throw new InvalidArgumentException('Unicode CID mapping out of range.');
-            }
             $cids[] = $index + 1;
         }
         return [$mappings, $cids];

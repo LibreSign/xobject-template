@@ -15,9 +15,6 @@ final readonly class UnicodeScalarCodec
     /** @return list<int> */
     public function decode(string $value): array
     {
-        if (preg_match('//u', $value) !== 1) {
-            throw new InvalidArgumentException('Text must be valid UTF-8.');
-        }
         $characters = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
         if ($characters === false) {
             throw new InvalidArgumentException('Text must be valid UTF-8.');
@@ -38,7 +35,6 @@ final readonly class UnicodeScalarCodec
             3 => (($first & 15) << 12) | ((ord($character[1]) & 63) << 6) | (ord($character[2]) & 63),
             4 => (($first & 7) << 18) | ((ord($character[1]) & 63) << 12)
                 | ((ord($character[2]) & 63) << 6) | (ord($character[3]) & 63),
-            default => throw new InvalidArgumentException('Invalid UTF-8 sequence.'),
         };
     }
 

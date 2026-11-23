@@ -15,6 +15,8 @@ final readonly class TrueTypeCmap
     private int $offset;
     private int $format;
     private int $length;
+    /** @var list<array{start: int, end: int, glyph: int}> */
+    private array $groups;
 
     public function __construct(private SfntTableReader $reader, int $cmapOffset, int $tableLength)
     {
@@ -27,11 +29,13 @@ final readonly class TrueTypeCmap
         $this->length = $this->format === 12
             ? $reader->u32($this->offset + 4)
             : $reader->u16($this->offset + 2);
-        $reader->requireRange($this->offset, $this->length);
         if ($this->length > $cmapOffset + $tableLength - $this->offset) {
             throw new InvalidArgumentException('TrueType cmap subtable exceeds its table bounds.');
         }
-        $this->validateIndex();
+        $this->groups = $this->format === 12 ? $this->readGroups() : [];
+        if ($this->format !== 12) {
+            $this->validateSegments();
+        }
     }
 
     public function glyphFor(int $codepoint): int
@@ -46,80 +50,89 @@ final readonly class TrueTypeCmap
 
     private function chooseCmapOffset(int $tableOffset, int $tableLength): int
     {
-        $reader = $this->reader;
-        $records = $reader->u16($tableOffset + 2);
+        $records = $this->reader->u16($tableOffset + 2);
         if ($records > 256 || $records * 8 > $tableLength - 4) {
             throw new InvalidArgumentException('TrueType Unicode cmap contains too many encoding records.');
         }
-        $reader->requireRange($tableOffset + 4, $records * 8);
-        $bestPriority = -1;
-        $selectedOffset = -1;
+        /** @var list<array{platform: int, encoding: int, format: int, offset: int}> $entries */
+        $entries = [];
         for ($index = 0; $index < $records; $index++) {
             $record = $tableOffset + 4 + 8 * $index;
-            $platform = $reader->u16($record);
-            $encoding = $reader->u16($record + 2);
-            $offset = $tableOffset + $reader->u32($record + 4);
-            if ($offset < $tableOffset || $offset > $tableOffset + $tableLength - 2) {
+            $offset = $tableOffset + $this->reader->u32($record + 4);
+            if ($offset > $tableOffset + $tableLength - 2) {
                 continue;
             }
-            $format = $reader->u16($offset);
-            $priority = $this->priority($platform, $encoding, $format);
-            if ($priority > $bestPriority) {
-                $bestPriority = $priority;
-                $selectedOffset = $offset;
+            $entries[] = [
+                'platform' => $this->reader->u16($record),
+                'encoding' => $this->reader->u16($record + 2),
+                'format' => $this->reader->u16($offset),
+                'offset' => $offset,
+            ];
+        }
+        // Preference order: Windows UCS-4, Unicode UCS-4, Windows BMP, Unicode BMP.
+        foreach ([[3, 10, 12], [0, null, 12], [3, 1, 4], [0, null, 4]] as [$platform, $encoding, $format]) {
+            foreach ($entries as $entry) {
+                if ($this->matchesPreference($entry, $platform, $encoding, $format)) {
+                    return $entry['offset'];
+                }
             }
         }
-        if ($selectedOffset === -1) {
-            throw new InvalidArgumentException('TrueType font has no Unicode cmap.');
-        }
-        return $selectedOffset;
+        throw new InvalidArgumentException('TrueType font has no Unicode cmap.');
     }
 
-    private function priority(int $platform, int $encoding, int $format): int
+    /**
+     * @param array{platform: int, encoding: int, format: int, offset: int} $entry
+     */
+    private function matchesPreference(array $entry, int $platform, ?int $encoding, int $format): bool
     {
-        if ($format === 12) {
-            return $platform === 3 && $encoding === 10 ? 4 : ($platform === 0 ? 3 : -1);
-        }
-        if ($format === 4) {
-            return $platform === 3 && $encoding === 1 ? 2 : ($platform === 0 ? 1 : -1);
-        }
-        return -1;
+        return $entry['platform'] === $platform
+            && ($encoding === null || $entry['encoding'] === $encoding)
+            && $entry['format'] === $format;
     }
 
-    private function validateIndex(): void
+    /** @return list<array{start: int, end: int, glyph: int}> */
+    private function readGroups(): array
     {
-        if ($this->format === 12) {
-            $groups = $this->reader->u32($this->offset + 12);
-            if ($groups > intdiv($this->length - 16, 12)) {
-                throw new InvalidArgumentException('Truncated TrueType format 12 cmap.');
+        $groupCount = $this->reader->u32($this->offset + 12);
+        if ($groupCount > intdiv($this->length - 16, 12)) {
+            throw new InvalidArgumentException('Truncated TrueType format 12 cmap.');
+        }
+        if ($groupCount > 16384) {
+            throw new InvalidArgumentException('TrueType format 12 cmap exceeds safe group limit.');
+        }
+        $groups = [];
+        $lastEnd = null;
+        for ($index = 0; $index < $groupCount; $index++) {
+            $groupOffset = $this->offset + 16 + $index * 12;
+            $start = $this->reader->u32($groupOffset);
+            $end = $this->reader->u32($groupOffset + 4);
+            $glyph = $this->reader->u32($groupOffset + 8);
+            if ($start > $end || $end > 0x10FFFF || ($lastEnd !== null && $start <= $lastEnd)) {
+                throw new InvalidArgumentException('Invalid TrueType format 12 cmap ranges.');
             }
-            return;
+            $groups[] = ['start' => $start, 'end' => $end, 'glyph' => $glyph];
+            $lastEnd = $end;
         }
+        return $groups;
+    }
+
+    private function validateSegments(): void
+    {
         $segments = intdiv($this->reader->u16($this->offset + 6), 2);
-        if ($segments <= 0 || 16 + $segments * 8 > $this->length) {
+        if ($segments === 0 || 16 + $segments * 8 > $this->length) {
             throw new InvalidArgumentException('Truncated TrueType format 4 cmap.');
         }
     }
 
     private function glyphFromGroups(int $codepoint): int
     {
-        $groups = $this->reader->u32($this->offset + 12);
-        $low = 0;
-        $high = $groups - 1;
-        while ($low <= $high) {
-            $middle = intdiv($low + $high, 2);
-            $group = $this->offset + 16 + $middle * 12;
-            $start = $this->reader->u32($group);
-            $end = $this->reader->u32($group + 4);
-            if ($codepoint < $start) {
-                $high = $middle - 1;
-                continue;
+        foreach ($this->groups as $group) {
+            if ($codepoint < $group['start']) {
+                return 0;
             }
-            if ($codepoint > $end) {
-                $low = $middle + 1;
-                continue;
+            if ($codepoint <= $group['end']) {
+                return $group['glyph'] + $codepoint - $group['start'];
             }
-            return $this->reader->u32($group + 8) + $codepoint - $start;
         }
         return 0;
     }
@@ -134,33 +147,40 @@ final readonly class TrueTypeCmap
         $startOffset = $endOffset + 2 * $segments + 2;
         $deltaOffset = $startOffset + 2 * $segments;
         $rangeOffset = $deltaOffset + 2 * $segments;
-        for ($index = 0; $index < $segments; $index++) {
-            if ($codepoint > $this->reader->u16($endOffset + 2 * $index)) {
-                continue;
+        $endCursor = $endOffset;
+        $startCursor = $startOffset;
+        $deltaCursor = $deltaOffset;
+        $rangeCursor = $rangeOffset;
+        $endLimit = $endOffset + 2 * $segments;
+        while ($endCursor < $endLimit) {
+            if ($codepoint <= $this->reader->u16($endCursor)) {
+                if ($codepoint < $this->reader->u16($startCursor)) {
+                    return 0;
+                }
+                return $this->segmentGlyph($codepoint, $startCursor, $deltaCursor, $rangeCursor);
             }
-            if ($codepoint < $this->reader->u16($startOffset + 2 * $index)) {
-                return 0;
-            }
-            return $this->segmentGlyph($codepoint, $index, $startOffset, $deltaOffset, $rangeOffset);
+            $endCursor += 2;
+            $startCursor += 2;
+            $deltaCursor += 2;
+            $rangeCursor += 2;
         }
         return 0;
     }
 
     private function segmentGlyph(
         int $codepoint,
-        int $index,
-        int $startOffset,
-        int $deltaOffset,
-        int $rangeOffset,
+        int $startCursor,
+        int $deltaCursor,
+        int $rangeCursor,
     ): int {
-        $delta = $this->reader->u16($deltaOffset + 2 * $index);
-        $range = $this->reader->u16($rangeOffset + 2 * $index);
+        $delta = $this->reader->u16($deltaCursor);
+        $range = $this->reader->u16($rangeCursor);
         if ($range === 0) {
             return ($codepoint + $delta) & 0xFFFF;
         }
-        $glyphOffset = $rangeOffset + 2 * $index + $range
-            + 2 * ($codepoint - $this->reader->u16($startOffset + 2 * $index));
-        if ($glyphOffset < $this->offset || $glyphOffset + 2 > $this->offset + $this->length) {
+        $glyphOffset = $rangeCursor + $range
+            + 2 * ($codepoint - $this->reader->u16($startCursor));
+        if ($glyphOffset + 2 > $this->offset + $this->length) {
             throw new InvalidArgumentException('TrueType cmap glyph index exceeds subtable.');
         }
         $glyph = $this->reader->u16($glyphOffset);

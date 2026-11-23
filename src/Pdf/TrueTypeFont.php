@@ -15,6 +15,8 @@ use InvalidArgumentException;
  */
 final class TrueTypeFont
 {
+    private const MIN_BYTES = 64;
+    private const MAX_BYTES = 33554432;
     private readonly string $bytes;
     /** @var array<string, array{offset: int, length: int}> */
     private array $tables = [];
@@ -50,15 +52,15 @@ final class TrueTypeFont
 
     private function readFontData(string $path): string
     {
-        if (!is_file($path) || !is_readable($path)) {
+        if (!is_file($path)) {
             throw new InvalidArgumentException('TrueType font file cannot be read.');
         }
         $size = filesize($path);
-        if ($size === false || $size < 64 || $size > 32 * 1024 * 1024) {
+        if ($size < self::MIN_BYTES || $size > self::MAX_BYTES) {
             throw new InvalidArgumentException('TrueType font file must be between 64 bytes and 32 MiB.');
         }
-        $bytes = file_get_contents($path);
-        if ($bytes === false || strlen($bytes) !== $size) {
+        $bytes = sprintf('%s', file_get_contents($path));
+        if (strlen($bytes) !== $size) {
             throw new InvalidArgumentException('TrueType font file cannot be read.');
         }
         return $bytes;
@@ -70,7 +72,7 @@ final class TrueTypeFont
             throw new InvalidArgumentException('Only sfnt TrueType outlines are supported (not OTF/CFF or TTC).');
         }
         $count = $this->u16(4);
-        if ($count > 128 || 12 + $count * 16 > strlen($this->bytes)) {
+        if ($count > 128) {
             throw new InvalidArgumentException('Invalid TrueType table directory.');
         }
         for ($index = 0; $index < $count; $index++) {
@@ -78,14 +80,12 @@ final class TrueTypeFont
             $name = substr($this->bytes, $entry, 4);
             $offset = $this->u32($entry + 8);
             $length = $this->u32($entry + 12);
-            if ($offset > strlen($this->bytes) || $length > strlen($this->bytes) - $offset) {
-                throw new InvalidArgumentException('TrueType table exceeds font bounds.');
-            }
+            $this->reader->requireRange($offset, $length);
             $this->tables[$name] = ['offset' => $offset, 'length' => $length];
         }
         foreach (['head', 'hhea', 'hmtx', 'maxp', 'cmap'] as $required) {
             if (!isset($this->tables[$required])) {
-                throw new InvalidArgumentException('Missing TrueType table: ' . $required);
+                throw new InvalidArgumentException('Missing required TrueType table.');
             }
         }
     }
@@ -98,15 +98,15 @@ final class TrueTypeFont
      */
     private function readFontMetrics(): array
     {
-        $unitsPerEm = $this->u16($this->fieldOffset('head', 18, 2));
-        $bboxLeft = $this->s16($this->fieldOffset('head', 36, 2));
-        $bboxBottom = $this->s16($this->fieldOffset('head', 38, 2));
-        $bboxRight = $this->s16($this->fieldOffset('head', 40, 2));
-        $bboxTop = $this->s16($this->fieldOffset('head', 42, 2));
-        $ascent = $this->s16($this->fieldOffset('hhea', 4, 2));
-        $descent = $this->s16($this->fieldOffset('hhea', 6, 2));
-        $hMetricsCount = $this->u16($this->fieldOffset('hhea', 34, 2));
-        $glyphCount = $this->u16($this->fieldOffset('maxp', 4, 2));
+        $unitsPerEm = $this->u16($this->fieldOffset('head', 18));
+        $bboxLeft = $this->s16($this->fieldOffset('head', 36));
+        $bboxBottom = $this->s16($this->fieldOffset('head', 38));
+        $bboxRight = $this->s16($this->fieldOffset('head', 40));
+        $bboxTop = $this->s16($this->fieldOffset('head', 42));
+        $ascent = $this->s16($this->fieldOffset('hhea', 4));
+        $descent = $this->s16($this->fieldOffset('hhea', 6));
+        $hMetricsCount = $this->u16($this->fieldOffset('hhea', 34));
+        $glyphCount = $this->u16($this->fieldOffset('maxp', 4));
         if ($unitsPerEm === 0 || $glyphCount === 0 || $hMetricsCount === 0) {
             throw new InvalidArgumentException('Invalid TrueType font metrics.');
         }
@@ -135,7 +135,7 @@ final class TrueTypeFont
         if (!isset($this->tables['OS/2'])) {
             return;
         }
-        $embeddingFlags = $this->u16($this->fieldOffset('OS/2', 8, 2));
+        $embeddingFlags = $this->u16($this->fieldOffset('OS/2', 8));
         if (($embeddingFlags & 0x0002) !== 0 || ($embeddingFlags & 0x0200) !== 0) {
             throw new InvalidArgumentException('TrueType font embedding is restricted by OS/2 fsType.');
         }
@@ -158,7 +158,7 @@ final class TrueTypeFont
             throw new InvalidArgumentException('Invalid TrueType glyph index.');
         }
         $index = min($glyph, $this->hMetricsCount - 1);
-        return (int) round($this->u16($this->fieldOffset('hmtx', $index * 4, 2)) * 1000 / $this->unitsPerEm);
+        return (int) round($this->u16($this->fieldOffset('hmtx', $index * 4)) * 1000 / $this->unitsPerEm);
     }
 
     /** @return array<string, mixed> */
@@ -195,10 +195,10 @@ final class TrueTypeFont
         return (new UnicodeScalarCodec())->encodeUtf16Hex($codepoint);
     }
 
-    private function fieldOffset(string $table, int $localOffset, int $size): int
+    private function fieldOffset(string $table, int $localOffset): int
     {
         $entry = $this->tables[$table];
-        if ($localOffset < 0 || $size > $entry['length'] - $localOffset) {
+        if ($localOffset < 0 || 2 > $entry['length'] - $localOffset) {
             throw new InvalidArgumentException('TrueType field exceeds its table bounds.');
         }
         return $entry['offset'] + $localOffset;

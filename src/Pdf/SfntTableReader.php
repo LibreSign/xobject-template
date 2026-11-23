@@ -24,7 +24,9 @@ final readonly class SfntTableReader
     public function u16(int $offset): int
     {
         $this->requireRange($offset, 2);
-        return (int) unpack('n', substr($this->bytes, $offset, 2))[1];
+        /** @var array<int, int> $word */
+        $word = unpack('n', $this->bytes, $offset);
+        return $word[1];
     }
 
     public function s16(int $offset): int
@@ -36,7 +38,10 @@ final readonly class SfntTableReader
     public function u32(int $offset): int
     {
         $this->requireRange($offset, 4);
-        return (int) unpack('N', substr($this->bytes, $offset, 4))[1];
+        return (ord($this->bytes[$offset]) << 24)
+            | (ord($this->bytes[$offset + 1]) << 16)
+            | (ord($this->bytes[$offset + 2]) << 8)
+            | ord($this->bytes[$offset + 3]);
     }
 
     public function requireRange(int $offset, int $size): void

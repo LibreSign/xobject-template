@@ -15,6 +15,8 @@ final readonly class UnicodeFontPdfWriter
 {
     /**
      * The callbacks use the exporter's PDF object allocator and serializer.
+     * @param Closure(array<string, mixed>, string): string $stream
+     * @param Closure(array<string, mixed>): string $dictionary
      */
     public function __construct(
         private Closure $stream,
@@ -105,15 +107,15 @@ final readonly class UnicodeFontPdfWriter
      */
     private function collectMappings(TrueTypeFont $font, array $mappings): array
     {
+        if (count($mappings) > 65535) {
+            throw new InvalidArgumentException('Invalid Unicode CID.');
+        }
         $cidMap = pack('n', 0);
         $widths = [];
         $cmapEntries = [];
         foreach ($mappings as $index => $entry) {
-            if ($index > 65534) {
-                throw new InvalidArgumentException('Invalid Unicode CID.');
-            }
             $glyph = $font->glyphFor($entry['glyph']);
-            if ($glyph <= 0 || $glyph > 65535) {
+            if ($glyph === 0) {
                 throw new InvalidArgumentException('Missing TrueType glyph for Unicode resource.');
             }
             $cidMap .= pack('n', $glyph);
@@ -130,11 +132,18 @@ final readonly class UnicodeFontPdfWriter
     /** @param list<string> $entries */
     private function createToUnicode(array $entries): string
     {
-        $cmap = "/CIDInit /ProcSet findresource begin\n"
-            . "12 dict begin\nbegincmap\n"
-            . "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
-            . "/CMapName /LibreSignToUnicode def\n/CMapType 2 def\n"
-            . "1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n";
+        $cmap = <<<'CMAP'
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /LibreSignToUnicode def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+
+CMAP;
         foreach (array_chunk($entries, 100) as $chunk) {
             $cmap .= count($chunk) . " beginbfchar\n"
                 . implode("\n", $chunk) . "\nendbfchar\n";
@@ -150,7 +159,7 @@ final readonly class UnicodeFontPdfWriter
     private function createDictionary(array &$objects, array $dictionary): string
     {
         $objectId = count($objects) + 1;
-        $objects[$objectId] = (string) ($this->dictionary)($dictionary);
+        $objects[$objectId] = ($this->dictionary)($dictionary);
         return sprintf('%d 0 R', $objectId);
     }
 
@@ -162,7 +171,7 @@ final readonly class UnicodeFontPdfWriter
     private function createStream(array &$objects, array $dictionary, string $data): string
     {
         $objectId = count($objects) + 1;
-        $objects[$objectId] = (string) ($this->stream)($dictionary, $data);
+        $objects[$objectId] = ($this->stream)($dictionary, $data);
         return sprintf('%d 0 R', $objectId);
     }
 }
