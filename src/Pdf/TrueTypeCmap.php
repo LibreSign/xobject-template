@@ -18,6 +18,9 @@ final readonly class TrueTypeCmap
 
     public function __construct(private SfntTableReader $reader, int $cmapOffset, int $tableLength)
     {
+        if ($tableLength < 4) {
+            throw new InvalidArgumentException('Truncated TrueType cmap table.');
+        }
         $reader->requireRange($cmapOffset, $tableLength);
         $this->offset = $this->chooseCmapOffset($cmapOffset, $tableLength);
         $this->format = $reader->u16($this->offset);

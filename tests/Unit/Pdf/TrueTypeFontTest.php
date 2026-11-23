@@ -88,6 +88,9 @@ final class TrueTypeFontTest extends TestCase
             'bitmap-only embedding' => $this->replaceTableField($bytes, 'OS/2', 8, pack('n', 0x200)),
             'too many horizontal metrics' => $this->replaceTableField($bytes, 'hhea', 34, pack('n', 65535)),
             'invalid cmap table size' => $this->shortenCmapTable($bytes),
+            'short head table' => $this->shortenTable($bytes, 'head', 16),
+            'short hhea table' => $this->shortenTable($bytes, 'hhea', 12),
+            'short OS/2 table' => $this->shortenTable($bytes, 'OS/2', 6),
             default => throw new \LogicException('Unknown fixture mutation.'),
         };
         $file = tempnam(sys_get_temp_dir(), 'ttf-fixture-');
@@ -118,10 +121,26 @@ final class TrueTypeFontTest extends TestCase
             'bitmap-only embedding',
             'too many horizontal metrics',
             'invalid cmap table size',
+            'short head table',
+            'short hhea table',
+            'short OS/2 table',
             ] as $case
         ) {
             yield $case => ['case' => $case];
         }
+    }
+
+    public function testRejectsOutOfRangeGlyphMetrics(): void
+    {
+        $font = new TrueTypeFont(self::FIXTURE);
+        $this->expectException(InvalidArgumentException::class);
+        $font->widthForGlyph(-1);
+    }
+
+    private function shortenTable(string $bytes, string $table, int $length): string
+    {
+        $entry = $this->tableEntry($bytes, $table);
+        return substr_replace($bytes, pack('N', $length), $entry + 12, 4);
     }
 
     private function shortenCmapTable(string $bytes): string
