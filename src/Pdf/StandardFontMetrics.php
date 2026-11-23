@@ -73,18 +73,7 @@ final readonly class StandardFontMetrics
         }
 
         if (preg_match('/[^\x00-\x7f]/', $text) && $this->unicodeFonts !== []) {
-            $glyphs = (new ArabicPresentationShaper())->shape(TrueTypeFont::codepoints($text));
-            foreach ($this->unicodeFonts as $font) {
-                $width = 0;
-                foreach ($glyphs as $glyph) {
-                    $gid = $font->glyphFor($glyph['glyph']);
-                    if ($gid === 0) {
-                        continue 2;
-                    }
-                    $width += $font->widthForGlyph($gid);
-                }
-                return $width * $fontSize / 1000;
-            }
+            return $this->measureUnicode($fontSize, $text);
         }
 
         $width = 0.0;
@@ -93,6 +82,23 @@ final readonly class StandardFontMetrics
         }
 
         return ($width / 1000.0) * $fontSize;
+    }
+
+    private function measureUnicode(float $fontSize, string $text): float
+    {
+        $glyphs = (new DirectGlyphShaper())->shape($text);
+        foreach ($this->unicodeFonts as $font) {
+            $width = 0;
+            foreach ($glyphs as $glyph) {
+                $glyphId = $font->glyphFor($glyph['glyph']);
+                if ($glyphId === 0) {
+                    continue 2;
+                }
+                $width += $font->widthForGlyph($glyphId);
+            }
+            return $width * $fontSize / 1000;
+        }
+        return 0.0;
     }
 
     private function resolveCharacterWidth(string $fontAlias, string $character): float

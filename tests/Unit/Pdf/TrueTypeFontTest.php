@@ -84,6 +84,10 @@ final class TrueTypeFontTest extends TestCase
             'zero units per em' => $this->replaceTableField($bytes, 'head', 18, pack('n', 0)),
             'zero glyph count' => $this->replaceTableField($bytes, 'maxp', 4, pack('n', 0)),
             'missing Unicode cmap' => $this->disableUnicodeCmap($bytes),
+            'embedding prohibited' => $this->replaceTableField($bytes, 'OS/2', 8, pack('n', 2)),
+            'bitmap-only embedding' => $this->replaceTableField($bytes, 'OS/2', 8, pack('n', 0x200)),
+            'too many horizontal metrics' => $this->replaceTableField($bytes, 'hhea', 34, pack('n', 65535)),
+            'invalid cmap table size' => $this->shortenCmapTable($bytes),
             default => throw new \LogicException('Unknown fixture mutation.'),
         };
         $file = tempnam(sys_get_temp_dir(), 'ttf-fixture-');
@@ -110,10 +114,20 @@ final class TrueTypeFontTest extends TestCase
             'zero units per em',
             'zero glyph count',
             'missing Unicode cmap',
+            'embedding prohibited',
+            'bitmap-only embedding',
+            'too many horizontal metrics',
+            'invalid cmap table size',
             ] as $case
         ) {
             yield $case => ['case' => $case];
         }
+    }
+
+    private function shortenCmapTable(string $bytes): string
+    {
+        $entry = $this->tableEntry($bytes, 'cmap');
+        return substr_replace($bytes, pack('N', 4), $entry + 12, 4);
     }
 
     private function renameTable(string $bytes, string $table): string

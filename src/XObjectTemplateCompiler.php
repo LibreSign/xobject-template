@@ -17,6 +17,7 @@ use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use LibreSign\XObjectTemplate\Pdf\ColorParser;
 use LibreSign\XObjectTemplate\Pdf\PdfEscaper;
 use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
 {
@@ -40,7 +41,7 @@ final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerI
             $colorParser ?? new ColorParser(),
         );
         $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine(
-            fontMetrics: new \LibreSign\XObjectTemplate\Pdf\StandardFontMetrics($this->documentBuilder->unicodeFonts()),
+            fontMetrics: new StandardFontMetrics($this->documentBuilder->unicodeFonts()),
         );
     }
 

@@ -52,9 +52,11 @@ final class UnicodeTextScenarioTest extends TestCase
             );
         }
 
-        if (trim((string) shell_exec('command -v pdftotext 2>/dev/null')) === '') {
-            return; // PDF extraction is additionally verified in CI, which installs Poppler.
-        }
+        self::assertNotSame(
+            '',
+            trim((string) shell_exec('command -v pdftotext 2>/dev/null')),
+            'Poppler pdftotext is required for extraction tests.'
+        );
 
         $file = tempnam(sys_get_temp_dir(), 'libresign-unicode-');
         self::assertNotFalse($file);
@@ -62,7 +64,7 @@ final class UnicodeTextScenarioTest extends TestCase
             file_put_contents($file, $pdf);
             $output = shell_exec('pdftotext -layout ' . escapeshellarg($file) . ' - 2>/dev/null');
             self::assertNotNull($output, 'Poppler pdftotext must be installed.');
-            $actual = trim(str_replace(["\u{202A}", "\u{202B}", "\u{202C}"], '', $output));
+            $actual = trim(str_replace(["\u{202A}", "\u{202B}", "\u{202C}"], '', $output), " \t\n\r\0\x0B\f");
             self::assertSame($text, $actual);
         } finally {
             unlink($file);
@@ -78,8 +80,6 @@ final class UnicodeTextScenarioTest extends TestCase
         yield 'French accents' => ['text' => 'Signé par Renée', 'fontPath' => $dejavu];
         yield 'Greek' => ['text' => 'Αλέξανδρος', 'fontPath' => $dejavu];
         yield 'Cyrillic' => ['text' => 'Иван Иванов', 'fontPath' => $dejavu];
-        yield 'Hebrew' => ['text' => 'שלום', 'fontPath' => $dejavu];
-        yield 'Arabic' => ['text' => 'محمد', 'fontPath' => $dejavu];
         yield 'Japanese CJK' => ['text' => '山田太郎', 'fontPath' => $droid];
         yield 'escaped punctuation' => ['text' => 'Assinado (João) \\ Teste', 'fontPath' => $dejavu];
     }
@@ -102,6 +102,27 @@ final class UnicodeTextScenarioTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Unicode text requires an embedded TrueType font');
         $compiler->compile(new CompileRequest(html: '<div>山田太郎</div>'));
+    }
+
+    #[DataProvider('unsupportedComplexScriptProvider')]
+    public function testComplexScriptsRequireExternalShapingEngine(string $text): void
+    {
+        $compiler = new XObjectTemplateCompiler(
+            documentBuilder: (new TemplateDocumentBuilder())->withUnicodeFontFiles([
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            ]),
+        );
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Complex-script text requires');
+        $compiler->compile(new CompileRequest(html: '<div>' . $text . '</div>'));
+    }
+
+    /** @return iterable<string, array{text: string}> */
+    public static function unsupportedComplexScriptProvider(): iterable
+    {
+        yield 'Hebrew' => ['text' => 'שלום'];
+        yield 'Arabic' => ['text' => 'محمد'];
+        yield 'combining accent' => ['text' => "e\u{0301}"];
     }
 
     public function testAsciiRetainsLegacyFontStreamAndResources(): void
