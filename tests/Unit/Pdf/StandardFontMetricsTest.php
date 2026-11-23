@@ -110,23 +110,51 @@ final class StandardFontMetricsTest extends TestCase
 
     public function testSelectsNextUnicodeFontWhenFirstLacksGlyph(): void
     {
-        $latin = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
-        $cjk = '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf';
-        self::assertFileExists($latin);
-        self::assertFileExists($cjk);
-        $first = new TrueTypeFont($latin);
-        $second = new TrueTypeFont($cjk);
-        self::assertSame(0, $first->glyphFor(0x5C71));
-        $expected = 0;
-        foreach ([0x5C71, 0x7530, 0x592A, 0x90CE] as $scalar) {
-            $gid = $second->glyphFor($scalar);
-            self::assertGreaterThan(0, $gid);
-            $expected += $second->widthForGlyph($gid);
+        $firstPath = tempnam(sys_get_temp_dir(), 'font-first-');
+        $secondPath = tempnam(sys_get_temp_dir(), 'font-second-');
+        self::assertNotFalse($firstPath);
+        self::assertNotFalse($secondPath);
+
+        try {
+            // The first font only maps 'A'. The second maps U+03A9 (Greek Omega).
+            // Both fixtures are built in the test suite, not installed by the OS.
+            $firstData = SyntheticTrueTypeFontTest::makeFont(1000, 650);
+            $secondData = SyntheticTrueTypeFontTest::makeFont(1000, 750);
+            $secondData = SyntheticTrueTypeFontTest::setTableField(
+                $secondData,
+                'cmap',
+                12 + 14,
+                pack('n', 0x03A9),
+            );
+            $secondData = SyntheticTrueTypeFontTest::setTableField(
+                $secondData,
+                'cmap',
+                12 + 20,
+                pack('n', 0x03A9),
+            );
+            $secondData = SyntheticTrueTypeFontTest::setTableField(
+                $secondData,
+                'cmap',
+                12 + 24,
+                pack('n', (3 - 0x03A9) & 0xFFFF),
+            );
+            self::assertSame(strlen($firstData), file_put_contents($firstPath, $firstData));
+            self::assertSame(strlen($secondData), file_put_contents($secondPath, $secondData));
+
+            $first = new TrueTypeFont($firstPath);
+            $second = new TrueTypeFont($secondPath);
+            self::assertSame(3, $first->glyphFor(0x41));
+            self::assertSame(0, $first->glyphFor(0x03A9));
+            self::assertSame(3, $second->glyphFor(0x03A9));
+            self::assertSame(750, $second->widthForGlyph(3));
+            self::assertSame(
+                18.0,
+                (new StandardFontMetrics([$first, $second]))->measureString('F1', 12.0, 'ΩΩ'),
+            );
+        } finally {
+            unlink($firstPath);
+            unlink($secondPath);
         }
-        self::assertSame(
-            $expected * 12.0 / 1000,
-            (new StandardFontMetrics([$first, $second]))->measureString('F1', 12.0, '山田太郎'),
-        );
     }
 
     public function testReturnsZeroForUnicodeWithoutFontCoverage(): void
