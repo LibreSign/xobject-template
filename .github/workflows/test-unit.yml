@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install Unicode font regression fixtures and PDF extraction tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core fonts-droid-fallback poppler-utils
+      - name: Install CJK font fixture and PDF extraction utility
+        run: sudo apt-get install -y --no-install-recommends fonts-droid-fallback poppler-utils
       - name: Detect minimum PHP from composer.json
         id: php_min
         run: |
