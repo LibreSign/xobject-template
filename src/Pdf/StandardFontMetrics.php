@@ -53,6 +53,11 @@ final readonly class StandardFontMetrics
         '{' => 480.0, '|' => 200.0, '}' => 480.0, '~' => 541.0,
     ];
 
+    /** @param list<TrueTypeFont> $unicodeFonts */
+    public function __construct(private array $unicodeFonts = [])
+    {
+    }
+
     public function measureString(string $fontAlias, float $fontSize, string $text): float
     {
         if ($text === '') {
@@ -67,12 +72,33 @@ final readonly class StandardFontMetrics
             return 0.0;
         }
 
+        if (preg_match('/[^\x00-\x7f]/', $text) && $this->unicodeFonts !== []) {
+            return $this->measureUnicode($fontSize, $text);
+        }
+
         $width = 0.0;
         foreach ($this->splitCharacters($text) as $character) {
             $width += $this->resolveCharacterWidth($fontAlias, $character);
         }
 
         return ($width / 1000.0) * $fontSize;
+    }
+
+    private function measureUnicode(float $fontSize, string $text): float
+    {
+        $glyphs = (new DirectGlyphShaper())->shape($text);
+        foreach ($this->unicodeFonts as $font) {
+            $width = 0;
+            foreach ($glyphs as $glyph) {
+                $glyphId = $font->glyphFor($glyph['glyph']);
+                if ($glyphId === 0) {
+                    continue 2;
+                }
+                $width += $font->widthForGlyph($glyphId);
+            }
+            return $width * $fontSize / 1000;
+        }
+        return 0.0;
     }
 
     private function resolveCharacterWidth(string $fontAlias, string $character): float

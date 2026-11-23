@@ -109,12 +109,24 @@ final readonly class SinglePagePdfExporter
         $fontReferences = [];
 
         foreach ($fontResources as $alias => $fontResource) {
+            if (isset($fontResource['__TrueTypeFont'])) {
+                $fontReferences[$alias] = $this->unicodeFontWriter()->create($objects, $fontResource);
+                continue;
+            }
             $reference = $this->reserveObject($objects);
             $objects[$reference] = $this->serializeDictionary($fontResource);
             $fontReferences[$alias] = $this->asReference($reference);
         }
 
         return $fontReferences;
+    }
+
+    private function unicodeFontWriter(): UnicodeFontPdfWriter
+    {
+        return new UnicodeFontPdfWriter(
+            $this->serializeStreamObject(...),
+            $this->serializeDictionary(...),
+        );
     }
 
     /**

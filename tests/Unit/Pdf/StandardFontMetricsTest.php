@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Tests\Unit\Pdf;
 
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
+use LibreSign\XObjectTemplate\Pdf\TrueTypeFont;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class StandardFontMetricsTest extends TestCase
@@ -72,6 +74,94 @@ final class StandardFontMetricsTest extends TestCase
         $metrics = new StandardFontMetrics();
 
         self::assertGreaterThan(0.0, $metrics->measureString('F1', 10.0, "😀"));
+    }
+
+    #[DataProvider('unicodeMeasurementProvider')]
+    public function testMeasuresEmbeddedUnicodeGlyphWidthsExactly(
+        string $text,
+        float $size,
+        array $scalars,
+    ): void {
+        $fontPath = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+        self::assertFileExists($fontPath);
+        $font = new TrueTypeFont($fontPath);
+        $expected = 0.0;
+        foreach ($scalars as $scalar) {
+            $glyph = $font->glyphFor($scalar);
+            self::assertGreaterThan(0, $glyph);
+            $expected += $font->widthForGlyph($glyph);
+        }
+        $metrics = new StandardFontMetrics([$font]);
+        self::assertEqualsWithDelta(
+            $expected * $size / 1000,
+            $metrics->measureString('F1', $size, $text),
+            0.0000001,
+        );
+    }
+
+    /** @return iterable<string, array{text: string, size: float, scalars: list<int>}> */
+    public static function unicodeMeasurementProvider(): iterable
+    {
+        yield 'latin accent small font' => ['é', 1.0, [0xE9]];
+        yield 'latin accent large font' => ['é', 24.0, [0xE9]];
+        yield 'multiple glyphs' => ['éΩé', 10.0, [0xE9, 0x3A9, 0xE9]];
+        yield 'greek uppercase' => ['Ω', 12.0, [0x3A9]];
+    }
+
+    public function testSelectsNextUnicodeFontWhenFirstLacksGlyph(): void
+    {
+        $firstPath = tempnam(sys_get_temp_dir(), 'font-first-');
+        $secondPath = tempnam(sys_get_temp_dir(), 'font-second-');
+        self::assertNotFalse($firstPath);
+        self::assertNotFalse($secondPath);
+
+        try {
+            // The first font only maps 'A'. The second maps U+03A9 (Greek Omega).
+            // Both fixtures are built in the test suite, not installed by the OS.
+            $firstData = SyntheticTrueTypeFontTest::makeFont(1000, 650);
+            $secondData = SyntheticTrueTypeFontTest::makeFont(1000, 750);
+            $secondData = SyntheticTrueTypeFontTest::setTableField(
+                $secondData,
+                'cmap',
+                12 + 14,
+                pack('n', 0x03A9),
+            );
+            $secondData = SyntheticTrueTypeFontTest::setTableField(
+                $secondData,
+                'cmap',
+                12 + 20,
+                pack('n', 0x03A9),
+            );
+            $secondData = SyntheticTrueTypeFontTest::setTableField(
+                $secondData,
+                'cmap',
+                12 + 24,
+                pack('n', (3 - 0x03A9) & 0xFFFF),
+            );
+            self::assertSame(strlen($firstData), file_put_contents($firstPath, $firstData));
+            self::assertSame(strlen($secondData), file_put_contents($secondPath, $secondData));
+
+            $first = new TrueTypeFont($firstPath);
+            $second = new TrueTypeFont($secondPath);
+            self::assertSame(3, $first->glyphFor(0x41));
+            self::assertSame(0, $first->glyphFor(0x03A9));
+            self::assertSame(3, $second->glyphFor(0x03A9));
+            self::assertSame(750, $second->widthForGlyph(3));
+            self::assertSame(
+                18.0,
+                (new StandardFontMetrics([$first, $second]))->measureString('F1', 12.0, 'ΩΩ'),
+            );
+        } finally {
+            unlink($firstPath);
+            unlink($secondPath);
+        }
+    }
+
+    public function testReturnsZeroForUnicodeWithoutFontCoverage(): void
+    {
+        $font = new TrueTypeFont('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+        self::assertSame(0, $font->glyphFor(0x5C71));
+        self::assertSame(0.0, (new StandardFontMetrics([$font]))->measureString('F1', 12.0, '山'));
     }
 
     public function testMeasureStringSplitsUnicodeCharactersAndHandlesInvalidUtf8(): void

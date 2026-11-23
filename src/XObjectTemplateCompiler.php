@@ -17,6 +17,7 @@ use LibreSign\XObjectTemplate\Layout\LinearLayoutEngine;
 use LibreSign\XObjectTemplate\Pdf\ColorParser;
 use LibreSign\XObjectTemplate\Pdf\PdfEscaper;
 use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerInterface
 {
@@ -35,10 +36,12 @@ final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerI
     ) {
         $this->htmlParser = $htmlParser ?? new SubsetHtmlParser();
         $this->contextInterpolator = $contextInterpolator ?? new HtmlContextInterpolator();
-        $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine();
         $this->documentBuilder = $documentBuilder ?? new TemplateDocumentBuilder(
             $pdfEscaper ?? new PdfEscaper(),
             $colorParser ?? new ColorParser(),
+        );
+        $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine(
+            fontMetrics: new StandardFontMetrics($this->documentBuilder->unicodeFonts()),
         );
     }
 

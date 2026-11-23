@@ -62,6 +62,8 @@ final readonly class TemplateDocumentBuilder
         private ColorParser $colorParser = new ColorParser(),
         private array $fontResources = self::DEFAULT_FONT_RESOURCES,
         ?Closure $clock = null,
+        /** @var list<TrueTypeFont> */
+        private array $unicodeFonts = [],
     ) {
         $this->clock = $clock ?? static fn (): int => hrtime(true);
     }
@@ -92,7 +94,8 @@ final readonly class TemplateDocumentBuilder
             $stream[] = $this->buildImageCommand($image);
         }
 
-        $this->appendTextCommands($stream, $layout->lines);
+        $unicode = new UnicodeTextResources($layout->lines, $this->unicodeFonts);
+        $this->appendTextCommands($stream, $layout->lines, $unicode);
 
         $stream[] = 'Q';
 
@@ -104,8 +107,9 @@ final readonly class TemplateDocumentBuilder
      */
     public function buildResources(LayoutResult $layout): array
     {
+        $unicode = new UnicodeTextResources($layout->lines, $this->unicodeFonts);
         $resources = [
-            'Font' => $this->fontResources,
+            'Font' => array_merge($this->fontResources, $unicode->fonts()),
             'XObject' => [],
         ];
 
@@ -140,7 +144,25 @@ final readonly class TemplateDocumentBuilder
      */
     public function withFontResources(array $fontResources): self
     {
-        return new self($this->pdfEscaper, $this->colorParser, $fontResources, $this->clock);
+        return new self($this->pdfEscaper, $this->colorParser, $fontResources, $this->clock, $this->unicodeFonts);
+    }
+
+    /**
+     * Configure embeddable TrueType fonts (in fallback order). The font must
+     * cover every Unicode character in each non-ASCII text line.
+     *
+     * @param list<string> $paths
+     */
+    public function withUnicodeFontFiles(array $paths): self
+    {
+        $fonts = array_map(static fn (string $path): TrueTypeFont => new TrueTypeFont($path), $paths);
+        return new self($this->pdfEscaper, $this->colorParser, $this->fontResources, $this->clock, $fonts);
+    }
+
+    /** @return list<TrueTypeFont> */
+    public function unicodeFonts(): array
+    {
+        return $this->unicodeFonts;
     }
 
     private function buildImageCommand(LayoutImage $image): string
@@ -175,21 +197,21 @@ final readonly class TemplateDocumentBuilder
      * @param list<LayoutLine> $lines
      * @param list<string> $stream
      */
-    private function appendTextCommands(array &$stream, array $lines): void
+    private function appendTextCommands(array &$stream, array $lines, UnicodeTextResources $unicode): void
     {
         if ($lines === []) {
             return;
         }
 
         if ($this->hasClippedText($lines)) {
-            foreach ($lines as $line) {
-                $stream[] = $this->buildTextCommand($line);
+            foreach ($lines as $index => $line) {
+                $stream[] = $this->buildTextCommand($line, $index, $unicode);
             }
 
             return;
         }
 
-        foreach ($this->buildGroupedTextCommands($lines) as $command) {
+        foreach ($this->buildGroupedTextCommands($lines, $unicode) as $command) {
             $stream[] = $command;
         }
     }
@@ -212,13 +234,13 @@ final readonly class TemplateDocumentBuilder
      * @param list<LayoutLine> $lines
      * @return list<string>
      */
-    private function buildGroupedTextCommands(array $lines): array
+    private function buildGroupedTextCommands(array $lines, UnicodeTextResources $unicode): array
     {
         $commands = ['BT'];
         $currentWordSpacing = 0.0;
 
-        foreach ($lines as $line) {
-            $commands[] = sprintf('/%s %F Tf', $line->fontAlias, $line->fontSize);
+        foreach ($lines as $index => $line) {
+            $commands[] = sprintf('/%s %F Tf', $unicode->aliasFor($index, $line->fontAlias), $line->fontSize);
             $commands[] = $this->colorParser->toPdfRgb($line->rgbColor);
             if ($line->wordSpacing !== $currentWordSpacing) {
                 $commands[] = sprintf('%F Tw', $line->wordSpacing);
@@ -226,7 +248,7 @@ final readonly class TemplateDocumentBuilder
             }
 
             $commands[] = sprintf('1 0 0 1 %F %F Tm', $line->x, $line->y);
-            $commands[] = sprintf('(%s) Tj', $this->pdfEscaper->escapeLiteralString($line->text));
+            $commands[] = $unicode->textOperator($index, $line->text, $this->pdfEscaper);
         }
 
         $commands[] = 'ET';
@@ -234,7 +256,7 @@ final readonly class TemplateDocumentBuilder
         return $commands;
     }
 
-    private function buildTextCommand(LayoutLine $line): string
+    private function buildTextCommand(LayoutLine $line, int $index, UnicodeTextResources $unicode): string
     {
         $commands = ['q'];
         if ($line->clipBox !== null) {
@@ -242,14 +264,14 @@ final readonly class TemplateDocumentBuilder
         }
 
         $commands[] = 'BT';
-        $commands[] = sprintf('/%s %F Tf', $line->fontAlias, $line->fontSize);
+        $commands[] = sprintf('/%s %F Tf', $unicode->aliasFor($index, $line->fontAlias), $line->fontSize);
         $commands[] = $this->colorParser->toPdfRgb($line->rgbColor);
         if ($line->wordSpacing !== 0.0) {
             $commands[] = sprintf('%F Tw', $line->wordSpacing);
         }
 
         $commands[] = sprintf('1 0 0 1 %F %F Tm', $line->x, $line->y);
-        $commands[] = sprintf('(%s) Tj', $this->pdfEscaper->escapeLiteralString($line->text));
+        $commands[] = $unicode->textOperator($index, $line->text, $this->pdfEscaper);
         $commands[] = 'ET';
         $commands[] = 'Q';
 

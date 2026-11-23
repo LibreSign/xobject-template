@@ -17,6 +17,25 @@ use ReflectionProperty;
 
 final class LinearLayoutEngineTest extends TestCase
 {
+    public function testInjectedUnicodeMetricsControlRightAlignedTextPosition(): void
+    {
+        $fontPath = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+        self::assertFileExists($fontPath);
+        $font = new \LibreSign\XObjectTemplate\Pdf\TrueTypeFont($fontPath);
+        $metrics = new \LibreSign\XObjectTemplate\Pdf\StandardFontMetrics([$font]);
+        $node = new Node(
+            tag: 'span',
+            text: 'é',
+            attributes: ['style' => 'font-size:10;text-align:right;width:100'],
+        );
+        $layout = (new LinearLayoutEngine(fontMetrics: $metrics))->layout([$node], 100.0, 84.0);
+        self::assertCount(1, $layout->lines);
+        $expected = 100.0 - $metrics->measureString('F1', 10.0, 'é');
+        self::assertEqualsWithDelta($expected, $layout->lines[0]->x, 0.00001);
+        $defaultLayout = (new LinearLayoutEngine())->layout([$node], 100.0, 84.0);
+        self::assertNotEquals($defaultLayout->lines[0]->x, $layout->lines[0]->x);
+    }
+
     public function testLayoutSupportsNestedNodesImagesAndStyles(): void
     {
         $engine = new LinearLayoutEngine();

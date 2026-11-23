@@ -19,12 +19,16 @@ final readonly class LinearLayoutEngine
     private StructuredLayoutRenderer $structuredRenderer;
     private StandardFontMetrics $fontMetrics;
 
-    public function __construct(?InlineStyleParser $styleParser = null)
+    public function __construct(?InlineStyleParser $styleParser = null, ?StandardFontMetrics $fontMetrics = null)
     {
         $this->styleParser = $styleParser ?? new InlineStyleParser();
         $this->styleResolver = new LayoutStyleResolver();
-        $this->fontMetrics = new StandardFontMetrics();
-        $this->structuredRenderer = new StructuredLayoutRenderer($this->styleParser, $this->styleResolver);
+        $this->fontMetrics = $fontMetrics ?? new StandardFontMetrics();
+        $this->structuredRenderer = new StructuredLayoutRenderer(
+            $this->styleParser,
+            $this->styleResolver,
+            $this->fontMetrics,
+        );
     }
 
     /**
