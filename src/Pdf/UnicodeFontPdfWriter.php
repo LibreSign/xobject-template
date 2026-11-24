@@ -31,6 +31,29 @@ final readonly class UnicodeFontPdfWriter
      */
     public function create(array &$objects, array $resource): string
     {
+        return $this->createWithFactories(
+            $resource,
+            function (array $dictionary) use (&$objects): string {
+                return $this->createDictionary($objects, $dictionary);
+            },
+            function (array $dictionary, string $data) use (&$objects): string {
+                return $this->createStream($objects, $dictionary, $data);
+            },
+        );
+    }
+
+    /**
+     * Materialize a Type 0 font using the destination document's object allocator.
+     *
+     * @param array<string, mixed> $resource
+     * @param Closure(array<string, mixed>): string $dictionaryFactory
+     * @param Closure(array<string, mixed>, string): string $streamFactory
+     */
+    public function createWithFactories(
+        array $resource,
+        Closure $dictionaryFactory,
+        Closure $streamFactory,
+    ): string {
         $font = $resource['__TrueTypeFont'] ?? null;
         if (!$font instanceof TrueTypeFont) {
             throw new InvalidArgumentException('Invalid Unicode font resource.');
@@ -38,13 +61,14 @@ final readonly class UnicodeFontPdfWriter
         $mappings = $this->requireMappings($resource['__Mappings'] ?? null);
 
         $fontName = 'LibreSignUnicode' . substr(hash('sha256', $font->fontData()), 0, 12);
-        $fontRef = $this->createFontFile($objects, $font->fontData());
         [$widths, $cidMap, $cmapEntries] = $this->collectMappings($font, $mappings);
-        $cidMapRef = $this->createStream($objects, [], $cidMap);
-        $toUnicodeRef = $this->createStream($objects, [], $this->createToUnicode($cmapEntries));
+        $fontData = $font->fontData();
+        $fontRef = $streamFactory(['Length1' => strlen($fontData)], $fontData);
+        $cidMapRef = $streamFactory([], $cidMap);
+        $toUnicodeRef = $streamFactory([], $this->createToUnicode($cmapEntries));
         $descriptor = $font->descriptor($fontName, $fontRef);
-        $descriptorRef = $this->createDictionary($objects, $descriptor);
-        $cidFontRef = $this->createDictionary($objects, [
+        $descriptorRef = $dictionaryFactory($descriptor);
+        $cidFontRef = $dictionaryFactory([
             'Type' => '/Font',
             'Subtype' => '/CIDFontType2',
             'BaseFont' => '/' . $fontName,
@@ -54,7 +78,7 @@ final readonly class UnicodeFontPdfWriter
             'DW' => 1000,
             'W' => [1, $widths],
         ]);
-        return $this->createDictionary($objects, [
+        return $dictionaryFactory([
             'Type' => '/Font',
             'Subtype' => '/Type0',
             'BaseFont' => '/' . $fontName,
@@ -91,14 +115,6 @@ final readonly class UnicodeFontPdfWriter
         if (count(array_filter($entry['unicode'], 'is_int')) !== count($entry['unicode'])) {
             throw new InvalidArgumentException('Invalid Unicode scalar mapping.');
         }
-    }
-
-    /**
-     * @param array<int, string|null> $objects
-     */
-    private function createFontFile(array &$objects, string $data): string
-    {
-        return $this->createStream($objects, ['Length1' => strlen($data)], $data);
     }
 
     /**
