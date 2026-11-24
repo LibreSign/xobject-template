@@ -279,8 +279,8 @@ final readonly class TextLineBreaker
     {
         // A fallback line break must not split a combining sequence or
         // another extended grapheme cluster into separate rendered lines.
-        $count = preg_match_all('/\X/u', $text, $matches);
+        preg_match_all('/\X/u', $text, $matches);
 
-        return $count === false ? [] : $matches[0];
+        return $matches[0];
     }
 }

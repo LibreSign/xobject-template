@@ -125,16 +125,21 @@ final readonly class FriBidiParagraphMapper
 
     private function scriptOf(string $character): string
     {
+        // Marks inherit the base's script even when PCRE's Script_Extensions
+        // data assigns them to several scripts (or a different primary script).
+        if (preg_match('/\p{M}/u', $character) === 1) {
+            return '';
+        }
         $patterns = [
-            '/\p{Arabic}/u' => 'Arab',
-            '/\p{Hebrew}/u' => 'Hebr',
-            '/\p{Latin}/u' => 'Latn',
-            '/\p{Cyrillic}/u' => 'Cyrl',
-            '/\p{Greek}/u' => 'Grek',
-            '/\p{Han}/u' => 'Hani',
-            '/\p{Hiragana}/u' => 'Hira',
-            '/\p{Katakana}/u' => 'Kana',
-            '/\p{Hangul}/u' => 'Hang',
+            '/\p{sc=Arabic}/u' => 'Arab',
+            '/\p{sc=Hebrew}/u' => 'Hebr',
+            '/\p{sc=Latin}/u' => 'Latn',
+            '/\p{sc=Cyrillic}/u' => 'Cyrl',
+            '/\p{sc=Greek}/u' => 'Grek',
+            '/\p{sc=Han}/u' => 'Hani',
+            '/\p{sc=Hiragana}/u' => 'Hira',
+            '/\p{sc=Katakana}/u' => 'Kana',
+            '/\p{sc=Hangul}/u' => 'Hang',
         ];
         foreach ($patterns as $pattern => $script) {
             if (preg_match($pattern, $character) === 1) {

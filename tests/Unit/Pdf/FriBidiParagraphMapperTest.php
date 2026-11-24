@@ -113,6 +113,21 @@ final class FriBidiParagraphMapperTest extends TestCase
             'AB', [1, 0], [1, 0], [3, 3],
             [['text' => 'AB', 'rtl' => true, 'visual' => 0, 'start' => 0]],
         ];
+        yield 'inherited Arabic mark does not create its own script run' => [
+            "A\u{064E}", [0, 1], [0, 1], [0, 0],
+            [['text' => "A\u{064E}", 'rtl' => false, 'visual' => 0, 'start' => 0]],
+        ];
+        yield 'script-specific Hebrew mark stays attached to a foreign base' => [
+            "A\u{05B8}", [0, 1], [0, 1], [0, 0],
+            [['text' => "A\u{05B8}", 'rtl' => false, 'visual' => 0, 'start' => 0]],
+        ];
+        yield 'inherited marks do not split Greek and Cyrillic runs' => [
+            "α\u{0301}и\u{0306}", [0, 1, 2, 3], [0, 1, 2, 3], [0, 0, 0, 0],
+            [
+                ['text' => "α\u{0301}", 'rtl' => false, 'visual' => 0, 'start' => 0],
+                ['text' => "и\u{0306}", 'rtl' => false, 'visual' => 2, 'start' => 2],
+            ],
+        ];
         yield 'combining mark inherits preceding script' => [
             "e\u{0301}", [0, 1], [0, 1], [0, 0],
             [['text' => "e\u{0301}", 'rtl' => false, 'visual' => 0, 'start' => 0]],
