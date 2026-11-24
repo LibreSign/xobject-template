@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Layout;
 
+use InvalidArgumentException;
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
+use Normalizer;
 
 /** @internal */
 final readonly class TextLineBreaker
@@ -31,7 +33,56 @@ final readonly class TextLineBreaker
             return [$text];
         }
 
-        $words = $this->splitWords($text);
+        return $this->wrapWords($this->splitWords($text), $text, $maxWidth, $fontAlias, $fontSize, $hyphens);
+    }
+
+    /**
+     * Wrap literal UTF-8 text, preserving explicit line breaks and without inserting hyphens.
+     *
+     * @return list<string>
+     */
+    public function wrapLiteral(string $text, float $maxWidth, string $fontAlias, float $fontSize): array
+    {
+        $normalized = Normalizer::normalize($text, Normalizer::FORM_C);
+        if ($normalized === false || preg_match('//u', $text) !== 1) {
+            throw new InvalidArgumentException('Literal text must be valid UTF-8.');
+        }
+
+        $lines = [];
+        foreach (preg_split('/\r\n|\r|\n/', $normalized) ?: [] as $paragraph) {
+            $paragraph = trim(str_replace("\t", ' ', $paragraph));
+            if ($this->fontMetrics->measureString($fontAlias, $fontSize, $paragraph) <= $maxWidth) {
+                $lines[] = $paragraph;
+                continue;
+            }
+            $words = preg_split('/ +/', $paragraph, -1, PREG_SPLIT_NO_EMPTY);
+            $words = $words === false ? [] : $words;
+            array_push($lines, ...$this->wrapWords(
+                $words,
+                $paragraph,
+                $maxWidth,
+                $fontAlias,
+                $fontSize,
+                'none',
+                true,
+            ));
+        }
+        return $lines;
+    }
+
+    /**
+     * @param list<string> $words
+     * @return list<string>
+     */
+    private function wrapWords(
+        array $words,
+        string $text,
+        float $maxWidth,
+        string $fontAlias,
+        float $fontSize,
+        string $hyphens,
+        bool $breakLongWords = false,
+    ): array {
         if ($words === []) {
             return [$text];
         }
@@ -58,6 +109,7 @@ final readonly class TextLineBreaker
                 $hyphens,
                 $lines,
                 $currentLine,
+                $breakLongWords,
             );
         }
 
@@ -96,8 +148,11 @@ final readonly class TextLineBreaker
         string $hyphens,
         array &$lines,
         string &$currentLine,
+        bool $breakLongWords = false,
     ): void {
-        $segments = $this->breakWord($word, $maxWidth, $fontAlias, $fontSize, $hyphens);
+        $segments = $breakLongWords
+            ? $this->breakWordAutomatically($word, $maxWidth, $fontAlias, $fontSize, false)
+            : $this->breakWord($word, $maxWidth, $fontAlias, $fontSize, $hyphens);
         $currentLine = array_pop($segments) ?? '';
 
         foreach ($segments as $segment) {
@@ -158,6 +213,7 @@ final readonly class TextLineBreaker
         float $maxWidth,
         string $fontAlias,
         float $fontSize,
+        bool $insertHyphen = true,
     ): array {
         $characters = $this->splitCharacters($word);
         if ($characters === []) {
@@ -165,7 +221,7 @@ final readonly class TextLineBreaker
         }
 
         $segments = [];
-        $hyphenWidth = $this->fontMetrics->measureString($fontAlias, $fontSize, '-');
+        $hyphenWidth = $insertHyphen ? $this->fontMetrics->measureString($fontAlias, $fontSize, '-') : 0.0;
         $offset = 0;
         $characterCount = count($characters);
 
@@ -182,7 +238,7 @@ final readonly class TextLineBreaker
             $fallbackCount = count($this->splitCharacters($characters[$offset]));
             $consumedCount = max(count($segmentCharacters) + $fallbackCount - 1, $fallbackCount);
             $offset = min($offset + $consumedCount, $characterCount);
-            $segments[] = !isset($characters[$offset]) ? $segment : ($segment . '-');
+            $segments[] = $insertHyphen && isset($characters[$offset]) ? ($segment . '-') : $segment;
         }
 
         return $segments;

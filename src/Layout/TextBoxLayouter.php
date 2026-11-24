@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Layout;
 
 use LibreSign\XObjectTemplate\Css\StyleMap;
+use LibreSign\XObjectTemplate\Dto\PlainTextBlock;
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 final readonly class TextBoxLayouter
@@ -21,6 +22,38 @@ final readonly class TextBoxLayouter
     ) {
         $this->lineBreaker = new TextLineBreaker($fontMetrics);
         $this->overflowTruncator = new TextOverflowTruncator($fontMetrics);
+    }
+
+    /** @return list<LayoutLine> */
+    public function layoutLiteral(PlainTextBlock $block, float $canvasHeight): array
+    {
+        $settings = $this->resolveSettings(new StyleMap([
+            'font-size' => (string) $block->fontSize,
+            'text-align' => $block->align,
+        ]));
+        // Literal text uses a baseline step of one font size.
+        $settings['fontSize'] = $block->fontSize;
+        $settings['lineHeight'] = $block->fontSize;
+        $lines = $this->lineBreaker->wrapLiteral(
+            $block->text,
+            $block->width,
+            $settings['fontAlias'],
+            $block->fontSize,
+        );
+        $maxLines = (int) min(count($lines), floor($block->height / $block->fontSize));
+        $lines = array_slice($lines, 0, $maxLines);
+        $box = [
+            'x' => $block->x,
+            'y' => $block->y,
+            'width' => $block->width,
+            'height' => $block->height,
+        ];
+        $clipBox = $box;
+        if ($block->verticalCenter) {
+            $box['y'] += max(($block->height - count($lines) * $block->fontSize) / 2.0, 0.0);
+        }
+
+        return $this->buildLayoutResult($lines, $box, $canvasHeight, $settings, false, $clipBox)['lines'];
     }
 
     /**
