@@ -8,6 +8,7 @@
 ## Start here
 
 - [Getting started](guides/getting-started.md)
+- [Unicode text and font resources](guides/unicode-fonts.md)
 - [Examples](reference/examples.md)
 - [Visible signature use case](use-cases/visible-signatures.md)
 

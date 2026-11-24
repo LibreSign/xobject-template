@@ -198,6 +198,55 @@ CMAP, $toUnicode);
             '__Mappings' => [['glyph' => 65, 'unicode' => [-1]]]]];
     }
 
+    #[DataProvider('invalidShapedGlyphProvider')]
+    public function testRejectsInvalidShapedGlyphId(mixed $glyphId): void
+    {
+        $this->withFont(function (TrueTypeFont $font) use ($glyphId): void {
+            $objects = [];
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('Invalid shaped TrueType glyph index');
+            try {
+                $this->writer()->create($objects, [
+                    '__TrueTypeFont' => $font,
+                    '__Mappings' => [['glyph' => 0x41, 'glyphId' => $glyphId, 'unicode' => [0x41]]],
+                ]);
+            } finally {
+                self::assertSame([], $objects, 'Invalid glyphs must not create partial PDF objects.');
+            }
+        });
+    }
+
+    /** @return iterable<string, array{glyphId: mixed}> */
+    public static function invalidShapedGlyphProvider(): iterable
+    {
+        yield 'negative index' => [-1];
+        yield 'zero index' => [0];
+        yield 'string' => ['2'];
+        yield 'float' => [2.0];
+        yield 'null' => [null];
+        yield 'highest impossible TrueType index' => [65535];
+        yield 'over 16 bit' => [65536];
+    }
+
+    public function testShapedGlyphIdOverridesCmapAndEmbedsItsExactCid(): void
+    {
+        $this->withFont(function (TrueTypeFont $font): void {
+            self::assertSame(3, $font->glyphFor(0x41));
+            $objects = [];
+            $this->writer()->create($objects, [
+                '__TrueTypeFont' => $font,
+                '__Mappings' => [['glyph' => 0x41, 'glyphId' => 2, 'unicode' => [0x41]]],
+            ]);
+            [$cidDictionary, $cidMap] = unserialize($objects[2], ['allowed_classes' => false]);
+            self::assertSame([], $cidDictionary);
+            self::assertSame(pack('nn', 0, 2), $cidMap);
+            $cidFont = json_decode($objects[5], true, flags: JSON_THROW_ON_ERROR);
+            self::assertSame([1, [$font->widthForGlyph(2)]], $cidFont['W']);
+            [$unicodeDictionary, $toUnicode] = unserialize($objects[3], ['allowed_classes' => false]);
+            self::assertStringContainsString('<0001> <0041>', $toUnicode);
+        });
+    }
+
     private function writer(): UnicodeFontPdfWriter
     {
         return new UnicodeFontPdfWriter(

@@ -41,7 +41,10 @@ final readonly class XObjectTemplateCompiler implements XObjectTemplateCompilerI
             $colorParser ?? new ColorParser(),
         );
         $this->layoutEngine = $layoutEngine ?? new LinearLayoutEngine(
-            fontMetrics: new StandardFontMetrics($this->documentBuilder->unicodeFonts()),
+            fontMetrics: new StandardFontMetrics(
+                $this->documentBuilder->unicodeFonts(),
+                $this->documentBuilder->complexShaper(),
+            ),
         );
     }
 

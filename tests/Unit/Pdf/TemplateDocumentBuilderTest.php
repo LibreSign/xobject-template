@@ -13,6 +13,8 @@ use LibreSign\XObjectTemplate\Layout\LayoutImage;
 use LibreSign\XObjectTemplate\Layout\LayoutLine;
 use LibreSign\XObjectTemplate\Layout\LayoutResult;
 use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
+use LibreSign\XObjectTemplate\Pdf\ComplexTextShaperInterface;
+use LibreSign\XObjectTemplate\Pdf\TrueTypeFont;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -65,6 +67,50 @@ final class TemplateDocumentBuilderTest extends TestCase
         self::assertSame(1, $result->metadata['image_count']);
         self::assertSame(2, $result->metadata['node_count']);
         self::assertArrayHasKey('render_ms', $result->metadata);
+    }
+
+    public function testOneBuildSharesUnicodeShapingBetweenStreamAndResources(): void
+    {
+        $shaper = new class implements ComplexTextShaperInterface {
+            public int $calls = 0;
+
+            public function shape(string $text, TrueTypeFont $font): array
+            {
+                $this->calls++;
+                $result = [];
+                foreach (TrueTypeFont::codepoints($text) as $index => $codepoint) {
+                    $result[] = [
+                        'glyph' => $codepoint,
+                        'glyphId' => $font->glyphFor($codepoint),
+                        'unicode' => [$codepoint],
+                        'advance' => 500,
+                        'dx' => 0,
+                        'dy' => 0,
+                        'cluster' => $index,
+                        'logical' => $index,
+                    ];
+                }
+                return $result;
+            }
+
+            public function shapeWithFonts(string $text, array $fonts): array
+            {
+                throw new \LogicException('This test only exercises one font.');
+            }
+        };
+        $builder = (new TemplateDocumentBuilder(complexShaper: $shaper))
+            ->withUnicodeFontFiles(['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']);
+        $layout = new LayoutResult(
+            lines: [new LayoutLine('שלום', 10.0, 20.0, 12.0, 'F1', '#000000')],
+            images: [],
+        );
+
+        $result = $builder->build(new CompileRequest(html: '<p>שלום</p>'), $layout, 0);
+
+        self::assertSame(1, $shaper->calls, 'Shaping must not run twice for one compiled document.');
+        self::assertStringContainsString('/ActualText <FEFF', $result->contentStream);
+        self::assertSame('U1', array_key_last($result->resources['Font']));
+        self::assertCount(4, $result->resources['Font']['U1']['__Mappings']);
     }
 
     public function testBuildMetadataDefaultsNodeCountAndUsesRoundedMilliseconds(): void
