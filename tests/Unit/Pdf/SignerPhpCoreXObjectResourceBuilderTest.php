@@ -44,37 +44,70 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
 
             $result = (new SignerPhpCoreXObjectResourceBuilder())->materialize($document, $resources);
 
-            self::assertSame($resources['Font']['F1'], $result['Font']['F1']);
+            self::assertInstanceOf(PDFValueReference::class, $result['Font']['F1']);
+            self::assertStringContainsString('/BaseFont/Helvetica', $document->getPdfObjects()[2]->toPdfEntry());
             self::assertInstanceOf(PDFValueReference::class, $result['Font']['U1']);
-            self::assertSame('7 0 R', (string) $result['Font']['U1']);
-            self::assertCount(7, $document->getPdfObjects());
-            self::assertSame(7, $document->getMaxOid());
+            self::assertSame('8 0 R', (string) $result['Font']['U1']);
+            self::assertCount(8, $document->getPdfObjects());
+            self::assertSame(8, $document->getMaxOid());
             self::assertArrayHasKey('__TrueTypeFont', $resources['Font']['U1']);
 
-            $fontFile = $document->getPdfObjects()[2];
+            $fontFile = $document->getPdfObjects()[3];
             self::assertSame($font->fontData(), $fontFile->getStream(false));
             self::assertStringContainsString('/Length1 ', $fontFile->toPdfEntry());
 
-            $cidMap = $document->getPdfObjects()[3];
+            $cidMap = $document->getPdfObjects()[4];
             self::assertSame(pack('nnn', 0, 3, 3), $cidMap->getStream(false));
 
-            $unicode = $document->getPdfObjects()[4];
+            $unicode = $document->getPdfObjects()[5];
             self::assertStringContainsString('<0001> <0041>', $unicode->getStream(false));
             self::assertStringContainsString('<0002> <D83DDE00>', $unicode->getStream(false));
 
-            $descriptor = $document->getPdfObjects()[5]->toPdfEntry();
-            self::assertStringContainsString('/FontFile2 2 0 R', $descriptor);
+            $descriptor = $document->getPdfObjects()[6]->toPdfEntry();
+            self::assertStringContainsString('/FontFile2 3 0 R', $descriptor);
 
-            $cidFont = $document->getPdfObjects()[6]->toPdfEntry();
-            self::assertStringContainsString('/CIDToGIDMap 3 0 R', $cidFont);
-            self::assertStringContainsString('/FontDescriptor 5 0 R', $cidFont);
+            $cidFont = $document->getPdfObjects()[7]->toPdfEntry();
+            self::assertStringContainsString('/CIDToGIDMap 4 0 R', $cidFont);
+            self::assertStringContainsString('/FontDescriptor 6 0 R', $cidFont);
             self::assertStringContainsString('/Registry(Adobe)', $cidFont);
             self::assertStringContainsString('/Ordering(Identity)', $cidFont);
 
-            $type0 = $document->getPdfObjects()[7]->toPdfEntry();
-            self::assertStringContainsString('/DescendantFonts[6 0 R]', $type0);
-            self::assertStringContainsString('/ToUnicode 4 0 R', $type0);
+            $type0 = $document->getPdfObjects()[8]->toPdfEntry();
+            self::assertStringContainsString('/DescendantFonts[7 0 R]', $type0);
+            self::assertStringContainsString('/ToUnicode 5 0 R', $type0);
         });
+    }
+
+    public function testEmptyResourceDictionariesAreOmittedWithoutAllocatingObjects(): void
+    {
+        $document = new PdfDocument();
+        $resources = (new SignerPhpCoreXObjectResourceBuilder())->materialize($document, [
+            'Font' => [],
+            'XObject' => [],
+            'ProcSet' => ['/PDF'],
+        ]);
+
+        self::assertSame(['ProcSet' => ['/PDF']], $resources);
+        self::assertSame([], $document->getPdfObjects());
+    }
+
+    public function testPreservesExistingFontReferencesAndOnlyMaterializesGeneratedStandardFonts(): void
+    {
+        $document = new PdfDocument();
+        $existing = $document->createObject(['Type' => '/Font']);
+        $reference = new PDFValueReference($existing->getOid());
+        $fonts = [
+            'Existing' => $reference,
+            'TypeOnly' => ['Type' => '/Font'],
+            'SubtypeOnly' => ['Subtype' => '/Type1'],
+            'Standard' => ['Type' => '/Font', 'Subtype' => '/Type1', 'BaseFont' => '/Helvetica'],
+        ];
+        $result = (new SignerPhpCoreXObjectResourceBuilder())->materialize($document, ['Font' => $fonts]);
+        self::assertSame($reference, $result['Font']['Existing']);
+        self::assertSame($fonts['TypeOnly'], $result['Font']['TypeOnly']);
+        self::assertSame($fonts['SubtypeOnly'], $result['Font']['SubtypeOnly']);
+        self::assertInstanceOf(PDFValueReference::class, $result['Font']['Standard']);
+        self::assertCount(2, $document->getPdfObjects());
     }
 
     public function testRejectsSourceBasedImageResourcesWithoutCreatingPdfObjects(): void
@@ -290,7 +323,7 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
         $document = new PdfDocument();
         $resources = [
             'ExtGState' => ['GS0' => ['Type' => '/ExtGState']],
-            'Font' => ['F1' => ['Type' => '/Font', 'BaseFont' => '/Helvetica']],
+            'Font' => ['F1' => new PDFValueReference(42)],
             'XObject' => [
                 'preserved' => ['Type' => '/XObject'],
                 'ImA' => ['Source' => 'A'],

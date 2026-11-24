@@ -7,13 +7,41 @@ declare(strict_types=1);
 
 namespace LibreSign\XObjectTemplate\Tests\Unit\Layout;
 
+use LibreSign\XObjectTemplate\Layout\LiteralTextLineBreaker;
 use LibreSign\XObjectTemplate\Layout\TextLineBreaker;
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
 final class TextLineBreakerTest extends TestCase
 {
+    #[DataProvider('literalWrappingProvider')]
+    public function testWrapLiteralPreservesGraphemesAndDoesNotInsertHyphens(
+        string $input,
+        float $width,
+        array $expected,
+    ): void {
+        $breaker = new LiteralTextLineBreaker(new StandardFontMetrics());
+        self::assertSame($expected, $breaker->wrap($input, $width, 'F5', 10.0));
+    }
+
+    /** @return iterable<string, array{string, float, list<string>}> */
+    public static function literalWrappingProvider(): iterable
+    {
+        yield 'long word' => ['abcdef', 18.0, ['abc', 'def']];
+        yield 'word fits on new line' => ['ab cde', 18.0, ['ab', 'cde']];
+        yield 'single glyph wider than box' => ['ab', 1.0, ['a', 'b']];
+        yield 'canonical accents' => ["e\u{0301}e\u{0301}e\u{0301}", 12.0, ['éé', 'é']];
+        yield 'noncomposable combining mark' => ["x\u{0301}y", 6.0, ["x\u{0301}", 'y']];
+        yield 'explicit blank lines and all line endings' => ["a\r\n\r\nb\rc", 18.0, ['a', '', 'b', 'c']];
+        yield 'whitespace trimmed' => ["  a  ", 60.0, ['a']];
+        yield 'exact width preserves internal spaces' => ['a  b', 24.0, ['a  b']];
+        yield 'wrap with adjacent spaces' => ['a  b  0', 18.0, ['a b', '0']];
+        yield 'spacing retained when it fits' => ["a  b\tc", 60.0, ['a  b c']];
+        yield 'nonbreaking space retained when wrapping' => ["a\u{00A0}b c", 18.0, ["a\u{00A0}b", 'c']];
+    }
+
     public function testWrapReturnsOriginalTextForNowrapAndNonPositiveWidths(): void
     {
         $breaker = new TextLineBreaker(new StandardFontMetrics());
@@ -196,7 +224,7 @@ final class TextLineBreakerTest extends TestCase
 
         self::assertSame(
             [$invalidUtf8],
-            $this->invokeBreakerMethod($breaker, 'breakWordAutomatically', $invalidUtf8, 1.0, 'F1', 10.0),
+            $this->invokeBreakerMethod($breaker, 'breakWordAutomatically', $invalidUtf8, 1.0, 'F1', 10.0, '-'),
         );
     }
 

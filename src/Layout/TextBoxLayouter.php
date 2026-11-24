@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\XObjectTemplate\Layout;
 
 use LibreSign\XObjectTemplate\Css\StyleMap;
+use LibreSign\XObjectTemplate\Dto\PlainTextBlock;
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
 
 final readonly class TextBoxLayouter
@@ -21,6 +22,37 @@ final readonly class TextBoxLayouter
     ) {
         $this->lineBreaker = new TextLineBreaker($fontMetrics);
         $this->overflowTruncator = new TextOverflowTruncator($fontMetrics);
+    }
+
+    /** @return list<LayoutLine> */
+    public function layoutLiteral(PlainTextBlock $block, float $canvasHeight): array
+    {
+        $settings = $this->resolveSettings(new StyleMap([
+            'text-align' => $block->align,
+        ]));
+        // Literal text uses a baseline step of one font size.
+        $settings['fontSize'] = $block->fontSize;
+        $settings['lineHeight'] = $block->fontSize;
+        $lines = (new LiteralTextLineBreaker($this->fontMetrics))->wrap(
+            $block->text,
+            $block->width,
+            $settings['fontAlias'],
+            $block->fontSize,
+        );
+        $maxLines = (int) min(count($lines), floor($block->height / $block->fontSize));
+        $lines = array_slice($lines, 0, $maxLines);
+        $box = [
+            'x' => $block->x,
+            'y' => $block->y,
+            'width' => $block->width,
+            'height' => $block->height,
+        ];
+        $clipBox = $box;
+        if ($block->verticalAlign === 'center') {
+            $box['y'] += ($block->height - count($lines) * $block->fontSize) / 2.0;
+        }
+
+        return $this->buildLayoutLines($lines, $box, $canvasHeight, $settings, $clipBox);
     }
 
     /**
@@ -208,6 +240,37 @@ final readonly class TextBoxLayouter
         bool $truncated,
         ?array $clipBox,
     ): array {
+        return [
+            'lines' => $this->buildLayoutLines($lines, $box, $canvasHeight, $settings, $clipBox),
+            'consumedHeight' => count($lines) * $settings['lineHeight'],
+            'truncated' => $truncated,
+        ];
+    }
+
+    /**
+     * @param list<string> $lines
+     * @param array{x: float, y: float, width: float, height: float} $box
+     * @param array{
+     *     fontSize: float,
+     *     lineHeight: float,
+     *     fontAlias: string,
+     *     align: string,
+     *     overflow: string,
+     *     textOverflow: string,
+     *     hyphens: string,
+     *     whiteSpace: string,
+     *     color: string
+     * } $settings
+     * @param array{x: float, y: float, width: float, height: float}|null $clipBox
+     * @return list<LayoutLine>
+     */
+    private function buildLayoutLines(
+        array $lines,
+        array $box,
+        float $canvasHeight,
+        array $settings,
+        ?array $clipBox,
+    ): array {
         $pdfClipBox = $this->toPdfClipBox($clipBox, $canvasHeight);
         $layoutLines = [];
         $lineCount = count($lines);
@@ -224,11 +287,7 @@ final readonly class TextBoxLayouter
             );
         }
 
-        return [
-            'lines' => $layoutLines,
-            'consumedHeight' => $lineCount * $settings['lineHeight'],
-            'truncated' => $truncated,
-        ];
+        return $layoutLines;
     }
 
     /**

@@ -409,17 +409,17 @@ final class UnicodeTextScenarioTest extends TestCase
             'F' => 132,
             'P' => new PDFValueReference($page->getOid()),
         ]);
-        // Materialize through the public callback before attaching the resources.
-        // This exercises pdf-core v0.1.2 too; the automatic callback constructor
-        // integration requires the separately released pdf-core resource-builder API.
         $builder = new SignerPhpCoreXObjectResourceBuilder();
-        $resources = ($builder->resourcesBuilder())($document, $result->resources);
         SignatureAppearance::new()
             ->withRect($result->bbox)
             ->withPdfDocument($document)
             ->withAnnotationObject($annotation)
             ->withPageRotate(new PDFValueSimple(0))
-            ->withXObject(new AppearanceXObject($result->contentStream, $resources))
+            ->withXObject(new AppearanceXObject(
+                $result->contentStream,
+                $result->resources,
+                $builder->resourcesBuilder(),
+            ))
             ->generate();
         $page['Annots'] = [new PDFValueReference($annotation->getOid())];
         $document->addObject($page);

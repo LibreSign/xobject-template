@@ -75,11 +75,21 @@ final readonly class TemplateDocumentBuilder
         int $startedAtNs,
         int $nodeCount = 0,
     ): CompileResult {
+        return $this->buildLayout($layout, $request->width, $request->height, $startedAtNs, $nodeCount);
+    }
+
+    public function buildLayout(
+        LayoutResult $layout,
+        float $width,
+        float $height,
+        int $startedAtNs,
+        int $nodeCount,
+    ): CompileResult {
         $unicode = new UnicodeTextResources($layout->lines, $this->unicodeFonts, $this->complexShaper);
         return new CompileResult(
             contentStream: $this->buildContentStream($layout, $unicode),
             resources: $this->buildResources($layout, $unicode),
-            bbox: [0.0, 0.0, $request->width, $request->height],
+            bbox: [0.0, 0.0, $width, $height],
             metadata: $this->buildMetadata($layout, $startedAtNs, $nodeCount),
         );
     }
