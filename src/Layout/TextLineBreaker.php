@@ -277,8 +277,10 @@ final readonly class TextLineBreaker
      */
     private function splitCharacters(string $text): array
     {
-        $characters = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+        // A fallback line break must not split a combining sequence or
+        // another extended grapheme cluster into separate rendered lines.
+        $count = preg_match_all('/\X/u', $text, $matches);
 
-        return $characters === false ? [] : $characters;
+        return $count === false ? [] : $matches[0];
     }
 }

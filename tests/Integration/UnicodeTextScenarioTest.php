@@ -12,6 +12,7 @@ use LibreSign\XObjectTemplate\Dto\CompileResult;
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Layout\LayoutLine;
 use LibreSign\XObjectTemplate\Layout\LayoutResult;
+use LibreSign\XObjectTemplate\Layout\TextLineBreaker;
 use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
 use LibreSign\XObjectTemplate\Pdf\SignerPhpCoreXObjectResourceBuilder;
 use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
@@ -351,6 +352,22 @@ final class UnicodeTextScenarioTest extends TestCase
         yield 'Latin multiple combining marks' => ["a\u{0308}\u{0301}", 'ltr'];
         yield 'Greek combining accent' => ["α\u{0301}", 'ltr'];
         yield 'Cyrillic combining breve' => ["и\u{0306}", 'ltr'];
+    }
+
+    #[DataProvider('graphemeWrapProvider')]
+    public function testAutoWrapNeverSeparatesCombiningMarksFromTheirBase(string $text, array $expected): void
+    {
+        $font = new TrueTypeFont('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+        $breaker = new TextLineBreaker(new StandardFontMetrics([$font]));
+        self::assertSame($expected, $breaker->wrap($text, 1.0, 'F1', 12.0, 'auto', 'normal'));
+    }
+
+    /** @return iterable<string, array{text: string, expected: list<string>}> */
+    public static function graphemeWrapProvider(): iterable
+    {
+        yield 'decomposed Latin accents' => ["e\u{0301}e\u{0301}", ["e\u{0301}-", "e\u{0301}"]];
+        yield 'Hebrew stacked and single vowel marks' => ['שָׁלֹ', ['שָׁ-', 'לֹ']];
+        yield 'Arabic vowel marks' => ['مُحَ', ['مُ-', 'حَ']];
     }
 
     private function assertPreviewAndAppearance(CompileResult $result, string $preview, string $expected): void
