@@ -12,7 +12,10 @@ use InvalidArgumentException;
 /** A literal text box in points, relative to the top-left of the canvas. */
 final readonly class PlainTextBlock
 {
-    /** @param 'left'|'center'|'right' $align */
+    /**
+     * @param 'left'|'center'|'right' $align
+     * @param 'top'|'center' $verticalAlign
+     */
     public function __construct(
         public string $text,
         public float $x,
@@ -21,7 +24,7 @@ final readonly class PlainTextBlock
         public float $height,
         public float $fontSize = 10.0,
         public string $align = 'left',
-        public bool $verticalCenter = false,
+        public string $verticalAlign = 'top',
     ) {
         foreach ([$x, $y, $width, $height, $fontSize] as $value) {
             if (!is_finite($value)) {

@@ -43,35 +43,6 @@ $result = $compiler->compile(new CompileRequest(
 // $result->bbox
 ```
 
-## Literal text boxes
-
-Use `PlainTextCompiler` for already resolved text that must not be interpreted as HTML or
-as a template. It shares the font metrics, line breaker, positioning and PDF writer with
-the HTML compiler.
-
-```php
-use LibreSign\XObjectTemplate\Dto\PlainTextBlock;
-use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
-use LibreSign\XObjectTemplate\PlainTextCompiler;
-
-$compiler = new PlainTextCompiler(
-    (new TemplateDocumentBuilder())->withUnicodeFontFiles(['/path/to/font.ttf']),
-);
-$result = $compiler->compile([
-    new PlainTextBlock("Signé par Renée\nÉmetteur : Example", 2, 2, 236, 80),
-], width: 240, height: 84);
-```
-
-Boxes use points measured from the top-left, wrap long words at grapheme boundaries
-without inserting hyphens, preserve explicit line breaks and normalize text to NFC.
-Text is clipped to its box; only complete lines that fit vertically are included.
-Horizontal tabs are treated as spaces, and wrapping may collapse regular spaces.
-Configure fonts with coverage for the intended scripts, as with the HTML compiler.
-
-Use `SignerPhpCoreXObjectResourceBuilder::resourcesBuilder()` when passing the result
-to a signing appearance. The adapter materializes the generated font dictionaries
-and omits empty resource dictionaries rather than serializing them as arrays.
-
 ## LibreSign use case
 
 - LibreSign project: <https://github.com/LibreSign/libresign>

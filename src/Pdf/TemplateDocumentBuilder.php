@@ -83,7 +83,7 @@ final readonly class TemplateDocumentBuilder
         float $width,
         float $height,
         int $startedAtNs,
-        int $nodeCount = 0,
+        int $nodeCount,
     ): CompileResult {
         $unicode = new UnicodeTextResources($layout->lines, $this->unicodeFonts, $this->complexShaper);
         return new CompileResult(

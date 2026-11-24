@@ -45,6 +45,7 @@ final readonly class PlainTextCompiler
             $width,
             $height,
             $start,
+            0,
         );
     }
 }

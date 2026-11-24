@@ -91,6 +91,25 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
         self::assertSame([], $document->getPdfObjects());
     }
 
+    public function testPreservesExistingFontReferencesAndOnlyMaterializesGeneratedStandardFonts(): void
+    {
+        $document = new PdfDocument();
+        $existing = $document->createObject(['Type' => '/Font']);
+        $reference = new PDFValueReference($existing->getOid());
+        $fonts = [
+            'Existing' => $reference,
+            'TypeOnly' => ['Type' => '/Font'],
+            'SubtypeOnly' => ['Subtype' => '/Type1'],
+            'Standard' => ['Type' => '/Font', 'Subtype' => '/Type1', 'BaseFont' => '/Helvetica'],
+        ];
+        $result = (new SignerPhpCoreXObjectResourceBuilder())->materialize($document, ['Font' => $fonts]);
+        self::assertSame($reference, $result['Font']['Existing']);
+        self::assertSame($fonts['TypeOnly'], $result['Font']['TypeOnly']);
+        self::assertSame($fonts['SubtypeOnly'], $result['Font']['SubtypeOnly']);
+        self::assertInstanceOf(PDFValueReference::class, $result['Font']['Standard']);
+        self::assertCount(2, $document->getPdfObjects());
+    }
+
     public function testRejectsSourceBasedImageResourcesWithoutCreatingPdfObjects(): void
     {
         $document = new PdfDocument();

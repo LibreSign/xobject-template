@@ -50,16 +50,12 @@ final readonly class SignerPhpCoreXObjectResourceBuilder
         $originalObjects = $document->getPdfObjects();
         $originalMaxOid = $document->getMaxOid();
         try {
-            if ($fonts === []) {
-                unset($resources['Font']);
-            } else {
+            // These keys represent dictionaries, not PDF arrays. Omit empty ones.
+            unset($resources['Font'], $resources['XObject']);
+            if ($fonts !== []) {
                 $resources['Font'] = $this->materializeFonts($document, $fonts);
             }
-
-            // These keys represent dictionaries, not PDF arrays. Omit empty ones.
-            if ($images === []) {
-                unset($resources['XObject']);
-            } else {
+            if ($images !== []) {
                 $resources['XObject'] = $this->materializeImages($document, $images, $preparedImages);
             }
 
