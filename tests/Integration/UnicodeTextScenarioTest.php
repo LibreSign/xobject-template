@@ -104,25 +104,71 @@ final class UnicodeTextScenarioTest extends TestCase
         $compiler->compile(new CompileRequest(html: '<div>山田太郎</div>'));
     }
 
-    #[DataProvider('unsupportedComplexScriptProvider')]
-    public function testComplexScriptsRequireExternalShapingEngine(string $text): void
+    #[DataProvider('complexScriptProvider')]
+    public function testComplexScriptsRenderAndExtractOriginalUnicode(string $text): void
     {
+        $font = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+        self::assertFileExists($font);
         $compiler = new XObjectTemplateCompiler(
-            documentBuilder: (new TemplateDocumentBuilder())->withUnicodeFontFiles([
-                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-            ]),
+            documentBuilder: (new TemplateDocumentBuilder())->withUnicodeFontFiles([$font]),
         );
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Complex-script text requires');
-        $compiler->compile(new CompileRequest(html: '<div>' . $text . '</div>'));
+        $result = $compiler->compile(new CompileRequest(
+            html: '<div>' . htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div>',
+            width: 500,
+            height: 90,
+        ));
+        $actualTextHex = 'FEFF';
+        foreach (\LibreSign\XObjectTemplate\Pdf\TrueTypeFont::codepoints($text) as $scalar) {
+            $actualTextHex .= \LibreSign\XObjectTemplate\Pdf\TrueTypeFont::utf16Hex($scalar);
+        }
+        self::assertStringContainsString('/ActualText <' . $actualTextHex . '>', $result->contentStream);
+        self::assertStringContainsString('/U1 ', $result->contentStream);
+
+        $pdf = (new SinglePagePdfExporter())->export($result);
+        self::assertStringContainsString('/Subtype /CIDFontType2', $pdf);
+        $file = tempnam(sys_get_temp_dir(), 'libresign-rtl-');
+        self::assertNotFalse($file);
+        try {
+            file_put_contents($file, $pdf);
+            $output = shell_exec('pdftotext -layout ' . escapeshellarg($file) . ' - 2>/dev/null');
+            self::assertNotNull($output);
+            self::assertSame(
+                $text,
+                self::normalizePopplerVisualBidi(trim($output, " \t\n\r\0\x0B\f")),
+                'Extracted text must preserve logical Unicode including order and combining marks.',
+            );
+        } finally {
+            unlink($file);
+        }
     }
 
     /** @return iterable<string, array{text: string}> */
-    public static function unsupportedComplexScriptProvider(): iterable
+    public static function complexScriptProvider(): iterable
     {
         yield 'Hebrew' => ['text' => 'שלום'];
         yield 'Arabic' => ['text' => 'محمد'];
+        yield 'Arabic lam-alef ligature' => ['text' => 'لا'];
+        yield 'Arabic diacritics' => ['text' => 'مُحَمَّد'];
+        yield 'Arabic and Latin mixed' => ['text' => 'Signed by محمد 123'];
+        yield 'Hebrew vowel marks' => ['text' => 'שָׁלוֹם'];
+        yield 'Hebrew and Latin mixed' => ['text' => 'Signed by שלום 123'];
         yield 'combining accent' => ['text' => "e\u{0301}"];
+    }
+
+    private static function normalizePopplerVisualBidi(string $text): string
+    {
+        // Poppler's pdftotext emits RTL runs in visual order with RLE/PDF
+        // controls even for semantic PDF ActualText. Normalize only its
+        // presentation convention; the PDF itself retains logical Unicode.
+        $normalized = preg_replace_callback(
+            '/\x{202B}(.*?)\x{202C}/u',
+            static function (array $match): string {
+                $scalars = preg_split('//u', $match[1], -1, PREG_SPLIT_NO_EMPTY);
+                return $scalars === false ? '' : implode('', array_reverse($scalars));
+            },
+            $text,
+        );
+        return $normalized ?? $text;
     }
 
     public function testAsciiRetainsLegacyFontStreamAndResources(): void
