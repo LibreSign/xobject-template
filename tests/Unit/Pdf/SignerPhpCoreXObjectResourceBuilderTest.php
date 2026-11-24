@@ -192,6 +192,41 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
         });
     }
 
+    public function testFailureInLaterFontLeavesExistingDocumentUnchanged(): void
+    {
+        $this->withFont(function (TrueTypeFont $font): void {
+            $document = new PdfDocument();
+            $original = $document->createObject(['Type' => '/Catalog']);
+            $document->setMaxOid(10);
+            $valid = [
+                '__TrueTypeFont' => $font,
+                '__Mappings' => [['glyph' => 0x41, 'unicode' => [0x41]]],
+            ];
+            $invalid = ['__TrueTypeFont' => $font, '__Mappings' => []];
+            $builder = new SignerPhpCoreXObjectResourceBuilder();
+            try {
+                $builder->materialize($document, ['Font' => ['U1' => $valid, 'U2' => $invalid]]);
+                self::fail('Invalid font mappings must be rejected.');
+            } catch (InvalidArgumentException $error) {
+                self::assertSame('Invalid Unicode font mappings.', $error->getMessage());
+            }
+            self::assertSame([1 => $original], $document->getPdfObjects());
+            self::assertSame(10, $document->getMaxOid());
+            $result = $builder->materialize($document, ['Font' => ['U1' => $valid]]);
+            self::assertSame('16 0 R', (string) $result['Font']['U1']);
+        });
+    }
+
+    public function testRejectsNullFontPlaceholder(): void
+    {
+        $document = new PdfDocument();
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid Unicode font resource.');
+        (new SignerPhpCoreXObjectResourceBuilder())->materialize($document, [
+            'Font' => ['U1' => ['__TrueTypeFont' => null]],
+        ]);
+    }
+
     #[DataProvider('invalidResourceDictionaryProvider')]
     public function testRejectsInvalidResourceDictionary(string $key, mixed $invalid): void
     {
@@ -225,6 +260,7 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
     public static function invalidImageResourceProvider(): iterable
     {
         yield 'empty' => [''];
+        yield 'null' => [null];
         yield 'integer' => [1];
         yield 'false' => [false];
         yield 'array' => [[]];

@@ -9,6 +9,7 @@ namespace LibreSign\XObjectTemplate\Pdf;
 
 use Closure;
 use InvalidArgumentException;
+use Throwable;
 use SignerPHP\PdfCore\PdfDocument;
 use SignerPHP\PdfCore\PdfValue\PDFValueReference;
 use SignerPHP\PdfCore\PdfValue\PDFValueString;
@@ -45,13 +46,22 @@ final readonly class SignerPhpCoreXObjectResourceBuilder
         $fonts = $this->requireDictionary($resources['Font'] ?? [], 'Font');
         $images = $this->requireDictionary($resources['XObject'] ?? [], 'XObject');
         $preparedImages = $this->prepareImages($images);
-        $resources['Font'] = $this->materializeFonts($document, $fonts);
+        // A failed resource must not leave unreachable objects or consume IDs in the signing document.
+        $originalObjects = $document->getPdfObjects();
+        $originalMaxOid = $document->getMaxOid();
+        try {
+            $resources['Font'] = $this->materializeFonts($document, $fonts);
 
-        if ($images !== []) {
-            $resources['XObject'] = $this->materializeImages($document, $images, $preparedImages);
+            if ($images !== []) {
+                $resources['XObject'] = $this->materializeImages($document, $images, $preparedImages);
+            }
+
+            return $resources;
+        } catch (Throwable $error) {
+            $document->setPdfObjects($originalObjects);
+            $document->setMaxOid($originalMaxOid);
+            throw $error;
         }
-
-        return $resources;
     }
 
     /**
@@ -79,7 +89,7 @@ final readonly class SignerPhpCoreXObjectResourceBuilder
     {
         $prepared = [];
         foreach ($images as $alias => $resource) {
-            if (!is_array($resource) || !isset($resource['Source'])) {
+            if (!is_array($resource) || !array_key_exists('Source', $resource)) {
                 continue;
             }
             if (!is_string($resource['Source']) || $resource['Source'] === '') {
@@ -108,7 +118,7 @@ final readonly class SignerPhpCoreXObjectResourceBuilder
         $writer = new UnicodeFontPdfWriter($makeStream, $makeDictionary);
 
         foreach ($fonts as $alias => $font) {
-            if (!is_array($font) || !isset($font['__TrueTypeFont'])) {
+            if (!is_array($font) || !array_key_exists('__TrueTypeFont', $font)) {
                 continue;
             }
             $reference = $writer->createWithFactories(
