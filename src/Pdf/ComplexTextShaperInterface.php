@@ -18,4 +18,14 @@ interface ComplexTextShaperInterface
      * }>
      */
     public function shape(string $text, TrueTypeFont $font): array;
+
+    /**
+     * Resolve bidirectional order before splitting shaping runs among configured fonts.
+     * @param list<TrueTypeFont> $fonts
+     * @return list<array{
+     *   fontIndex: int, glyph: int, glyphId: int, unicode: list<int>,
+     *   advance: int, dx: int, dy: int, cluster: int, logical: int
+     * }>
+     */
+    public function shapeWithFonts(string $text, array $fonts): array;
 }

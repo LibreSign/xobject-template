@@ -130,6 +130,57 @@ final class UnicodeTextScenarioTest extends TestCase
         }
     }
 
+    #[DataProvider('mixedFontProvider')]
+    public function testMixedScriptLineUsesAllRequiredFontResources(string $text): void
+    {
+        $paths = [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+        ];
+        $fonts = array_map(static fn (string $path): TrueTypeFont => new TrueTypeFont($path), $paths);
+        $metrics = new StandardFontMetrics($fonts);
+        self::assertGreaterThan(0.0, $metrics->measureString('F1', 12.0, $text));
+        $compiler = new XObjectTemplateCompiler(
+            documentBuilder: (new TemplateDocumentBuilder())->withUnicodeFontFiles($paths),
+        );
+        $result = $compiler->compile(new CompileRequest(
+            html: '<div>' . htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div>',
+            width: 500,
+            height: 90,
+        ));
+        self::assertSame(1, $result->metadata['line_count']);
+        self::assertArrayHasKey('U1', $result->resources['Font']);
+        self::assertArrayHasKey('U2', $result->resources['Font']);
+        self::assertStringContainsString('/U1 ', $result->contentStream);
+        self::assertStringContainsString('/U2 ', $result->contentStream);
+        $pdf = (new SinglePagePdfExporter())->export($result);
+        self::assertSame(2, substr_count($pdf, '/Subtype /CIDFontType2'));
+        $path = tempnam(sys_get_temp_dir(), 'libresign-font-fallback-');
+        self::assertNotFalse($path);
+        try {
+            file_put_contents($path, $pdf);
+            $output = shell_exec('pdftotext -layout ' . escapeshellarg($path) . ' - 2>/dev/null');
+            self::assertNotNull($output);
+            self::assertSame(
+                $text,
+                self::normalizePopplerVisualBidi(trim($output, " \t\n\r\0\x0B\f")),
+            );
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /** @return iterable<string, array{text: string}> */
+    public static function mixedFontProvider(): iterable
+    {
+        yield 'Latin and Japanese' => ['text' => 'Renée 山田太郎'];
+        yield 'adjacent Latin and Japanese' => ['text' => 'Renée山田太郎'];
+        yield 'LTR with Arabic and Japanese' => ['text' => 'Signed by محمد / 山田太郎'];
+        yield 'RTL with Japanese' => ['text' => 'محمد 山田太郎'];
+        yield 'Hebrew and Japanese' => ['text' => 'דוד 山田太郎'];
+        yield 'combining accent and Japanese' => ['text' => "e\u{0301} 山田太郎"];
+    }
+
     public function testInvalidUnconfiguredUnicodeCannotSilentlyCorruptPdf(): void
     {
         $compiler = new XObjectTemplateCompiler();

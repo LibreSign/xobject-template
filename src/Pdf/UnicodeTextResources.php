@@ -10,7 +10,10 @@ namespace LibreSign\XObjectTemplate\Pdf;
 use InvalidArgumentException;
 use LibreSign\XObjectTemplate\Layout\LayoutLine;
 
-/** @internal Immutable per-layout Unicode resource preparation. */
+/**
+ * @internal Immutable per-layout Unicode resource preparation.
+ * @psalm-import-type Glyph from UnicodeTextPlanner
+ */
 final readonly class UnicodeTextResources
 {
     /**
@@ -23,12 +26,8 @@ final readonly class UnicodeTextResources
 
     /**
      * @var array<int, array{
-     *   alias: string, cids: list<int>, complex: bool,
-     *   positions: list<array{
-     *     glyph: int, glyphId: int, unicode: list<int>, advance: int,
-     *     dx: int, dy: int, cluster: int, logical: int
-     *   }>,
-     *   x: float, y: float, fontSize: float, text: string
+     *   alias: string, cids: list<int>, aliases: list<string>, complex: bool,
+     *   positions: list<Glyph>, x: float, y: float, fontSize: float, text: string
      * }>
      */
     private array $lineBindings;
@@ -42,41 +41,36 @@ final readonly class UnicodeTextResources
         array $fonts,
         private ComplexTextShaperInterface $complexShaper = new HarfBuzzComplexTextShaper(),
     ) {
-        $shaper = new DirectGlyphShaper();
-        $codec = new UnicodeScalarCodec();
+        $planner = new UnicodeTextPlanner($this->complexShaper);
         $selected = [];
-        /** @var array<int, array{
-         * alias: string, cids: list<int>, complex: bool,
-         * positions: list<array{
-         *   glyph: int, glyphId: int, unicode: list<int>, advance: int,
-         *   dx: int, dy: int, cluster: int, logical: int
-         * }>,
-         * x: float, y: float, fontSize: float, text: string
-         * }> $bindings
-         */
         $bindings = [];
 
         foreach ($lines as $index => $line) {
             if (preg_match('/[^\x00-\x7f]/', $line->text) !== 1) {
                 continue;
             }
-            $fontIndex = $this->selectFont($fonts, $codec->decode($line->text));
-            $complex = preg_match('/[\p{Arabic}\p{Hebrew}\p{M}]/u', $line->text) === 1;
-            $complexGlyphs = $complex
-                ? $this->complexShaper->shape($line->text, $fonts[$fontIndex])
-                : [];
-            /** @var list<array{glyph: int, unicode: list<int>, glyphId?: int}> $glyphs */
-            $glyphs = $complex ? $complexGlyphs : $shaper->shape($line->text);
-            $alias = 'U' . ($fontIndex + 1);
-            /** @var list<array{glyph: int, unicode: list<int>, glyphId?: int}> $mappings */
-            $mappings = $selected[$alias]['mappings'] ?? [];
-            [$mappings, $cids] = $this->bindGlyphs($mappings, $glyphs);
-            $selected[$alias] = ['font' => $fonts[$fontIndex], 'mappings' => $mappings];
+            $plan = $planner->plan($line->text, $fonts);
+            if ($plan === null) {
+                throw new InvalidArgumentException(
+                    'Unicode text requires an embedded TrueType font covering every shaped glyph.',
+                );
+            }
+            $cids = [];
+            $aliases = [];
+            foreach ($plan['glyphs'] as $glyph) {
+                $fontIndex = $glyph['fontIndex'];
+                $alias = 'U' . ($fontIndex + 1);
+                $mappings = $selected[$alias]['mappings'] ?? [];
+                $cids[] = $this->bindGlyph($mappings, $glyph);
+                $aliases[] = $alias;
+                $selected[$alias] = ['font' => $fonts[$fontIndex], 'mappings' => $mappings];
+            }
             $bindings[$index] = [
-                'alias' => $alias,
+                'alias' => $aliases[0],
                 'cids' => $cids,
-                'complex' => $complex,
-                'positions' => $complexGlyphs,
+                'aliases' => $aliases,
+                'complex' => $plan['positioned'],
+                'positions' => $plan['glyphs'],
                 'x' => $line->x,
                 'y' => $line->y,
                 'fontSize' => $line->fontSize,
@@ -88,53 +82,22 @@ final readonly class UnicodeTextResources
     }
 
     /**
-     * @param list<TrueTypeFont> $fonts
-     * @param list<int> $codepoints
-     */
-    private function selectFont(array $fonts, array $codepoints): int
-    {
-        foreach ($fonts as $fontIndex => $font) {
-            if ($this->coversCodepoints($font, $codepoints)) {
-                return $fontIndex;
-            }
-        }
-        throw new InvalidArgumentException(
-            'Unicode text requires an embedded TrueType font covering every shaped glyph.',
-        );
-    }
-
-    /** @param list<int> $codepoints */
-    private function coversCodepoints(TrueTypeFont $font, array $codepoints): bool
-    {
-        foreach ($codepoints as $codepoint) {
-            if ($font->glyphFor($codepoint) === 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
      * @param list<array{glyph: int, unicode: list<int>, glyphId?: int}> $mappings
-     * @param list<array{glyph: int, unicode: list<int>, glyphId?: int}> $glyphs
-     * @return array{list<array{glyph: int, unicode: list<int>, glyphId?: int}>, list<int>}
+     * @param-out list<array{glyph: int, unicode: list<int>, glyphId?: int}> $mappings
+     * @param Glyph $glyph
      */
-    private function bindGlyphs(array $mappings, array $glyphs): array
+    private function bindGlyph(array &$mappings, array $glyph): int
     {
-        $cids = [];
-        foreach ($glyphs as $glyph) {
-            $mapping = ['glyph' => $glyph['glyph'], 'unicode' => $glyph['unicode']];
-            if (isset($glyph['glyphId'])) {
-                $mapping['glyphId'] = $glyph['glyphId'];
-            }
-            $index = array_search($mapping, $mappings, true);
-            if ($index === false) {
-                $mappings[] = $mapping;
-                $index = count($mappings) - 1;
-            }
-            $cids[] = $index + 1;
+        $mapping = ['glyph' => $glyph['glyph'], 'unicode' => $glyph['unicode']];
+        if (isset($glyph['glyphId'])) {
+            $mapping['glyphId'] = $glyph['glyphId'];
         }
-        return [$mappings, $cids];
+        $index = array_search($mapping, $mappings, true);
+        if ($index === false) {
+            $mappings[] = $mapping;
+            $index = count($mappings) - 1;
+        }
+        return $index + 1;
     }
 
     /** @return array<string, array<string, mixed>> */
@@ -171,12 +134,8 @@ final readonly class UnicodeTextResources
         return '<' . $hex . '> Tj';
     }
     /**
-     * @param array{alias: string, cids: list<int>, complex: bool,
-     * positions: list<array{
-     *   glyph: int, glyphId: int, unicode: list<int>, advance: int,
-     *   dx: int, dy: int, cluster: int, logical: int
-     * }>,
-     * x: float, y: float, fontSize: float, text: string} $binding
+     * @param array{alias: string, cids: list<int>, aliases: list<string>, complex: bool,
+     * positions: list<Glyph>, x: float, y: float, fontSize: float, text: string} $binding
      */
     private function complexTextOperator(array $binding): string
     {
@@ -198,6 +157,7 @@ final readonly class UnicodeTextResources
                 'x' => $binding['x'] + ($advance + $glyph['dx']) * $scale,
                 'y' => $binding['y'] + $glyph['dy'] * $scale,
                 'cid' => $cid,
+                'alias' => $binding['aliases'][$index],
             ];
             $advance += $glyph['advance'];
         }
@@ -205,7 +165,12 @@ final readonly class UnicodeTextResources
         // absolute glyph placement, so text extraction retains original order.
         usort($positions, static fn (array $first, array $second): int =>
             ($first['logical'] <=> $second['logical']) ?: ($first['visual'] <=> $second['visual']));
+        $currentAlias = $binding['alias'];
         foreach ($positions as $position) {
+            if ($position['alias'] !== $currentAlias) {
+                $commands[] = sprintf('/%s %F Tf', $position['alias'], $binding['fontSize']);
+                $currentAlias = $position['alias'];
+            }
             $commands[] = sprintf(
                 '1 0 0 1 %F %F Tm <%04X> Tj',
                 $position['x'],

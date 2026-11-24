@@ -61,6 +61,17 @@ final class FriBidiParagraphMapperTest extends TestCase
                 ['text' => 'Ж', 'rtl' => false, 'visual' => 1, 'start' => 1],
             ],
         ];
+        yield 'Greek and East Asian scripts are itemized separately' => [
+            'AΩ山あア한', [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5], [0, 0, 0, 0, 0, 0],
+            [
+                ['text' => 'A', 'rtl' => false, 'visual' => 0, 'start' => 0],
+                ['text' => 'Ω', 'rtl' => false, 'visual' => 1, 'start' => 1],
+                ['text' => '山', 'rtl' => false, 'visual' => 2, 'start' => 2],
+                ['text' => 'あ', 'rtl' => false, 'visual' => 3, 'start' => 3],
+                ['text' => 'ア', 'rtl' => false, 'visual' => 4, 'start' => 4],
+                ['text' => '한', 'rtl' => false, 'visual' => 5, 'start' => 5],
+            ],
+        ];
         yield 'hebrew arabic same rtl embedding level' => [
             'שم', [1, 0], [1, 0], [1, 1],
             [

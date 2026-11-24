@@ -33,6 +33,11 @@ final class ComplexTextPositioningTest extends TestCase
                 TestCase::assertSame('שלום', $text);
                 return $this->glyphs;
             }
+
+            public function shapeWithFonts(string $text, array $fonts): array
+            {
+                throw new \LogicException('This test only exercises one font.');
+            }
         };
         $resources = new UnicodeTextResources(
             [new LayoutLine('שלום', 10.0, 20.0, 12.0, 'F1', '#000000')],

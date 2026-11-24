@@ -25,25 +25,37 @@ final readonly class HarfBuzzRunShaper
     /**
      * @return list<array{glyph: int, glyphId: int, unicode: list<int>, advance: int, dx: int, dy: int, cluster: int}>
      */
-    public function shape(string $fontPath, string $text, bool $rtl): array
-    {
-        return $this->mapClusters($this->shapeRun($fontPath, $text, $rtl), $text);
+    public function shape(
+        string $fontPath,
+        string $text,
+        bool $rtl,
+        string $before = '',
+        string $after = '',
+    ): array {
+        return $this->mapClusters($this->shapeRun($fontPath, $text, $rtl, $before, $after), $text);
     }
 
     /**
      * @return list<array{g: int, cl: int, ax: int, dx: int, dy: int}>
      */
-    private function shapeRun(string $fontPath, string $text, bool $rtl): array
+    private function shapeRun(string $fontPath, string $text, bool $rtl, string $before, string $after): array
     {
-        $output = ($this->run)([
+        $arguments = [
             $this->binary,
             '--no-glyph-names',
             '--output-format=json',
             '--font-size=1000',
             '--direction=' . ($rtl ? 'rtl' : 'ltr'),
             '--text=' . $text,
-            $fontPath,
-        ], null);
+        ];
+        if ($before !== '') {
+            $arguments[] = '--text-before=' . $before;
+        }
+        if ($after !== '') {
+            $arguments[] = '--text-after=' . $after;
+        }
+        $arguments[] = $fontPath;
+        $output = ($this->run)($arguments, null);
         try {
             $result = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $error) {

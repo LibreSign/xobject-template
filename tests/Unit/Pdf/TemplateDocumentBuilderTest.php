@@ -92,6 +92,11 @@ final class TemplateDocumentBuilderTest extends TestCase
                 }
                 return $result;
             }
+
+            public function shapeWithFonts(string $text, array $fonts): array
+            {
+                throw new \LogicException('This test only exercises one font.');
+            }
         };
         $builder = (new TemplateDocumentBuilder(complexShaper: $shaper))
             ->withUnicodeFontFiles(['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']);

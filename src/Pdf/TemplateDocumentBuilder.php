@@ -157,8 +157,8 @@ final readonly class TemplateDocumentBuilder
     }
 
     /**
-     * Configure embeddable TrueType fonts (in fallback order). The font must
-     * cover every Unicode character in each non-ASCII text line.
+     * Configure embeddable TrueType fonts (in fallback order). Each grapheme
+     * must be covered by one configured font.
      *
      * @param list<string> $paths
      */
@@ -179,6 +179,11 @@ final readonly class TemplateDocumentBuilder
     public function unicodeFonts(): array
     {
         return $this->unicodeFonts;
+    }
+
+    public function complexShaper(): ComplexTextShaperInterface
+    {
+        return $this->complexShaper;
     }
 
     private function buildImageCommand(LayoutImage $image): string

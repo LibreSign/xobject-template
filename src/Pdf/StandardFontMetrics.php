@@ -54,8 +54,10 @@ final readonly class StandardFontMetrics
     ];
 
     /** @param list<TrueTypeFont> $unicodeFonts */
-    public function __construct(private array $unicodeFonts = [])
-    {
+    public function __construct(
+        private array $unicodeFonts = [],
+        private ComplexTextShaperInterface $complexShaper = new HarfBuzzComplexTextShaper(),
+    ) {
     }
 
     public function measureString(string $fontAlias, float $fontSize, string $text): float
@@ -86,23 +88,11 @@ final readonly class StandardFontMetrics
 
     private function measureUnicode(float $fontSize, string $text): float
     {
-        $complex = preg_match('/[\p{Arabic}\p{Hebrew}\p{M}]/u', $text) === 1;
-        $codepoints = (new UnicodeScalarCodec())->decode($text);
-        foreach ($this->unicodeFonts as $font) {
-            $width = 0;
-            foreach ($codepoints as $codepoint) {
-                $glyphId = $font->glyphFor($codepoint);
-                if ($glyphId === 0) {
-                    continue 2;
-                }
-                $width += $font->widthForGlyph($glyphId);
-            }
-            if ($complex) {
-                $width = array_sum(array_column((new HarfBuzzComplexTextShaper())->shape($text, $font), 'advance'));
-            }
-            return $width * $fontSize / 1000;
+        $plan = (new UnicodeTextPlanner($this->complexShaper))->plan($text, $this->unicodeFonts);
+        if ($plan === null) {
+            return 0.0;
         }
-        return 0.0;
+        return array_sum(array_column($plan['glyphs'], 'advance')) * $fontSize / 1000;
     }
 
     private function resolveCharacterWidth(string $fontAlias, string $character): float

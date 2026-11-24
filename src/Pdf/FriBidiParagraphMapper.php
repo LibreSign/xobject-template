@@ -130,6 +130,11 @@ final readonly class FriBidiParagraphMapper
             '/\p{Hebrew}/u' => 'Hebr',
             '/\p{Latin}/u' => 'Latn',
             '/\p{Cyrillic}/u' => 'Cyrl',
+            '/\p{Greek}/u' => 'Grek',
+            '/\p{Han}/u' => 'Hani',
+            '/\p{Hiragana}/u' => 'Hira',
+            '/\p{Katakana}/u' => 'Kana',
+            '/\p{Hangul}/u' => 'Hang',
         ];
         foreach ($patterns as $pattern => $script) {
             if (preg_match($pattern, $character) === 1) {

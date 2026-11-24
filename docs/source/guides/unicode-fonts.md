@@ -24,7 +24,7 @@ $result = $compiler->compile(new CompileRequest(
 ));
 ```
 
-Only supply trusted, valid `.ttf` files with embedding rights. Fonts are loaded from explicitly configured paths, **not** discovered from arbitrary template input. A selected font currently needs to cover every Unicode scalar in the same text line; font fallback does not yet splice a single line across multiple fonts. Missing glyph coverage raises an exception rather than silently substituting a character.
+Only supply trusted, valid `.ttf` files with embedding rights. Fonts are loaded from explicitly configured paths, **not** discovered from arbitrary template input. The first configured font covering an entire line is preferred. Otherwise, the compiler selects fonts for contiguous runs without separating a grapheme (base character and its combining marks). Missing glyph coverage for a complete grapheme raises an exception rather than silently substituting a character. A mixed line such as `Signed by محمد / 山田太郎` can use both configured fonts.
 
 ### Complex scripts
 
@@ -32,16 +32,16 @@ HarfBuzz handles OpenType glyph substitution/positioning; FriBidi provides parag
 
 Both tools are executed with argument arrays, a fixed timeout and limited input. The shaping font is a temporary private file, deleted in a `finally` block. Inputs are decoded and validated as Unicode scalars.
 
-For shaped text, PDF appearance operators use HarfBuzz's exact glyph IDs and positioning with a logical Unicode `ActualText` span. Different PDF extractors can report bidirectional text in visual order despite `ActualText`; test extraction with more than one independent reader when interoperability matters.
+For shaped text, FriBidi determines visual runs before font fallback. HarfBuzz receives the surrounding text context when a directional run is split across fonts, preserving joining behavior where the selected fonts support it. PDF appearance operators use exact glyph IDs and positioning with a logical Unicode `ActualText` span; font switches use the embedded font resources of the corresponding run. Different PDF extractors can report bidirectional text in visual order despite `ActualText`; test extraction with more than one independent reader when interoperability matters.
 
 ### Signed PDF integration
 
-For signature appearance XObjects, the resource dictionary must be materialized **in the destination PDF document**, not simply embedded as PHP arrays. The `SignerPhpCoreXObjectResourceBuilder` adapter supplies the resources-builder closure to the compatible `SignerPHP/pdf-core` `AppearanceXObject`. This depends on the optional resource-builder API introduced in [SignerPHP/pdf-core PR #5](https://github.com/SignerPHP/pdf-core/pull/5). A consumer must first use a `pdf-core` version containing that API; older releases cannot process these indirect resources.
+For signature appearance XObjects, the resource dictionary must be materialized **in the destination PDF document**, not simply embedded as PHP arrays. The `SignerPhpCoreXObjectResourceBuilder` adapter supplies the resources-builder closure to the compatible `SignerPHP/pdf-core` `AppearanceXObject`. Pass it using the named `resourcesBuilder:` parameter so older versions fail explicitly instead of ignoring an extra positional argument. This depends on the optional resource-builder API introduced in [SignerPHP/pdf-core PR #5](https://github.com/SignerPHP/pdf-core/pull/5). A consumer must first use a `pdf-core` version containing that API; older releases cannot process these indirect resources.
 
 Test signature appearance output cryptographically (CMS/ByteRange), structurally (font file, descendant font and `ToUnicode`) and visually. Passing just one of these checks is insufficient.
 
 ### Limits
 
 * Complete font files are currently embedded; glyph subsetting is not implemented. This increases signed-PDF size. FontTools' `pyftsubset --retain-gids` is a possible **future** optimization, but needs reproducible tests for CID/GID stability and licensing before adoption.
-* The library handles the scripts exercised by its integration matrix; it does not claim full OpenType coverage for every language or arbitrary mixtures requiring different fonts within a single line.
+* The library handles the scripts exercised by its integration matrix; it does not claim full OpenType coverage for every language, variation-selector sequence or color font.
 * Complex shaping requires the external binaries at runtime and appropriate fonts in the deployment environment.
