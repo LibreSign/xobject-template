@@ -94,11 +94,12 @@ final readonly class FriBidiParagraphMapper
                 $script = $nextScript !== '' ? $nextScript : $script;
                 continue;
             }
+            /** @var non-empty-list<int> $positions Run boundaries always contain at least one character. */
             $positions = array_slice($visualPositions, $start, $i - $start);
             $runs[] = [
                 'text' => implode('', array_slice($characters, $start, $i - $start)),
                 'rtl' => ($levels[$start] % 2) === 1,
-                'visual' => $positions === [] ? 0 : min($positions),
+                'visual' => min($positions),
                 'start' => $start,
             ];
             $start = $i;

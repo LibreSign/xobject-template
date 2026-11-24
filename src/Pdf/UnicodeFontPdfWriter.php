@@ -149,10 +149,10 @@ final readonly class UnicodeFontPdfWriter
     /** @param array<array-key, mixed> $entry */
     private function assertShapedGlyphId(array $entry): void
     {
-        if (!isset($entry['glyphId'])) {
+        if (!array_key_exists('glyphId', $entry)) {
             return;
         }
-        if (!is_int($entry['glyphId']) || $entry['glyphId'] <= 0 || $entry['glyphId'] > 65535) {
+        if (!is_int($entry['glyphId']) || $entry['glyphId'] <= 0 || $entry['glyphId'] >= 65535) {
             throw new InvalidArgumentException('Invalid shaped TrueType glyph index.');
         }
     }

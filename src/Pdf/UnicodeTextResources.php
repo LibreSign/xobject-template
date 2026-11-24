@@ -37,8 +37,11 @@ final readonly class UnicodeTextResources
      * @param list<LayoutLine> $lines
      * @param list<TrueTypeFont> $fonts
      */
-    public function __construct(array $lines, array $fonts)
-    {
+    public function __construct(
+        array $lines,
+        array $fonts,
+        private ComplexTextShaperInterface $complexShaper = new HarfBuzzComplexTextShaper(),
+    ) {
         $shaper = new DirectGlyphShaper();
         $codec = new UnicodeScalarCodec();
         $selected = [];
@@ -57,14 +60,10 @@ final readonly class UnicodeTextResources
             if (preg_match('/[^\x00-\x7f]/', $line->text) !== 1) {
                 continue;
             }
-            $unicodeGlyphs = [];
-            foreach ($codec->decode($line->text) as $codepoint) {
-                $unicodeGlyphs[] = ['glyph' => $codepoint, 'unicode' => [$codepoint]];
-            }
-            $fontIndex = $this->selectFont($fonts, $unicodeGlyphs);
+            $fontIndex = $this->selectFont($fonts, $codec->decode($line->text));
             $complex = preg_match('/[\p{Arabic}\p{Hebrew}\p{M}]/u', $line->text) === 1;
             $complexGlyphs = $complex
-                ? (new HarfBuzzComplexTextShaper())->shape($line->text, $fonts[$fontIndex])
+                ? $this->complexShaper->shape($line->text, $fonts[$fontIndex])
                 : [];
             /** @var list<array{glyph: int, unicode: list<int>, glyphId?: int}> $glyphs */
             $glyphs = $complex ? $complexGlyphs : $shaper->shape($line->text);
@@ -90,12 +89,12 @@ final readonly class UnicodeTextResources
 
     /**
      * @param list<TrueTypeFont> $fonts
-     * @param list<array{glyph: int, unicode: list<int>}> $glyphs
+     * @param list<int> $codepoints
      */
-    private function selectFont(array $fonts, array $glyphs): int
+    private function selectFont(array $fonts, array $codepoints): int
     {
         foreach ($fonts as $fontIndex => $font) {
-            if ($this->coversGlyphs($font, $glyphs)) {
+            if ($this->coversCodepoints($font, $codepoints)) {
                 return $fontIndex;
             }
         }
@@ -104,11 +103,11 @@ final readonly class UnicodeTextResources
         );
     }
 
-    /** @param list<array{glyph: int, unicode: list<int>}> $glyphs */
-    private function coversGlyphs(TrueTypeFont $font, array $glyphs): bool
+    /** @param list<int> $codepoints */
+    private function coversCodepoints(TrueTypeFont $font, array $codepoints): bool
     {
-        foreach ($glyphs as $glyph) {
-            if ($font->glyphFor($glyph['glyph']) === 0) {
+        foreach ($codepoints as $codepoint) {
+            if ($font->glyphFor($codepoint) === 0) {
                 return false;
             }
         }

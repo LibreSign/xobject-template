@@ -82,7 +82,7 @@ final readonly class HarfBuzzRunShaper
     private function mapClusters(array $glyphs, string $runText): array
     {
         $codepoints = $this->codec->decode($runText);
-        $clusters = array_unique(array_column($glyphs, 'cl'));
+        $clusters = array_column($glyphs, 'cl');
         sort($clusters, SORT_NUMERIC);
         if (($clusters[0] ?? null) !== 0) {
             throw new InvalidArgumentException('HarfBuzz returned incomplete Unicode cluster coverage.');

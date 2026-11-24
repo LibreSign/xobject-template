@@ -64,6 +64,7 @@ final readonly class TemplateDocumentBuilder
         ?Closure $clock = null,
         /** @var list<TrueTypeFont> */
         private array $unicodeFonts = [],
+        private ComplexTextShaperInterface $complexShaper = new HarfBuzzComplexTextShaper(),
     ) {
         $this->clock = $clock ?? static fn (): int => hrtime(true);
     }
@@ -74,15 +75,16 @@ final readonly class TemplateDocumentBuilder
         int $startedAtNs,
         int $nodeCount = 0,
     ): CompileResult {
+        $unicode = new UnicodeTextResources($layout->lines, $this->unicodeFonts, $this->complexShaper);
         return new CompileResult(
-            contentStream: $this->buildContentStream($layout),
-            resources: $this->buildResources($layout),
+            contentStream: $this->buildContentStream($layout, $unicode),
+            resources: $this->buildResources($layout, $unicode),
             bbox: [0.0, 0.0, $request->width, $request->height],
             metadata: $this->buildMetadata($layout, $startedAtNs, $nodeCount),
         );
     }
 
-    public function buildContentStream(LayoutResult $layout): string
+    public function buildContentStream(LayoutResult $layout, ?UnicodeTextResources $unicode = null): string
     {
         $stream = ['q'];
 
@@ -94,7 +96,7 @@ final readonly class TemplateDocumentBuilder
             $stream[] = $this->buildImageCommand($image);
         }
 
-        $unicode = new UnicodeTextResources($layout->lines, $this->unicodeFonts);
+        $unicode ??= new UnicodeTextResources($layout->lines, $this->unicodeFonts, $this->complexShaper);
         $this->appendTextCommands($stream, $layout->lines, $unicode);
 
         $stream[] = 'Q';
@@ -105,9 +107,9 @@ final readonly class TemplateDocumentBuilder
     /**
      * @return array<string, mixed>
      */
-    public function buildResources(LayoutResult $layout): array
+    public function buildResources(LayoutResult $layout, ?UnicodeTextResources $unicode = null): array
     {
-        $unicode = new UnicodeTextResources($layout->lines, $this->unicodeFonts);
+        $unicode ??= new UnicodeTextResources($layout->lines, $this->unicodeFonts, $this->complexShaper);
         $resources = [
             'Font' => array_merge($this->fontResources, $unicode->fonts()),
             'XObject' => [],
@@ -144,7 +146,14 @@ final readonly class TemplateDocumentBuilder
      */
     public function withFontResources(array $fontResources): self
     {
-        return new self($this->pdfEscaper, $this->colorParser, $fontResources, $this->clock, $this->unicodeFonts);
+        return new self(
+            $this->pdfEscaper,
+            $this->colorParser,
+            $fontResources,
+            $this->clock,
+            $this->unicodeFonts,
+            $this->complexShaper,
+        );
     }
 
     /**
@@ -156,7 +165,14 @@ final readonly class TemplateDocumentBuilder
     public function withUnicodeFontFiles(array $paths): self
     {
         $fonts = array_map(static fn (string $path): TrueTypeFont => new TrueTypeFont($path), $paths);
-        return new self($this->pdfEscaper, $this->colorParser, $this->fontResources, $this->clock, $fonts);
+        return new self(
+            $this->pdfEscaper,
+            $this->colorParser,
+            $this->fontResources,
+            $this->clock,
+            $fonts,
+            $this->complexShaper,
+        );
     }
 
     /** @return list<TrueTypeFont> */
