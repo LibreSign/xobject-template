@@ -120,8 +120,8 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
             $imageStream = $document->getPdfObjects()[2]->getStream();
             self::assertSame("\x00\x80", gzuncompress($maskStream));
             self::assertSame("\x00\xff\x00\x00", gzuncompress($imageStream));
-            self::assertStringContainsString('/Length ' . strlen($maskStream), $softMask);
-            self::assertStringContainsString('/Length ' . strlen($imageStream), $image);
+            self::assertStringContainsString('/Length ' . strlen((string) $maskStream), $softMask);
+            self::assertStringContainsString('/Length ' . strlen((string) $imageStream), $image);
         } finally {
             unlink($path);
         }
@@ -141,7 +141,7 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
             self::assertCount(1, $document->getPdfObjects());
             $object = $document->getPdfObjects()[1];
             self::assertSame($scanline, gzuncompress($object->getStream()));
-            self::assertStringContainsString('/Length ' . strlen($object->getStream()), $object->toPdfEntry());
+            self::assertStringContainsString('/Length ' . strlen((string) $object->getStream()), $object->toPdfEntry());
         } finally {
             unlink($path);
         }
