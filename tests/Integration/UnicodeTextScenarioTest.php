@@ -87,6 +87,49 @@ final class UnicodeTextScenarioTest extends TestCase
         yield 'escaped punctuation' => ['text' => 'Assinado (João) \\ Teste', 'fontPath' => $dejavu];
     }
 
+    public function testIssue33SixLanguageExamplesShareOneValidFontResourceDocument(): void
+    {
+        $texts = ['Signé par Renée', 'Αλέξανδρος', 'Иван Иванов', 'محمد', 'דוד', '山田太郎'];
+        $html = implode('', array_map(
+            static fn (string $line): string =>
+                '<div>' . htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div>',
+            $texts,
+        ));
+        $compiler = new XObjectTemplateCompiler(
+            documentBuilder: (new TemplateDocumentBuilder())->withUnicodeFontFiles([
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+            ]),
+        );
+        $result = $compiler->compile(new CompileRequest(html: $html, width: 600, height: 400));
+
+        self::assertSame(6, $result->metadata['line_count']);
+        self::assertArrayHasKey('U1', $result->resources['Font']);
+        self::assertArrayHasKey('U2', $result->resources['Font']);
+        $pdf = (new SinglePagePdfExporter())->export($result);
+        self::assertSame(2, substr_count($pdf, '/Subtype /CIDFontType2'));
+        self::assertSame(2, substr_count($pdf, '/ToUnicode'));
+
+        $path = tempnam(sys_get_temp_dir(), 'libresign-multiscript-');
+        self::assertNotFalse($path);
+        try {
+            file_put_contents($path, $pdf);
+            $output = shell_exec('pdftotext -layout ' . escapeshellarg($path) . ' - 2>/dev/null');
+            self::assertNotNull($output);
+            $lines = array_map(
+                static fn (string $line): string => self::normalizePopplerVisualBidi(trim($line, " \t\n\r\0\x0B\f")),
+                array_values(array_filter(
+                    explode("
+", trim($output)),
+                    static fn (string $line): bool => trim($line, " \t\n\r\0\x0B\f") !== '',
+                )),
+            );
+            self::assertSame($texts, $lines);
+        } finally {
+            unlink($path);
+        }
+    }
+
     public function testInvalidUnconfiguredUnicodeCannotSilentlyCorruptPdf(): void
     {
         $compiler = new XObjectTemplateCompiler();
