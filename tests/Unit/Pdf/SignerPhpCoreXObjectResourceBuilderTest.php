@@ -116,9 +116,42 @@ final class SignerPhpCoreXObjectResourceBuilderTest extends TestCase
             self::assertStringContainsString('/DeviceGray', $softMask);
             self::assertStringContainsString('/SMask 1 0 R', $image);
             self::assertStringContainsString('/Subtype/Image', $image);
+            $maskStream = $document->getPdfObjects()[1]->getStream();
+            $imageStream = $document->getPdfObjects()[2]->getStream();
+            self::assertSame("\x00\x80", gzuncompress($maskStream));
+            self::assertSame("\x00\xff\x00\x00", gzuncompress($imageStream));
+            self::assertStringContainsString('/Length ' . strlen($maskStream), $softMask);
+            self::assertStringContainsString('/Length ' . strlen($imageStream), $image);
         } finally {
             unlink($path);
         }
+    }
+
+    #[DataProvider('opaquePngProvider')]
+    public function testPreservesEncodedOpaquePngStreams(int $colorType, string $scanline): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'core-resource-png-');
+        self::assertNotFalse($path);
+        try {
+            file_put_contents($path, PngFixtureFactory::createPng(1, 1, $colorType, $scanline));
+            $document = new PdfDocument();
+            (new SignerPhpCoreXObjectResourceBuilder())->materialize($document, [
+                'XObject' => ['Im1' => ['Source' => $path]],
+            ]);
+            self::assertCount(1, $document->getPdfObjects());
+            $object = $document->getPdfObjects()[1];
+            self::assertSame($scanline, gzuncompress($object->getStream()));
+            self::assertStringContainsString('/Length ' . strlen($object->getStream()), $object->toPdfEntry());
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /** @return iterable<string, array{int, string}> */
+    public static function opaquePngProvider(): iterable
+    {
+        yield 'grayscale' => [0, "\x00\x7f"];
+        yield 'RGB' => [2, "\x00\xff\x00\x00"];
     }
 
     public function testEmbedsSvgFormResourceInSamePdfDocument(): void

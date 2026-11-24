@@ -162,7 +162,9 @@ final readonly class SignerPhpCoreXObjectResourceBuilder
     private function createStream(PdfDocument $document, array $dictionary, string $bytes): string
     {
         $object = $document->createObject($this->convertDictionary($dictionary));
-        $object->setStream($bytes, false);
+        // Resource factories already supply the bytes in the declared filter encoding.
+        $object->setStream($bytes, true);
+        $object->setField('Length', strlen($bytes));
         return sprintf('%d 0 R', $object->getOid());
     }
 
