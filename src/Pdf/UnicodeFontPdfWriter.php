@@ -89,7 +89,7 @@ final readonly class UnicodeFontPdfWriter
     }
 
     /**
-     * @return list<array{glyph: int, unicode: list<int>}>
+     * @return list<array{glyph: int, unicode: non-empty-list<int>, glyphId?: int}>
      */
     private function requireMappings(mixed $value): array
     {
@@ -99,7 +99,7 @@ final readonly class UnicodeFontPdfWriter
         foreach (array_keys($value) as $index) {
             $this->assertMapping($value[$index]);
         }
-        /** @var list<array{glyph: int, unicode: list<int>}> $value */
+        /** @var list<array{glyph: int, unicode: non-empty-list<int>, glyphId?: int}> $value */
         return $value;
     }
 
@@ -112,13 +112,14 @@ final readonly class UnicodeFontPdfWriter
         ) {
             throw new InvalidArgumentException('Invalid Unicode font mappings.');
         }
+        $this->assertShapedGlyphId($entry);
         if (count(array_filter($entry['unicode'], 'is_int')) !== count($entry['unicode'])) {
             throw new InvalidArgumentException('Invalid Unicode scalar mapping.');
         }
     }
 
     /**
-     * @param list<array{glyph: int, unicode: list<int>}> $mappings
+     * @param list<array{glyph: int, unicode: non-empty-list<int>, glyphId?: int}> $mappings
      * @return array{list<int>, string, list<string>}
      */
     private function collectMappings(TrueTypeFont $font, array $mappings): array
@@ -130,7 +131,7 @@ final readonly class UnicodeFontPdfWriter
         $widths = [];
         $cmapEntries = [];
         foreach ($mappings as $index => $entry) {
-            $glyph = $font->glyphFor($entry['glyph']);
+            $glyph = $entry['glyphId'] ?? $font->glyphFor($entry['glyph']);
             if ($glyph === 0) {
                 throw new InvalidArgumentException('Missing TrueType glyph for Unicode resource.');
             }
@@ -143,6 +144,17 @@ final readonly class UnicodeFontPdfWriter
             $cmapEntries[] = sprintf('<%04X> <%s>', $index + 1, $unicodeHex);
         }
         return [$widths, $cidMap, $cmapEntries];
+    }
+
+    /** @param array<array-key, mixed> $entry */
+    private function assertShapedGlyphId(array $entry): void
+    {
+        if (!isset($entry['glyphId'])) {
+            return;
+        }
+        if (!is_int($entry['glyphId']) || $entry['glyphId'] <= 0 || $entry['glyphId'] > 65535) {
+            throw new InvalidArgumentException('Invalid shaped TrueType glyph index.');
+        }
     }
 
     /** @param list<string> $entries */

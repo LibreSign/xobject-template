@@ -86,7 +86,8 @@ final readonly class StandardFontMetrics
 
     private function measureUnicode(float $fontSize, string $text): float
     {
-        $glyphs = (new DirectGlyphShaper())->shape($text);
+        $complex = preg_match('/[\p{Arabic}\p{Hebrew}\p{M}]/u', $text) === 1;
+        $glyphs = $complex ? $this->scalarMappings($text) : (new DirectGlyphShaper())->shape($text);
         foreach ($this->unicodeFonts as $font) {
             $width = 0;
             foreach ($glyphs as $glyph) {
@@ -96,9 +97,22 @@ final readonly class StandardFontMetrics
                 }
                 $width += $font->widthForGlyph($glyphId);
             }
+            if ($complex) {
+                $width = array_sum(array_column((new HarfBuzzComplexTextShaper())->shape($text, $font), 'advance'));
+            }
             return $width * $fontSize / 1000;
         }
         return 0.0;
+    }
+
+    /** @return list<array{glyph: int, unicode: list<int>}> */
+    private function scalarMappings(string $text): array
+    {
+        $glyphs = [];
+        foreach ((new UnicodeScalarCodec())->decode($text) as $codepoint) {
+            $glyphs[] = ['glyph' => $codepoint, 'unicode' => [$codepoint]];
+        }
+        return $glyphs;
     }
 
     private function resolveCharacterWidth(string $fontAlias, string $character): float
