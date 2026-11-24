@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install CJK font fixture and PDF extraction utility
-        run: sudo apt-get install -y --no-install-recommends fonts-droid-fallback poppler-utils
+      - name: Install PDF, font and shaping test dependencies
+        run: sudo apt-get install -y --no-install-recommends fonts-droid-fallback poppler-utils libharfbuzz-bin libfribidi-bin
       - name: Detect minimum PHP from composer.json
         id: php_min
         run: |
