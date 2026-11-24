@@ -52,7 +52,7 @@ final class HarfBuzzComplexTextShaperTest extends TestCase
             if ($args[0] === 'fri') {
                 return "Base direction: L\n0 1 2 4 3\n0 1 2 4 3\n0 0 0 1 1\n";
             }
-            $text = substr($args[5], strlen('--text='));
+            $text = substr((string) $args[5], strlen('--text='));
             if ($text === 'A B') {
                 return '[{"g":10,"cl":0,"ax":500,"dx":0,"dy":0},'
                     . '{"g":3,"cl":1,"ax":250,"dx":0,"dy":0},'

@@ -10,6 +10,9 @@ namespace LibreSign\XObjectTemplate\Tests\Integration;
 use InvalidArgumentException;
 use LibreSign\XObjectTemplate\Dto\CompileRequest;
 use LibreSign\XObjectTemplate\Pdf\SinglePagePdfExporter;
+use LibreSign\XObjectTemplate\Pdf\StandardFontMetrics;
+use LibreSign\XObjectTemplate\Pdf\HarfBuzzComplexTextShaper;
+use LibreSign\XObjectTemplate\Pdf\TrueTypeFont;
 use LibreSign\XObjectTemplate\Pdf\TemplateDocumentBuilder;
 use LibreSign\XObjectTemplate\XObjectTemplateCompiler;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -102,6 +105,31 @@ final class UnicodeTextScenarioTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Unicode text requires an embedded TrueType font');
         $compiler->compile(new CompileRequest(html: '<div>山田太郎</div>'));
+    }
+
+    #[DataProvider('complexScriptWidthProvider')]
+    public function testComplexScriptWidthsUseShapedGlyphAdvances(string $text): void
+    {
+        $font = new TrueTypeFont('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+        $shaped = (new HarfBuzzComplexTextShaper())->shape($text, $font);
+        $expected = 0;
+        foreach ($shaped as $glyph) {
+            $expected += $glyph['advance'];
+        }
+        self::assertNotSame(0, $expected);
+        self::assertEqualsWithDelta(
+            $expected * 12.0 / 1000,
+            (new StandardFontMetrics([$font]))->measureString('F1', 12.0, $text),
+            0.000001,
+        );
+    }
+
+    /** @return iterable<string, array{text: string}> */
+    public static function complexScriptWidthProvider(): iterable
+    {
+        yield 'Arabic with diacritics' => ['text' => 'مُحَمَّد'];
+        yield 'Hebrew with vowel marks' => ['text' => 'שָׁלוֹם'];
+        yield 'decomposed accent' => ['text' => "e\u{0301}"];
     }
 
     #[DataProvider('complexScriptProvider')]
